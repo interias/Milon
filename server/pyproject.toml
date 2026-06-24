@@ -2,6 +2,7 @@
 name = "milon-server"
 version = "0.1.0"
 description = "Milon backend — FastAPI + SQLModel (SQLite). Lokales Fitness-Dashboard mit LLM-Coach."
+license = "CC0-1.0"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.138,<0.140",
