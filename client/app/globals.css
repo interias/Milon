@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Design-System „Klar & Klinisch" als Tailwind-v4-Theme-Tokens.
+   Tokens -> Utilities: bg-surface, text-accent, border-line, font-display, rounded-card … */
+@theme {
+  --color-bg: #fbfcfc;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f4f6f7;
+  --color-ink: #14201f;
+  --color-muted: #4d5b5a;
+  --color-line: #e2e7e8;
+  --color-accent: #0a6e66;
+  --color-accent-2: #5cb8af;
+  --color-good: #0a6e66;
+  --color-warn: #9a5b00;
+  --color-bad: #b3261e;
+
+  --font-display: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 10px;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Markdown-Ausgabe des Coaches */
+.md { font-size: 14px; line-height: 1.6; color: var(--color-ink); overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md h1 { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -.01em; margin: 1em 0 .4em; }
+.md h2 { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 1.1em 0 .4em; }
+.md h3 { font-size: 14px; font-weight: 700; margin: 1em 0 .3em; }
+.md p { margin: .6em 0; }
+.md ul, .md ol { margin: .5em 0; padding-left: 1.3em; }
+.md li { margin: .25em 0; }
+.md li::marker { color: var(--color-accent); }
+.md strong { font-weight: 700; }
+.md em { font-style: italic; }
+.md a { color: var(--color-accent); text-decoration: underline; }
+.md code { background: var(--color-surface-alt); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+.md pre { background: var(--color-surface-alt); padding: .8em; border-radius: 8px; overflow: auto; }
+.md pre code { background: none; padding: 0; }
+.md hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.1em 0; }
+.md blockquote { border-left: 3px solid var(--color-accent); padding-left: .8em; color: var(--color-muted); margin: .6em 0; }
+.md table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; border-collapse: collapse; width: 100%; margin: .7em 0; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--color-line); padding: 6px 10px; text-align: left; }
+.md th { background: var(--color-surface-alt); font-weight: 700; }

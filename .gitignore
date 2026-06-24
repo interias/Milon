@@ -1,0 +1,22 @@
+# Secrets / Env (alle .env in jedem Ordner)
+.env
+
+# Daten & DB
+data/
+*.db
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generierte Design-Assets: Roh-Greenscreen-Cache (freigestellte PNGs werden committed)
+design/assets/**/.raw/
+
+# OS
+.DS_Store
+Thumbs.db

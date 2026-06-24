@@ -1,0 +1,14 @@
+{
+  "name": "milon-design-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Dev-only Tooling: Generierung transparenter Design-Assets via OpenAI gpt-image-2 (Chroma-Key-Skill).",
+  "scripts": {
+    "assets": "node --env-file=.env \"%USERPROFILE%/.claude/skills/transparent-images/scripts/generate-transparent.mjs\" design/assets.json"
+  },
+  "dependencies": {
+    "openai": "^6.44.0",
+    "sharp": "^0.35.2"
+  }
+}

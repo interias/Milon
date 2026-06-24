@@ -1,0 +1,43 @@
+{
+  "_comment": "Studie: Sportler-Silhouette (Neo-Sport) im Stil Klar & Klinisch. Ink-Charcoal + EIN Teal-Akzent. Gruener Standard-Chroma ist ok (kein Gruen im Motiv).",
+  "outDir": "design/assets/klar-sport",
+  "style": "Clean Swiss-International clinical aesthetic: flat vector, crisp precise edges, generous negative space, calm and surgical, restrained palette of deep ink charcoal (#14201f) and a single cool teal accent (#0a6e66, lighter #5cb8af). No 3D, no heavy shading, no text, no background, single centered subject.",
+  "items": [
+    {
+      "key": "run-ink-slash",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A bold dynamic sprinting runner in mid-stride, shown as a single clean solid silhouette in deep ink charcoal, with exactly one crisp diagonal speed-slash of cool teal cutting across behind the torso to suggest forward momentum. Athletic, confident, minimal, flat poster-clean shapes, single centered subject"
+    },
+    {
+      "key": "run-teal-solid",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A bold dynamic sprinting runner in mid-stride as a single clean solid silhouette filled entirely in calm cool teal, ultra-minimal, no extra accents, smooth confident athletic shape, single centered subject"
+    },
+    {
+      "key": "run-monoline",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A sprinting runner in mid-stride drawn as one single continuous ultra-thin teal monoline of perfectly even weight, open and airy line-art, geometric and precise, athletic motion captured in a clean single stroke, single centered subject"
+    },
+    {
+      "key": "run-duotone",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A bold dynamic sprinting runner in mid-stride as a clean silhouette in deep ink charcoal, split by a crisp diagonal edge so the leading half is rendered in light teal — a precise two-tone duotone cut, flat and surgical, athletic momentum, single centered subject"
+    },
+    {
+      "key": "kraft-ink-slash",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A powerful athlete mid-lift raising a barbell overhead, shown as a single clean solid silhouette in deep ink charcoal, with exactly one crisp diagonal teal accent slash, strong stable stance, minimal flat poster-clean shape, single centered subject"
+    },
+    {
+      "key": "koerper-ink-arc",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A poised standing athletic human figure in a calm confident posture, shown as a single clean solid silhouette in deep ink charcoal, accented by one thin teal measurement arc curving beside the body, minimal and precise, single centered subject"
+    }
+  ]
+}

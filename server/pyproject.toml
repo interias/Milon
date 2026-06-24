@@ -1,0 +1,26 @@
+[project]
+name = "milon-server"
+version = "0.1.0"
+description = "Milon backend — FastAPI + SQLModel (SQLite). Lokales Fitness-Dashboard mit LLM-Coach."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.138,<0.140",
+  "uvicorn[standard]>=0.49",
+  "sqlmodel>=0.0.38",
+  "pandas>=3.0",
+  "python-multipart>=0.0.18",
+  "pydantic-settings>=2.5",
+  "openai>=2.43",
+  "tzdata>=2025.1",
+  "apscheduler>=3.10",
+  "pytz>=2024.1",
+  "pillow>=10.0",
+  "mcp>=1.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

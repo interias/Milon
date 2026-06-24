@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Milon · Studie — Klar &amp; Klinisch ✕ Sport</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&display=swap">
+  <style>
+    :root {
+      --bg: #fbfcfc; --surface: #ffffff; --surfaceAlt: #f4f6f7;
+      --text: #14201f; --muted: #4d5b5a; --border: #e2e7e8;
+      --accent: #0a6e66; --accent2: #5cb8af; --good: #0a6e66; --bad: #b3261e;
+      --radius: 8px;
+      --display: "Inter Tight", "Inter", system-ui, sans-serif;
+      --body: "Inter", system-ui, -apple-system, sans-serif;
+      --wrap: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--body); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    a { color: inherit; }
+
+    .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 14px;
+      padding: 16px 28px; border-bottom: 1px solid var(--border); background: rgba(251,252,252,.85); backdrop-filter: blur(8px); }
+    .logo { display: flex; align-items: center; gap: 9px; font-family: var(--display); font-weight: 800; letter-spacing: -.02em; font-size: 19px; }
+    .logo .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+    .topbar .sub { color: var(--muted); font-size: 13px; }
+    .spacer { flex: 1; }
+    .back { font-size: 13px; color: var(--muted); text-decoration: none; border: 1px solid var(--border); padding: 8px 13px; border-radius: 8px; }
+    .back:hover { color: var(--text); border-color: var(--accent2); }
+
+    .hero { max-width: var(--wrap); margin: 0 auto; padding: 48px 28px 28px; display: grid; grid-template-columns: 1.08fr .92fr; gap: 30px; align-items: center; }
+    @media (max-width: 880px) { .hero { grid-template-columns: 1fr; } }
+    .wordmark { font-family: var(--display); font-weight: 800; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+    .hero h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4.4vw, 50px); line-height: 1.04; letter-spacing: -.025em; margin: 14px 0 16px; }
+    .lead { color: var(--muted); font-size: 16px; line-height: 1.6; max-width: 46ch; margin: 0 0 24px; }
+    .chips { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 26px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; min-width: 96px; }
+    .stat b { display: block; font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; }
+    .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .cta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .cta { border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 600; font-size: 14px; padding: 12px 20px; border-radius: 8px; cursor: pointer; }
+    .cta:hover { filter: brightness(1.08); }
+    .cta-ghost { font-size: 13px; color: var(--muted); }
+
+    .hero-art { display: grid; place-items: center; }
+    .hero-art img { width: 100%; max-width: 440px; max-height: 380px; object-fit: contain; filter: drop-shadow(0 18px 30px rgba(20,32,31,.10)); }
+
+    .picker { max-width: var(--wrap); margin: 0 auto; padding: 8px 28px 30px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .picker-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+    .thumb { background: var(--surfaceAlt); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px 6px; cursor: pointer; display: grid; justify-items: center; gap: 4px; width: 92px; }
+    .thumb img { width: 100%; height: 48px; object-fit: contain; }
+    .thumb span { font-size: 10px; color: var(--muted); }
+    .thumb.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(10,110,102,.18); }
+    .thumb.sel span { color: var(--text); font-weight: 600; }
+
+    .section-line { max-width: var(--wrap); margin: 0 auto; padding: 0 28px; }
+    .section-line .rule { border-top: 1px solid var(--border); }
+    .dash { max-width: var(--wrap); margin: 0 auto; padding: 28px; }
+    .dash-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+    .dash-head h2 { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -.01em; }
+    .dash-head .date { color: var(--muted); font-size: 13px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 760px) { .kpi-grid { grid-template-columns: 1fr; } }
+    .card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: 0 1px 2px rgba(20,32,31,.04); }
+    .card .wm { position: absolute; right: -14px; bottom: -16px; width: 118px; opacity: .07; pointer-events: none; }
+    .card .label { font-size: 13px; font-weight: 600; }
+    .card .sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .kpi { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+    .kpi b { font-family: var(--display); font-weight: 800; font-size: 34px; letter-spacing: -.025em; line-height: 1; }
+    .kpi .u { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .delta { font-size: 12px; font-weight: 700; color: var(--good); }
+    .subrow { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .subrow b { color: var(--text); }
+
+    .wide { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-top: 16px; }
+    @media (max-width: 760px) { .wide { grid-template-columns: 1fr; } }
+    .chart-card h3 { margin: 0 0 2px; font-size: 15px; }
+    .chart-card .csub { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    svg.area { width: 100%; height: 150px; display: block; }
+    .coach { display: flex; flex-direction: column; gap: 10px; }
+    .coach-top { display: flex; align-items: center; gap: 10px; }
+    .coach-ava { width: 40px; height: 40px; border-radius: 50%; background: var(--surfaceAlt); display: grid; place-items: center; overflow: hidden; }
+    .coach-ava img { width: 100%; height: 100%; object-fit: cover; }
+    .coach-name { font-weight: 700; font-size: 14px; }
+    .coach-role { font-size: 11px; color: var(--muted); }
+    .coach-msg { font-size: 13px; line-height: 1.55; }
+    .coach-msg b { color: var(--accent); }
+    .pill { align-self: flex-start; font-size: 11px; color: var(--muted); background: var(--surfaceAlt); border: 1px solid var(--border); padding: 5px 10px; border-radius: 999px; }
+
+    footer { max-width: var(--wrap); margin: 10px auto 50px; padding: 0 28px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo"><span class="dot"></span>Milon</div>
+    <span class="sub">Studie · Klar &amp; Klinisch ✕ Sport-Signatur</span>
+    <div class="spacer"></div>
+    <a class="back" href="index.html">← Alle 11 Richtungen</a>
+  </div>
+
+  <section class="hero">
+    <div class="hero-text">
+      <div class="wordmark">Dein Trainings-Cockpit</div>
+      <h1>Wo werde ich besser,<br>wo schlechter?</h1>
+      <p class="lead">Körper, Laufen und Kraft an einem Ort — gefiltert auf die Kernmetriken, mit einem ehrlich-motivierenden Coach. Lokal, schlank, deins.</p>
+      <div class="chips">
+        <div class="stat"><b>72,3</b><span>kg · −0,4/7T</span></div>
+        <div class="stat"><b>38,2</b><span>km / Woche</span></div>
+        <div class="stat"><b>142</b><span>kg e1RM</span></div>
+      </div>
+      <div class="cta-row">
+        <button class="cta">Coach-Report ansehen</button>
+        <span class="cta-ghost">Spartan Beast: 12 Wochen</span>
+      </div>
+    </div>
+    <div class="hero-art">
+      <img id="hero-img" src="assets/klar-sport/run-ink-slash.png" alt="Sportler-Silhouette">
+    </div>
+  </section>
+
+  <section class="picker">
+    <span class="picker-label">Signatur-Variante</span>
+    <div class="thumbs" id="thumbs"></div>
+  </section>
+
+  <div class="section-line"><div class="rule"></div></div>
+
+  <section class="dash">
+    <div class="dash-head"><h2>Übersicht</h2><span class="date">Mo · 23. Juni</span></div>
+    <div class="kpi-grid">
+      <div class="card">
+        <img class="wm" src="assets/klar-sport/koerper-ink-arc.png" alt="">
+        <div class="label">Körper</div><div class="sub">Gewicht &amp; TDEE</div>
+        <div class="kpi"><b>72,3</b><span class="u">kg</span></div>
+        <div class="delta">▼ 0,4 kg / 7 Tage</div>
+        <div class="subrow"><span>TDEE <b>2.480 kcal</b></span><span>KFA <b>18,2 %</b></span></div>
+      </div>
+      <div class="card">
+        <img class="wm" src="assets/klar-sport/run-teal-solid.png" alt="">
+        <div class="label">Laufen</div><div class="sub">Volumen &amp; Tempo</div>
+        <div class="kpi"><b>38,2</b><span class="u">km/Wo</span></div>
+        <div class="delta">▲ 6,1 km</div>
+        <div class="subrow"><span>Pace <b>5:12 /km</b></span><span>VO₂max <b>52</b></span></div>
+      </div>
+      <div class="card">
+        <img class="wm" src="assets/klar-sport/kraft-ink-slash.png" alt="">
+        <div class="label">Kraft</div><div class="sub">Kraftaufbau</div>
+        <div class="kpi"><b>142</b><span class="u">kg e1RM</span></div>
+        <div class="delta">▲ 4 kg</div>
+        <div class="subrow"><span>Tonnage <b>12,4 t</b></span><span>RPE ø <b>7,5</b></span></div>
+      </div>
+    </div>
+
+    <div class="wide">
+      <div class="card chart-card">
+        <h3>Gewicht · 90 Tage</h3>
+        <div class="csub">7-Tage-EWMA · Defizit greift, Wasser-Rauschen gefiltert</div>
+        <svg class="area" id="weightChart" viewBox="0 0 100 42" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+      <div class="card coach">
+        <div class="coach-top">
+          <div class="coach-ava"><img src="assets/coach.png" alt=""></div>
+          <div><div class="coach-name">Coach</div><div class="coach-role">ehrlich-motivierend</div></div>
+        </div>
+        <div class="coach-msg">Diese Woche zeigt klar nach vorn: <b>Gewicht</b> −0,4 kg im 7-Tage-Mittel bei stabiler Tonnage — du hältst Kraft im Defizit. <b>Laufvolumen</b> +6 km, aber die Pace stagniert. Eine konkrete Anpassung: ein lockerer Dauerlauf weniger, dafür ein Intervall.</div>
+        <span class="pill">⛰ Höhenmeter: nicht verfügbar</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Studie zur gewählten Richtung — <b>Klar &amp; Klinisch</b> (UI) kombiniert mit der <b>Sport-Silhouette</b> aus Neo-Sport.
+    Signatur-Varianten oben umschaltbar. Zurück zur Gesamtübersicht über „Alle 11 Richtungen“.
+  </footer>
+
+  <script>
+    (() => {
+      "use strict";
+      const RUN = [
+        { key: "run-ink-slash", label: "Ink + Slash" },
+        { key: "run-teal-solid", label: "Teal" },
+        { key: "run-monoline", label: "Monoline" },
+        { key: "run-duotone", label: "Duotone" },
+      ];
+      const thumbs = document.getElementById("thumbs");
+      RUN.forEach((v, i) => {
+        const b = document.createElement("button");
+        b.className = "thumb" + (i === 0 ? " sel" : "");
+        b.innerHTML = '<img src="assets/klar-sport/' + v.key + '.png" alt=""><span>' + v.label + "</span>";
+        b.addEventListener("click", () => {
+          document.getElementById("hero-img").src = "assets/klar-sport/" + v.key + ".png";
+          document.querySelectorAll(".thumb").forEach((t) => t.classList.remove("sel"));
+          b.classList.add("sel");
+        });
+        thumbs.appendChild(b);
+      });
+
+      // kleiner Flaechen-Chart (Gewicht 90 Tage)
+      const vals = [74.8, 74.6, 74.9, 74.3, 74.4, 73.9, 74.1, 73.6, 73.8, 73.3,
+        73.5, 73.0, 73.2, 72.8, 72.9, 72.5, 72.7, 72.3, 72.5, 72.1, 72.3];
+      const W = 100, H = 42, pad = 4;
+      const min = Math.min(...vals), max = Math.max(...vals), range = (max - min) || 1, n = vals.length;
+      const p = vals.map((v, i) => [pad + (i / (n - 1)) * (W - 2 * pad), pad + (1 - (v - min) / range) * (H - 2 * pad)]);
+      const line = p.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ");
+      const area = line + " L" + p[n - 1][0].toFixed(1) + " " + H + " L" + p[0][0].toFixed(1) + " " + H + " Z";
+      const grid = [0.25, 0.5, 0.75].map((g) =>
+        '<line x1="0" x2="100" y1="' + (H * g).toFixed(1) + '" y2="' + (H * g).toFixed(1) +
+        '" style="stroke:var(--border)" stroke-width="1" vector-effect="non-scaling-stroke"/>').join("");
+      document.getElementById("weightChart").innerHTML =
+        '<defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" style="stop-color:var(--accent);stop-opacity:.20"/>' +
+        '<stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>' + grid +
+        '<path d="' + area + '" fill="url(#wg)"/>' +
+        '<path d="' + line + '" fill="none" style="stroke:var(--accent)" stroke-width="2" ' +
+        'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+    })();
+  </script>
+</body>
+</html>

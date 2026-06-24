@@ -1,0 +1,18 @@
+{
+  "_comment": "Diese beiden Motive sind neon-GRUEN -> mit Magenta-Chroma generieren (CHROMA_HEX=#FF00E5), sonst wuerde der gruene Key sie ausstanzen. Aufruf siehe README/Notiz.",
+  "outDir": "design/assets",
+  "items": [
+    {
+      "key": "dark-athletic",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single abstract athletic motif: a stylized upward-sprinting human stride rendered as glowing neon-green energy lines tracing motion, fused with a sharp rising performance trendline that arcs up and to the right. Thin precise luminous strokes with a soft electric-green and cyan glow bleeding from each line like a heads-up display readout. Minimal, geometric, data-driven, high-tech sports-tracker aesthetic. Crisp line-art with subtle gradient glow, no fill, focused energy. Single isolated subject, centered, no text, no UI elements."
+    },
+    {
+      "key": "terminal-local-first",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single isolated monospace-terminal-style emblem for a fitness app: an abstract running figure constructed entirely from thin uniform phosphor-green vector strokes and a regular grid of small green dots, like a luminous oscilloscope plot. The figure is mid-stride, suggested by a clean angular line path and a few glowing scanline-style horizontal traces, with one subtle waveform pulse running through the torso to evoke heartbeat and progress. Flat, no shading, no gradients except a faint inner phosphor glow on the strokes. Strictly one accent color: bright #5dff9b green. Crisp, technical, calm, precise CLI aesthetic. Single centered subject, no text, no labels, no UI chrome."
+    }
+  ]
+}

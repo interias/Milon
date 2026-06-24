@@ -1,0 +1,88 @@
+{
+  "outDir": "design/assets",
+  "items": [
+    {
+      "key": "klar-klinisch",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single minimal Swiss-International style line-art motif for a fitness app: one continuous ultra-thin precise stroke forming an abstract ascending pulse-meets-progress curve, like a clinical heartbeat line resolving into a clean upward trend arc. Drawn in a calm cool teal (#0a6e66), monoline weight, perfectly even thickness, geometric and surgical, generous negative space, two small precise circular node dots marking inflection points. Flat vector, no shading, no gradient, no fill, no perspective, clinical and trustworthy, grid-aligned, single isolated subject centered."
+    },
+    {
+      "key": "warm-editorial",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single abstract editorial emblem for a fitness app: one continuous, elegant terracotta-clay line forming an upward-rising human figure mid-stride, the torso and lifted arm sweeping into a smooth ascending curve that suggests both running and lifting. Warm magazine aesthetic, hand-inked fine-line illustration with subtle organic weight variation, like a premium serif-typeset print motif. Muted warm palette of clay terracotta, soft sand, and warm cream tones; flat with a faint paper-grain texture, no harsh shadows. Calm, mature, refined, generous negative space. Single isolated subject, centered, perfectly clean edges for cutout, no text, no UI, no grid."
+    },
+    {
+      "key": "soft-calm",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single soft abstract motif for a calming wellbeing fitness app: a gently rounded, pebble-smooth human figure mid-stride blended seamlessly into a flowing arc, formed from soft overlapping translucent shapes in muted pastels: soft lavender, gentle mint, and warm peach. Smooth gradients, no hard edges, plump rounded forms with a friendly, weightless feel, like soft clay or a calm breath made visible. Minimal flat-meets-gradient illustration style, generous curves, tender and reassuring mood. Single isolated subject, centered, no text, no UI elements."
+    },
+    {
+      "key": "brutalist-data",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A bold neo-brutalist emblem of a running human figure built from thick, hard-edged geometric blocks: chunky rectangles and sharp angular shards forming a striding body mid-run, rendered in flat solid colors with zero gradients. Heavy 4px pure-black outlines around every block, raw and uneven like a woodcut. Monochrome off-white and deep black structure with a single screaming orange (#FF4D00) accent block marking the forward leg, plus one small electric-blue (#1F4FFF) square as a counterweight. Flat poster-print aesthetic, high contrast, slight halftone grit texture on the fills, brutalist concrete energy. Single isolated subject, centered, no text, clean cut edges."
+    },
+    {
+      "key": "vibrant-energetic",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single bold abstract energy motif for a fitness app: an upward-surging chevron formed by three stacked, dynamic ribbon strokes that thicken and accelerate as they rise, like a stylized motion arc of a sprinting body in full push. Smooth fluid forms with a vivid molten gradient flowing from deep orange at the base through fiery coral into hot magenta-pink at the tips, glossy and saturated. Energetic forward lean, sense of momentum and explosive lift. Clean modern flat-gradient vector illustration, soft inner glow, crisp edges, geometric confidence. Single isolated subject, centered, no text, no UI, no shadow on ground."
+    },
+    {
+      "key": "nordic-scandi",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single minimal Scandinavian-style abstract motif symbolizing fitness progress: three smooth, rounded pebble-like bars of gently increasing height arranged like a calm ascending rhythm, suggesting an upward trend, each formed from soft matte clay shapes. Muted natural earth palette: warm stone beige, soft sage, and a quiet dusty blue, with subtle flat tonal shading, no harsh gradients, no glow. Clean geometric forms, generous negative space, soft organic edges, hand-crafted ceramic feel. Flat illustration, calm and precise, breathable composition. Single isolated subject, perfectly centered, no text, no UI."
+    },
+    {
+      "key": "glass-depth",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single abstract glassmorphism motif for a fitness app: a translucent frosted-glass orb pierced by an upward-sweeping ribbon of light, suggesting motion and ascent. Frosted semi-transparent surfaces with soft internal blur, layered depth, and gentle drop shadows. Cool palette of deep indigo and violet glass with bright cyan and soft lavender highlights, subtle iridescent edge glow catching light like polished acrylic. Smooth gradient fills, soft specular reflections, no harsh outlines. Elegant, modern, iOS-inspired, calm and premium. Single isolated subject, centered, no text, no UI elements."
+    },
+    {
+      "key": "neo-sport-bold",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A bold athletic emblem of a sprinting runner in mid-stride, rendered as a single flat solid-black silhouette with one aggressive diagonal slash of pure signal red (#D60020) cutting across the body to suggest forward speed and momentum. Sport-brand athletic badge aesthetic: ultra-high contrast, stark black and white with exactly one red accent, thick confident geometric shapes, sharp angular edges, no gradients, no fine detail, completely flat poster-style vector look. Dynamic, energetic, kinetic, condensed and muscular. Centered single subject, clean isolated cutout, no text, no lettering, no UI elements, no scenery."
+    },
+    {
+      "key": "aurora-gradient",
+      "size": "1024x1024",
+      "quality": "low",
+      "prompt": "A single abstract aurora ribbon shaped like an upward-flowing motion curve, evoking forward progress and ascent for a fitness app. Smooth silky gradient flowing from deep indigo through electric violet into luminous teal, with soft volumetric glow and fine luminous glints along its leading edge. Sleek modern SaaS aesthetic, ultra-clean, weightless and elegant, gentle curvature like a stylized running stride frozen in light. Subtle internal depth and translucency, faint particle sparkles trailing off. High-end product illustration, smooth rendered gradients, no harsh outlines, calm and premium. Single isolated subject, centered, no text, no UI elements."
+    },
+
+    {
+      "key": "koerper",
+      "size": "1024x1024",
+      "quality": "low",
+      "style": "Modern-minimal flat vector illustration, single centered subject, soft friendly rounded geometry, a cohesive warm-coral and teal accent palette with light neutral fills, gentle two-tone shading and subtle highlights, clean even line weight, no text, no labels, no shadow on ground.",
+      "prompt": "A friendly flat-design smart bathroom scale shown at a slight three-quarter angle with a rounded square platform and a softly glowing circular display showing a simple body-silhouette progress ring, clean rounded edges, single centered subject"
+    },
+    {
+      "key": "laufen",
+      "size": "1024x1024",
+      "quality": "low",
+      "style": "Modern-minimal flat vector illustration, single centered subject, soft friendly rounded geometry, a cohesive warm-coral and teal accent palette with light neutral fills, gentle two-tone shading and subtle highlights, clean even line weight, no text, no labels, no shadow on ground.",
+      "prompt": "A dynamic flat-design running shoe mid-stride leaning forward with a smooth curving dotted motion route trailing behind it like a path, energetic friendly rounded form, single centered subject"
+    },
+    {
+      "key": "kraft",
+      "size": "1024x1024",
+      "quality": "low",
+      "style": "Modern-minimal flat vector illustration, single centered subject, soft friendly rounded geometry, a cohesive warm-coral and teal accent palette with light neutral fills, gentle two-tone shading and subtle highlights, clean even line weight, no text, no labels, no shadow on ground.",
+      "prompt": "A bold flat-design dumbbell shown at a gentle three-quarter angle with chunky rounded weight plates and a clean grip handle, sturdy friendly geometry, single centered subject"
+    },
+    {
+      "key": "coach",
+      "size": "1024x1024",
+      "quality": "low",
+      "style": "Modern-minimal flat vector illustration, single centered subject, soft friendly rounded geometry, a cohesive warm-coral and teal accent palette with light neutral fills, gentle two-tone shading and subtle highlights, clean even line weight, no text, no labels, no shadow on ground.",
+      "prompt": "A friendly flat-design rounded speech-bubble chat shape with a simple smiling AI coach face and a small headset, conveying supportive guidance, soft approachable form, single centered subject"
+    }
+  ]
+}

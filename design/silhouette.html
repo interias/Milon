@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foto-Schablonen · Vorne-Test</title>
+<style>
+  :root{
+    --bg:#fbfcfc; --surface:#fff; --ink:#14201f; --muted:#4d5b5a; --line:#e2e7e8;
+    --accent:#0a6e66; --accent2:#5cb8af;
+    --op:.28; --tint:var(--accent);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Inter Tight",Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 22px 60px}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0}
+  .sub{color:var(--muted);font-size:14px;margin:4px 0 0}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin:22px 0 6px;
+    padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .controls label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  input[type=range]{accent-color:var(--accent)}
+  button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+  button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px;margin-top:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .frame{position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;
+    background:#f3f6f6;border:1px solid var(--line)}
+  .photo{position:absolute;inset:0;display:grid;place-items:center;color:#c7d0cf;font-size:12px}
+  .photo.has{background-size:cover;background-position:center}
+  .center{position:absolute;left:50%;top:4%;bottom:4%;width:0;border-left:1px dashed var(--accent);opacity:.3}
+  .sil{position:absolute;inset:6% 8%;background:var(--tint);opacity:var(--op);
+    -webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+  .chip{position:absolute;left:10px;top:10px;background:#e1f0ee;color:var(--accent);
+    font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px}
+  .name{font-size:13px;font-weight:600;margin:10px 0 2px}
+  .links{display:flex;gap:12px;font-size:12px}
+  .links a{color:var(--accent);text-decoration:none}
+  .links a:hover{text-decoration:underline}
+  .note{color:var(--muted);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Foto-Schablonen · Vorne-Test</h1>
+  <p class="sub">gpt-image-2 → Magenta freigestellt → als teal getönte Ausrichthilfe im 3:4-Zuschnitt. F5 = neu laden.</p>
+
+  <div class="controls">
+    <label>Deckkraft <input id="op" type="range" min="0" max="60" value="28" /> <span id="opv">28%</span></label>
+    <label>Farbe
+      <button id="cAccent" class="on">Teal</button>
+      <button id="cInk">Ink</button>
+    </label>
+    <label>Hintergrund
+      <button id="pOff" class="on">leer</button>
+      <button id="pOn">Beispielfoto</button>
+    </label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <p class="note">Tipp: Foto in den Frame denken — du skalierst/verschiebst es später so, dass dein Körper die Silhouette füllt. Roh- und Prompt-Dateien liegen unter <code>design/assets/silhouette/</code>.</p>
+</div>
+
+<script>
+  const VARIANTS = [
+    ["front-solid-armsout","Arme leicht ab, V-Taper"],
+    ["front-outline","nur Außenkontur"],
+    ["front-armsdown","Arme an der Seite"],
+    ["front-stance","athletischer Stand"],
+  ];
+  const grid = document.getElementById("grid");
+  for(const [id,desc] of VARIANTS){
+    const card = document.createElement("div"); card.className="card";
+    card.innerHTML = `
+      <div class="frame">
+        <div class="photo" data-photo></div>
+        <div class="center"></div>
+        <div class="sil" style="--m:url(assets/silhouette/${id}.png)"></div>
+        <div class="chip">Vorne</div>
+      </div>
+      <div class="name">${id}</div>
+      <div class="sub" style="font-size:12px">${desc}</div>
+      <div class="links">
+        <a href="assets/silhouette/${id}.png" target="_blank">Freigestellt</a>
+        <a href="assets/.raw/silhouette/${id}.png" target="_blank">Roh</a>
+        <a href="assets/silhouette/${id}.prompt" target="_blank">Prompt</a>
+      </div>`;
+    grid.appendChild(card);
+  }
+  const root = document.documentElement;
+  const op = document.getElementById("op"), opv = document.getElementById("opv");
+  op.oninput = () => { root.style.setProperty("--op", op.value/100); opv.textContent = op.value+"%"; };
+  const setSel = (a,b) => { a.classList.add("on"); b.classList.remove("on"); };
+  cAccent.onclick = () => { root.style.setProperty("--tint","var(--accent)"); setSel(cAccent,cInk); };
+  cInk.onclick    = () => { root.style.setProperty("--tint","var(--ink)"); setSel(cInk,cAccent); };
+  const photos = () => document.querySelectorAll("[data-photo]");
+  pOff.onclick = () => { photos().forEach(p=>{p.className="photo";p.textContent="";p.style.background="";}); setSel(pOff,pOn); };
+  pOn.onclick  = () => { photos().forEach(p=>{p.className="photo has";p.style.background="repeating-linear-gradient(135deg,#dfe7e6 0 14px,#e9efee 14px 28px)";}); setSel(pOn,pOff); };
+  pOff.click();
+</script>
+</body>
+</html>

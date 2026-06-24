@@ -1,0 +1,15 @@
+{
+  "_comment": "Muskelgruppen-Icons + Empty-State im Klar-&-Klinisch-Stil (Ink + Teal). Gruener Standard-Chroma ok.",
+  "outDir": "design/assets/icons",
+  "style": "Minimal flat anatomical icon, single subject centered, deep ink charcoal (#14201f) silhouette with a single cool teal (#0a6e66) highlight on the target muscle, clean Swiss clinical style, bold simple shapes that read clearly even at small size, no text, no background.",
+  "items": [
+    {"key": "beine", "prompt": "a pair of strong stylized human legs (thighs and quads) from the front, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "brust", "prompt": "a stylized male chest with pectoral muscles, front upper torso, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "ruecken", "prompt": "a stylized muscular back with a V-taper of the lats seen from behind, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "schultern", "prompt": "stylized rounded shoulders and deltoid muscles, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "bizeps", "prompt": "a flexed arm showing a prominent biceps, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "trizeps", "prompt": "an extended arm highlighting the triceps on the back of the upper arm, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "core", "prompt": "a stylized toned core with six-pack abs on a torso, simple bold flat icon", "size": "1024x1024", "quality": "low"},
+    {"key": "empty", "prompt": "a clean minimal illustration of a tidy clipboard with a small upward trend line, calm and friendly, for an empty-state placeholder", "size": "1024x1024", "quality": "low"}
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Design: HTML-Server",
+      "type": "shell",
+      "command": "python",
+      "args": ["serve.py"],
+      "options": { "cwd": "${workspaceFolder}/design" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "milon",
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true
+      }
+    },
+    {
+      "label": "Server: FastAPI (Dev)",
+      "type": "shell",
+      "command": "${workspaceFolder}/server/.venv/Scripts/uvicorn.exe",
+      "args": ["app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "milon",
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Client: Next.js (Dev)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/client" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "milon",
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Start: Server + Client",
+      "dependsOn": ["Server: FastAPI (Dev)", "Client: Next.js (Dev)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start: Alles (Server + Client + Design)",
+      "dependsOn": [
+        "Server: FastAPI (Dev)",
+        "Client: Next.js (Dev)",
+        "Design: HTML-Server"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

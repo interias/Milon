@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de" data-density="normal" data-assets="on">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Milon · Design-Exploration</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="chrome-header">
+    <div class="brand">
+      <b>Milon · Design-Exploration</b>
+      <span>11 Richtungen · gleiche Oberfläche, andere Haut — vergleichen &amp; weiterdrehen</span>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn" href="klar-klinisch.html" style="margin-right:12px; text-decoration:none">★ Studie: Klar &amp; Klinisch</a>
+    <a class="btn" href="silhouette.html" style="margin-right:12px; text-decoration:none">◍ Foto-Schablonen</a>
+    <div class="seg" id="view-seg">
+      <button data-view="single" aria-pressed="true">Einzelansicht</button>
+      <button data-view="gallery" aria-pressed="false">Galerie</button>
+    </div>
+  </header>
+
+  <div class="chrome-controls">
+    <div class="ctrl">
+      <label>Richtung</label>
+      <button class="btn icon" id="prev" title="vorige (←)">‹</button>
+      <select id="theme-select" aria-label="Design-Richtung"></select>
+      <button class="btn icon" id="next" title="nächste (→)">›</button>
+    </div>
+    <div class="ctrl">
+      <label>Dichte</label>
+      <div class="seg" id="density-seg">
+        <button data-density="compact" aria-pressed="false">Kompakt</button>
+        <button data-density="normal" aria-pressed="true">Normal</button>
+        <button data-density="cozy" aria-pressed="false">Luftig</button>
+      </div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="assets-toggle" checked>
+      Generierte Assets
+    </label>
+  </div>
+
+  <main class="stage">
+    <div id="single-view">
+      <div class="single-wrap">
+        <section class="frame" id="frame"></section>
+        <aside id="moodboard-slot"></aside>
+      </div>
+    </div>
+
+    <div id="gallery-view" class="hidden">
+      <div class="gallery" id="gallery"></div>
+    </div>
+
+    <div class="footnote">
+      <b>Bedienung:</b> Richtung oben wählen oder mit ← / → durchblättern · „Galerie“ zeigt alle 11 nebeneinander ·
+      „Generierte Assets“ blendet die gpt-image-2-Grafiken aus/ein, um reine Farb-/Typo-Wirkung zu prüfen.<br>
+      <b>Server:</b> VS-Code → <i>Task ausführen</i> → „Design: HTML-Server“ &nbsp;oder&nbsp; <code>python design/serve.py</code> &nbsp;→&nbsp; <code>http://localhost:4321</code><br>
+      <b>Assets neu generieren:</b> <code>npm run assets</code> (Standard) &nbsp;·&nbsp; die zwei neon-grünen Motive via Magenta-Chroma (siehe <code>design/assets-magenta-chroma.json</code>).
+    </div>
+  </main>
+
+  <script src="themes.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

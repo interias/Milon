@@ -1,0 +1,13 @@
+{
+  "_hinweis": "Diesen 'milon'-Block in die Claude-Desktop-Config einfuegen: %APPDATA%/Claude/claude_desktop_config.json (Windows) bzw. ~/Library/Application Support/Claude/claude_desktop_config.json (macOS). Danach Claude Desktop neu starten. Fuer Claude Code reicht die .mcp.json im Repo-Root.",
+  "mcpServers": {
+    "milon": {
+      "command": "C:\\Users\\stefa\\git\\Milon\\server\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "app.mcp.server"],
+      "env": {
+        "PYTHONPATH": "C:\\Users\\stefa\\git\\Milon\\server",
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}
