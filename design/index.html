@@ -1,68 +1,63 @@
 <!doctype html>
-<html lang="de" data-density="normal" data-assets="on">
+<html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Milon · Design-Exploration</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>Milon · Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#fbfcfc; --surface:#fff; --ink:#14201f; --muted:#4d5b5a;
+      --line:#e2e7e8; --accent:#0a6e66; --accent2:#5cb8af;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; background:var(--bg); color:var(--ink);
+      font-family:"Inter",system-ui,sans-serif; line-height:1.6;
+      -webkit-font-smoothing:antialiased; padding:48px 20px}
+    .wrap{max-width:760px; margin:0 auto}
+    .brand{display:flex; align-items:center; gap:12px; margin-bottom:8px}
+    .dot{width:12px; height:12px; border-radius:50%; background:var(--accent)}
+    h1{font-family:"Inter Tight",sans-serif; font-weight:800; letter-spacing:-.02em;
+      font-size:34px; margin:0}
+    .sub{color:var(--muted); margin:0 0 36px; font-size:16px}
+    .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+    @media (max-width:560px){.grid{grid-template-columns:1fr}}
+    .card{display:block; text-decoration:none; color:inherit; background:var(--surface);
+      border:1px solid var(--line); border-radius:10px; padding:22px 22px 20px;
+      transition:border-color .15s, transform .15s}
+    .card:hover{border-color:var(--accent); transform:translateY(-2px)}
+    .card .k{font-family:"Inter Tight",sans-serif; font-weight:700; font-size:19px;
+      display:flex; align-items:center; gap:9px; margin-bottom:6px}
+    .card .d{color:var(--muted); font-size:14px}
+    .card .mark{color:var(--accent); font-size:20px; line-height:1}
+    .note{margin-top:34px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:18px}
+    code{font-family:ui-monospace,monospace; background:#eef3f2; padding:1px 6px; border-radius:5px; font-size:.92em}
+  </style>
 </head>
 <body>
-  <header class="chrome-header">
-    <div class="brand">
-      <b>Milon · Design-Exploration</b>
-      <span>11 Richtungen · gleiche Oberfläche, andere Haut — vergleichen &amp; weiterdrehen</span>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>
+      <span style="font-family:'Inter Tight',sans-serif; font-weight:800; font-size:18px">Milon</span>
     </div>
-    <div class="spacer"></div>
-    <a class="btn" href="klar-klinisch.html" style="margin-right:12px; text-decoration:none">★ Studie: Klar &amp; Klinisch</a>
-    <a class="btn" href="silhouette.html" style="margin-right:12px; text-decoration:none">◍ Foto-Schablonen</a>
-    <div class="seg" id="view-seg">
-      <button data-view="single" aria-pressed="true">Einzelansicht</button>
-      <button data-view="gallery" aria-pressed="false">Galerie</button>
-    </div>
-  </header>
+    <h1>Design</h1>
+    <p class="sub">Gewählte Designrichtung <strong>Klar &amp; Klinisch</strong> und ihre Asset-Studien.
+      Die Explorations-Galerie der verworfenen Richtungen wurde entfernt.</p>
 
-  <div class="chrome-controls">
-    <div class="ctrl">
-      <label>Richtung</label>
-      <button class="btn icon" id="prev" title="vorige (←)">‹</button>
-      <select id="theme-select" aria-label="Design-Richtung"></select>
-      <button class="btn icon" id="next" title="nächste (→)">›</button>
+    <div class="grid">
+      <a class="card" href="klar-klinisch.html">
+        <div class="k"><span class="mark">★</span> Klar &amp; Klinisch</div>
+        <div class="d">Near-Product-Studie der gewählten UI: Tokens, Sportler-Silhouette, klinische Palette.</div>
+      </a>
+      <a class="card" href="silhouette.html">
+        <div class="k"><span class="mark">◍</span> Foto-Schablonen</div>
+        <div class="d">Silhouetten- &amp; Pose-Overlays für die Fortschritts-Fotos (gpt-image-2 → Magenta-Key).</div>
+      </a>
     </div>
-    <div class="ctrl">
-      <label>Dichte</label>
-      <div class="seg" id="density-seg">
-        <button data-density="compact" aria-pressed="false">Kompakt</button>
-        <button data-density="normal" aria-pressed="true">Normal</button>
-        <button data-density="cozy" aria-pressed="false">Luftig</button>
-      </div>
-    </div>
-    <label class="toggle">
-      <input type="checkbox" id="assets-toggle" checked>
-      Generierte Assets
-    </label>
+
+    <p class="note">Lokal starten: <code>python design/serve.py</code> (Port 4321) oder VS-Code-Task „Design: HTML-Server".
+      Asset-Generierung: <code>npm run assets</code> im Repo-Root (gpt-image-2, siehe <code>design/README.md</code>).</p>
   </div>
-
-  <main class="stage">
-    <div id="single-view">
-      <div class="single-wrap">
-        <section class="frame" id="frame"></section>
-        <aside id="moodboard-slot"></aside>
-      </div>
-    </div>
-
-    <div id="gallery-view" class="hidden">
-      <div class="gallery" id="gallery"></div>
-    </div>
-
-    <div class="footnote">
-      <b>Bedienung:</b> Richtung oben wählen oder mit ← / → durchblättern · „Galerie“ zeigt alle 11 nebeneinander ·
-      „Generierte Assets“ blendet die gpt-image-2-Grafiken aus/ein, um reine Farb-/Typo-Wirkung zu prüfen.<br>
-      <b>Server:</b> VS-Code → <i>Task ausführen</i> → „Design: HTML-Server“ &nbsp;oder&nbsp; <code>python design/serve.py</code> &nbsp;→&nbsp; <code>http://localhost:4321</code><br>
-      <b>Assets neu generieren:</b> <code>npm run assets</code> (Standard) &nbsp;·&nbsp; die zwei neon-grünen Motive via Magenta-Chroma (siehe <code>design/assets-magenta-chroma.json</code>).
-    </div>
-  </main>
-
-  <script src="themes.js"></script>
-  <script src="app.js"></script>
 </body>
 </html>

@@ -1,71 +1,46 @@
-# Milon · Design-Exploration
+# Milon · Design
 
-Spielwiese, um vor dem eigentlichen Bau Designrichtungen zu vergleichen und
-„weiterzudrehen". Eine Referenz-Oberfläche (Übersichts-Dashboard mit Körper /
-Laufen / Kraft + Coach), die sich live in **11 Richtungen** umskinnen lässt.
+Die **gewählte** Designrichtung als Referenz plus die Asset-Studien. Die ursprüngliche
+Explorations-Galerie (11 verworfene Richtungen, Theme-Switcher) wurde entfernt — die
+Entscheidung ist gefallen: **Klar & Klinisch ✕ Sport**.
 
 ## Starten
 
 - **VS Code:** `Terminal → Task ausführen…` → **„Design: HTML-Server"**
-- **oder:** `python design/serve.py`
-- Browser: <http://localhost:4321>
+- **oder:** `python design/serve.py` → <http://localhost:4321>
 
-Reload (F5) genügt nach Änderungen — kein Build. Der Server schickt No-Cache-Header.
-
-## Bedienen
-
-- **Richtung** oben wählen oder mit **← / →** durchblättern.
-- **Dichte:** Kompakt / Normal / Luftig.
-- **Galerie:** alle 11 Richtungen nebeneinander (klick öffnet die Einzelansicht).
-- **Generierte Assets:** blendet die gpt-image-2-Grafiken aus/ein (reine Farb-/Typo-Wirkung prüfen).
+Reload (F5) genügt — kein Build, der Server schickt No-Cache-Header.
 
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
-| `index.html` | Struktur + Bedienelemente |
-| `styles.css` | token-getriebenes Layout (jede Richtung setzt nur CSS-Variablen) |
-| `themes.js` | die 11 Richtungen (Tokens, Fonts, Signatur-Prompts) — aus dem Design-Workflow |
-| `app.js` | Theme-Switcher, Mock-Dashboard, Mini-Charts |
+| `index.html` | schlanke Landing → verlinkt die beiden Studien |
+| `klar-klinisch.html` | Near-Product-Studie der gewählten UI (Tokens, Sport-Silhouette, klinische Palette) |
+| `silhouette.html` | Foto-Schablonen: Silhouetten- & Pose-Overlays für die Fortschritts-Fotos |
 | `serve.py` | kleiner No-Cache-Dev-Server (Port 4321) |
-| `assets/` | generierte transparente PNGs (Signaturen je Richtung + 4 Domain-Icons) |
-
-## Assets neu generieren
-
-Voraussetzung: `OPENAI_API_KEY` in der Root-`.env`, einmalig `npm i openai sharp`.
-
-```bash
-# Standard-Batch (grüner Chroma-Key) – 9 Signaturen + 4 Icons
-npm run assets        # == node --env-file=.env <skill>/generate-transparent.mjs design/assets.json
-```
-
-**Sonderfall – zwei neon-grüne Motive** (`dark-athletic`, `terminal-local-first`):
-Der grüne Standard-Keyer würde sie ausstanzen. Darum auf **Magenta-Hintergrund**
-generieren und mit dem eigenen Magenta-Keyer freistellen:
-
-```bash
-CHROMA_HEX='#FF00E5' node --env-file=.env "$HOME/.claude/skills/transparent-images/scripts/generate-transparent.mjs" design/assets-magenta-chroma.json
-node design/tools/key-magenta.mjs
-```
-
-Bereits erzeugte Bilder werden bei Re-Runs übersprungen (Rohdaten in `assets/.raw/`,
-gitignored). Zum Neuerzeugen die jeweilige Datei in `assets/.raw/` löschen.
-
-Kosten: `1024×1024` / `quality:low` ≈ **$0,007/Bild** (alle 15 zusammen ≈ $0,10).
+| `assets/klar-sport/` | Lauf-Hero (`run-*`) + Domänen-Begleiter (`kraft-ink-slash`, `koerper-ink-arc`) |
+| `assets/silhouette/` | freigestellte Silhouetten + Posen (`poses/`) inkl. `*.prompt` (Generierungs-Protokoll) |
+| `assets/icons/` | Muskelgruppen-Icons (Quelle für `client/public/img/muscle/`) |
+| `tools/key-silhouette.mjs` | Magenta-Keyer (gpt-image-2 kann kein transparentes BG) |
 
 ## Gewählte Richtung: Klar & Klinisch ✕ Sport
 
-`klar-klinisch.html` (verlinkt oben in `index.html`) entwickelt die gewählte
-Richtung als nahezu echtes Produkt: **Klar-&-Klinisch-Stil** + die **Sport-Silhouette**
-aus Neo-Sport, übersetzt in die klinische Palette (Ink-Charcoal + ein Teal-Akzent).
-Hero-Silhouette oben per Picker umschaltbar (Ink+Slash / Teal / Monoline / Duotone).
+`klar-klinisch.html` entwickelt die Richtung als nahezu echtes Produkt: **Klar-&-Klinisch-Stil**
++ die **Sport-Silhouette**, übersetzt in die klinische Palette (Ink-Charcoal + ein Teal-Akzent).
+Tokens: bg `#fbfcfc`, surface `#fff`, text `#14201f`, muted `#4d5b5a`, border `#e2e7e8`,
+**accent Teal `#0a6e66`**, accent2 `#5cb8af`; Fonts **Inter Tight** (Display) / **Inter** (Body).
 
-Assets dazu in `assets/klar-sport/` (Definition `assets-klar-sport.json`):
-`run-ink-slash`, `run-teal-solid`, `run-monoline`, `run-duotone` (Lauf-Hero) sowie
-`kraft-ink-slash` und `koerper-ink-arc` (Domänen-Begleiter, als Karten-Wasserzeichen).
-Neu generieren: `node --env-file=.env "$HOME/.claude/skills/transparent-images/scripts/generate-transparent.mjs" design/assets-klar-sport.json`
+## Assets generieren
 
-## Bekannte Schwäche
+Voraussetzung: `OPENAI_API_KEY` in der Root-`.env` (gpt-image-2). Generierung läuft über die
+`transparent-images`-Skill (grüner bzw. Magenta-Chroma-Key → freigestellt). Definitionen:
+`assets-klar-sport.json` (Lauf-Hero + Domänen) und `assets-graphics.json` (Icons, Coach-Motiv).
 
-`terminal-local-first.png`: die Bewegungs-Punkte gerieten leicht rosa statt phosphor-grün.
-Brauchbar als Platzhalter; bei Wahl dieser Richtung neu generieren (Prompt schärfen).
+```bash
+npm run assets   # Root-Skript: node --env-file=.env <skill>/generate-transparent.mjs design/assets.json
+```
+
+Für die **Silhouetten** (auf Magenta generiert, dann freigestellt): siehe `tools/key-silhouette.mjs`.
+Rohdaten landen in `assets/.raw/` (gitignored); zum Neuerzeugen die jeweilige `.raw`-Datei löschen.
+Kosten: `1024²` / `quality:low` ≈ **$0,007/Bild**.
