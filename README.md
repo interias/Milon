@@ -96,7 +96,7 @@ flowchart LR
 
 | Quelle | Was | Wie / benötigte API |
 |---|---|---|
-| **Health Connect** (Android) | Gewicht, KFA, Schritte, Laufen, Radfahren, VO₂max | tägliche SQLite-Zip nach `data/incoming/` legen → inkrementeller Import (Phase 2: Drive-Pull) |
+| **Health Connect** (Android) | Gewicht, KFA, Schritte, Laufen, Radfahren, VO₂max | **automatischer Drive-Pull** der täglichen Export-Zip (öffentlicher Datei-Link → `HC_DRIVE_FILE_ID`, keylos via `gdown`) **oder** Zip manuell nach `data/incoming/` legen |
 | **Hevy** | Krafttraining (Sätze, Gewicht, Reps, RPE) | offizielle [Hevy-API](https://api.hevyapp.com/docs/) (`HEVY_API_KEY`), echter Inkrement-Sync via `/v1/workouts/events` |
 | **FDDB** | Ernährung (kcal + Makros) | Login-Cookie **`fddb`** (oder Auto-Login mit `FDDB_USER`/`FDDB_PW`), CSV-Export |
 | **OpenRouter** | LLM-Coach | OpenAI-kompatibler Endpunkt (`OPENROUTER_API_KEY`, Modell frei wählbar) |
@@ -122,6 +122,7 @@ cp server/.env.example server/.env   # App-Secrets (siehe Tabelle)
 | | `HEVY_API_KEY` | Hevy-Krafttraining-Sync |
 | | `FDDB_USER` / `FDDB_PW` | FDDB-Auto-Login (Ernährung) |
 | | `FDDB_COOKIE` | alternativ: `fddb`-Cookie (`userid,token`) |
+| | `HC_DRIVE_FILE_ID` | Health-Connect-Auto-Pull: Datei-ID aus dem Drive-Freigabelink der Export-Zip |
 | | `DATABASE_URL` | optional, Default `sqlite:///./data/tracker.db` |
 | `.env` (Root) | `OPENAI_API_KEY` | nur für gpt-image-2-Design-Assets |
 | `client/.env` | `NEXT_PUBLIC_API_URL` | optional (Default: `/api`-Proxy) |
@@ -150,12 +151,16 @@ serverseitig ans Backend (kein CORS, keine Firewall-Freigabe für `:8000` nötig
 ```bash
 curl -X POST http://localhost:8000/ingest/hevy            # Hevy
 curl -X POST http://localhost:8000/ingest/fddb            # FDDB
-# Health Connect: tägliche Export-Zip nach data/incoming/ legen, dann:
+# Health Connect aus Google Drive ziehen (HC_DRIVE_FILE_ID gesetzt):
+curl -X POST http://localhost:8000/ingest/health-connect-pull
+# ...oder die Export-Zip manuell nach data/incoming/ legen und:
 curl -X POST http://localhost:8000/ingest/health-connect
 curl -X POST "http://localhost:8000/ingest/refresh"       # alle Quellen + Status
 ```
 
-Ab Phase 2 erledigt das ein **Scheduler** automatisch (Hevy alle 6 h, FDDB täglich, HC-Ordner-Scan).
+Ab Phase 2 erledigt das ein **Scheduler** automatisch (Hevy alle 6 h, FDDB täglich, HC-Drive-Pull
+täglich 05:00 + Ordner-Scan). Für den **Drive-Pull**: die Export-Zip in Drive auf „Jeder mit dem
+Link" freigeben, den Datei-Link kopieren und die ID daraus als `HC_DRIVE_FILE_ID` in `server/.env`.
 
 ## Beispiel-Workflows
 
@@ -195,7 +200,7 @@ ohne Namensnennung. (Marken-/Patentrechte sind davon nicht berührt.)
 
 ## Status
 
-Phasen **1–3** umgesetzt: Ingest + Metriken + Dashboards · Auto-Syncs (Scheduler) · MCP-Server.
-Offen: **Phase 4** (Hosting) und optional ein echter Drive-Pull der Health-Connect-Zip.
+Phasen **1–3** umgesetzt: Ingest (inkl. Health-Connect-Auto-Pull aus Google Drive) + Metriken +
+Dashboards · Auto-Syncs (Scheduler) · MCP-Server. Offen: **Phase 4** (Hosting).
 
 <sub>Source of Truth für Architektur & Plan: <code>ARCHITECTURE.md</code>. Projekt-Memory: <code>CLAUDE.md</code>.</sub>

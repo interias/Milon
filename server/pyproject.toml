@@ -17,6 +17,7 @@ dependencies = [
   "pytz>=2024.1",
   "pillow>=10.0",
   "mcp>=1.2",
+  "gdown>=5.1",
 ]
 
 [project.optional-dependencies]

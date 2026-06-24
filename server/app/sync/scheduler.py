@@ -1,9 +1,9 @@
 """Phase-2-Automatik: geplante Quell-Syncs via APScheduler.
 - Hevy: API-Polling (alle 6 h)
 - FDDB: taeglich (Auto-Login -> CSV-Export)
-- Health Connect: Ordner-Scan auf data/incoming/ (alle 10 min) -> importiert bei neuer Datei
+- Health Connect: taeglicher Drive-Pull (05:00, wenn GOOGLE_API_KEY + HC_DRIVE_FOLDER_ID gesetzt)
+  PLUS Ordner-Scan auf data/incoming/ (alle 10 min) -> importiert auch manuell abgelegte Dateien.
 Jeder Lauf schreibt Status/Detail nach sync_state.
-(Echter Drive-Pull der HC-Zip = optionaler rclone-Schritt, siehe README/CLAUDE.md.)
 """
 from __future__ import annotations
 
@@ -72,6 +72,20 @@ def sync_hc_if_new() -> None:
         record_sync("health_connect", "error", str(e))
 
 
+def sync_hc_drive() -> None:
+    """Täglicher Pull der HC-Export-Zip aus Drive (wenn HC_DRIVE_FILE_ID gesetzt)."""
+    if not settings.hc_drive_file_id:
+        return
+    from ..ingest import drive
+    try:
+        res = drive.pull()
+        cur = str(int(HC_DB.stat().st_mtime)) if HC_DB.exists() else None
+        record_sync("health_connect", "ok",
+                    json.dumps({k: v for k, v in res.items() if k != "columns"}), cursor=cur)
+    except Exception as e:  # noqa: BLE001
+        record_sync("health_connect", "error", str(e))
+
+
 def start_scheduler() -> None:
     global _scheduler
     if not settings.scheduler_enabled or _scheduler is not None:
@@ -82,6 +96,7 @@ def start_scheduler() -> None:
     sch.add_job(sync_fddb, "cron", hour=4, minute=30, id="fddb", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())
+    sch.add_job(sync_hc_drive, "cron", hour=5, minute=0, id="hc_drive", replace_existing=True)
     sch.start()
     _scheduler = sch
 

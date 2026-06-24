@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     fddb_cookie: str = ""
     fddb_phpsessid: str = ""
 
+    # Health Connect via Google Drive: taegliche Export-Zip ziehen.
+    # "Jeder mit dem Link"-Inhalte sind per anonymem API-Key NICHT erreichbar (Google blockt das) ->
+    # der no-OAuth-Weg ist der keylose Download per DATEI-ID (gdown). Aus dem Datei-Freigabelink
+    # https://drive.google.com/file/d/<ID>/view die <ID> nehmen.
+    hc_drive_file_id: str = ""
+    # Optional/Legacy (nur fuer einen WIRKLICH oeffentlichen Ordner per API-Key nutzbar):
+    google_api_key: str = ""
+    hc_drive_folder_id: str = ""
+    hc_drive_filename: str = "Health Connect.zip"
+
     scheduler_enabled: bool = True
 
     def resolved_database_url(self) -> str:

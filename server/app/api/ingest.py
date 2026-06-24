@@ -8,8 +8,8 @@ import json
 
 from fastapi import APIRouter, HTTPException
 
-from ..config import INCOMING_DIR
-from ..ingest import fddb, health_connect, hevy
+from ..config import INCOMING_DIR, settings
+from ..ingest import drive, fddb, health_connect, hevy
 from ..sync import scheduler
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -52,6 +52,21 @@ def ingest_health_connect(full: bool = False) -> dict:
                 cursor=str(int(HC_DB.stat().st_mtime)))
 
 
+@router.post("/health-connect-pull")
+def ingest_health_connect_pull(full: bool = False) -> dict:
+    """Zieht die HC-Export-Zip aus dem öffentlichen Google-Drive-Ordner, entpackt + importiert sie.
+    Benötigt GOOGLE_API_KEY + HC_DRIVE_FOLDER_ID in server/.env."""
+    try:
+        res = drive.pull(full=full)
+    except Exception as e:  # noqa: BLE001
+        scheduler.record_sync("health_connect", "error", str(e))
+        raise HTTPException(status_code=502, detail=f"Drive-Pull fehlgeschlagen: {e}")
+    cursor = str(int(HC_DB.stat().st_mtime)) if HC_DB.exists() else None
+    scheduler.record_sync("health_connect", "ok",
+                          json.dumps({k: v for k, v in res.items() if k != "columns"}), cursor=cursor)
+    return res
+
+
 @router.post("/refresh")
 def refresh_all(full: bool = False) -> dict:
     """Alle Quellen aktualisieren (inkrementell; full=true erzwingt Voll-Reconciliation)."""
@@ -61,7 +76,17 @@ def refresh_all(full: bool = False) -> dict:
             res[src] = _run(src, fn)
         except HTTPException as e:
             res[src] = {"error": e.detail}
-    if HC_DB.exists():
+    if settings.hc_drive_file_id:
+        try:
+            r = drive.pull(full=full)
+            cur = str(int(HC_DB.stat().st_mtime)) if HC_DB.exists() else None
+            scheduler.record_sync("health_connect", "ok",
+                                  json.dumps({k: v for k, v in r.items() if k != "columns"}), cursor=cur)
+            res["health_connect"] = r
+        except Exception as e:  # noqa: BLE001
+            scheduler.record_sync("health_connect", "error", str(e))
+            res["health_connect"] = {"error": str(e)}
+    elif HC_DB.exists():
         try:
             res["health_connect"] = _run(
                 "health_connect",
@@ -71,5 +96,5 @@ def refresh_all(full: bool = False) -> dict:
         except HTTPException as e:
             res["health_connect"] = {"error": e.detail}
     else:
-        res["health_connect"] = {"skipped": "keine DB in data/incoming/"}
+        res["health_connect"] = {"skipped": "keine DB in data/incoming/ und kein Drive konfiguriert"}
     return res
