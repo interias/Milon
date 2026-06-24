@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   // erlauben — sonst blockt Next 16 den cross-origin Dev-Request und die HMR-WebSocket
   // schlägt fehl. Eigene IP(s) hier ergänzen, falls sie sich ändert.
   allowedDevOrigins: ["192.168.0.26"],
+  // Der Rewrite-Proxy hat per Default nur 30 s Timeout (Next: proxyTimeout || 30000).
+  // Der Tool-Calling-Coach (/coach/ask) braucht bei vielen Tool-Aufrufen 20–40 s → sonst
+  // antwortet der Proxy mit 500, obwohl das Backend noch sauber liefert. Auf 2 min anheben.
+  experimental: { proxyTimeout: 120_000 },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API}/:path*` }];
   },
