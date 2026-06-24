@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Milon · Coach-Lade-Animationen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#fbfcfc;--surface:#fff;--ink:#14201f;--muted:#4d5b5a;--line:#e2e7e8;--accent:#0a6e66;--accent2:#5cb8af}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,sans-serif;line-height:1.55;padding:40px 22px}
+  .wrap{max-width:1100px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--accent)}
+  h1{font-family:"Inter Tight",sans-serif;font-weight:800;letter-spacing:-.02em;font-size:30px;margin:0}
+  .sub{color:var(--muted);margin:.3rem 0 0;font-size:15px}
+  .demo{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:22px 0 8px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .demo .q{color:var(--accent);font-weight:500;min-width:230px}
+  .demo small{color:var(--muted)}
+  button.t{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 12px}
+  button.t:hover{border-color:var(--accent)}
+  .gallery{counter-reset:c;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-top:18px}
+  .card{counter-increment:c;position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .card::before{content:"#" counter(c);position:absolute;top:9px;left:12px;font-size:11px;font-weight:600;color:var(--muted)}
+  .stage{height:112px;width:100%;display:grid;place-items:center;overflow:hidden}
+  .stage svg{max-width:100%;max-height:100%}
+  figcaption{text-align:center}
+  figcaption b{font-size:13px}
+  figcaption small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  body.modal{background:#0c1413}
+  body.modal .wrap>.brand b,body.modal h1{color:#eef3f2}
+  body.modal .sub,body.modal .demo small{color:#9fb2ae}
+  body.modal .demo{background:#14201f;border-color:#23332f}
+  body.modal .gallery{}
+  .foot{margin-top:26px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="dot"></span><b style="font-family:'Inter Tight',sans-serif;font-weight:800;font-size:17px">Milon</b></div>
+  <h1>Coach-Lade-Animationen</h1>
+  <p class="sub">24 Kandidaten für den Wartescreen. <b>Sag mir einfach die Nummer</b> deiner Lieblingsanimation, dann baue ich sie ein.</p>
+
+  <div class="demo">
+    <span class="q" id="quip">…</span>
+    <small>↑ So rotieren die 100 Sprüche unabhängig — hier geht es nur um die <b>Animation</b>.</small>
+    <span style="flex:1"></span>
+    <button class="t" id="bg">Auf Modal-Hintergrund zeigen</button>
+  </div>
+
+  <div class="gallery">
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <line class="run-1-track" x1="0" y1="48" x2="120" y2="48" stroke="#5cb8af" stroke-width="3" stroke-linecap="round" stroke-dasharray="10 8"/>
+      <circle class="run-1-dot" cx="60" cy="48" r="7" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Laufbahn</b><small>Ein Punkt gleitet über eine scrollende, gestrichelte Strecke.</small></figcaption>
+  <style>
+    .run-1-track{animation:run-1-scroll 1.2s linear infinite}
+    @keyframes run-1-scroll{from{stroke-dashoffset:0}to{stroke-dashoffset:-18px}}
+    .run-1-dot{transform-box:fill-box;transform-origin:center;animation:run-1-bob 1.2s ease-in-out infinite}
+    @keyframes run-1-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+    @media (prefers-reduced-motion:reduce){.run-1-track,.run-1-dot{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <line x1="14" y1="74" x2="106" y2="74" stroke="#5cb8af" stroke-width="3" stroke-linecap="round"/>
+      <circle class="run-2-ball" cx="20" cy="64" r="8" fill="none" stroke="#0a6e66" stroke-width="3"/>
+    </svg>
+  </div>
+  <figcaption><b>Sprungbogen</b><small>Ein Ball hüpft in flüssigen Bögen über die Linie.</small></figcaption>
+  <style>
+    .run-2-ball{transform-box:fill-box;transform-origin:center;animation:run-2-hop 1.6s cubic-bezier(.4,0,.6,1) infinite}
+    @keyframes run-2-hop{
+      0%{transform:translate(0,0)}
+      25%{transform:translate(20px,-32px)}
+      50%{transform:translate(40px,0)}
+      75%{transform:translate(60px,-32px)}
+      100%{transform:translate(80px,0)}
+    }
+    @media (prefers-reduced-motion:reduce){.run-2-ball{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <path d="M24 70 A36 36 0 0 1 96 70" fill="none" stroke="#5cb8af" stroke-width="3" stroke-linecap="round"/>
+      <g class="run-3-needle">
+        <line x1="60" y1="70" x2="60" y2="34" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+      </g>
+      <circle cx="60" cy="70" r="4" fill="#14201f"/>
+    </svg>
+  </div>
+  <figcaption><b>Tacho</b><small>Die Nadel zieht zügig hoch und federt sanft zurück.</small></figcaption>
+  <style>
+    .run-3-needle{transform-box:fill-box;transform-origin:60px 70px;animation:run-3-sweep 2s cubic-bezier(.5,1.6,.4,1) infinite}
+    @keyframes run-3-sweep{0%{transform:rotate(-60deg)}55%,75%{transform:rotate(60deg)}100%{transform:rotate(-60deg)}}
+    @media (prefers-reduced-motion:reduce){.run-3-needle{animation:none;transform:rotate(15deg)}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <g class="run-4-row">
+        <ellipse class="run-4-p run-4-a" cx="6" cy="40" rx="6" ry="10" fill="#0a6e66"/>
+        <ellipse class="run-4-p run-4-b" cx="34" cy="56" rx="6" ry="10" fill="#0a6e66"/>
+        <ellipse class="run-4-p run-4-c" cx="62" cy="40" rx="6" ry="10" fill="#0a6e66"/>
+        <ellipse class="run-4-p run-4-d" cx="90" cy="56" rx="6" ry="10" fill="#0a6e66"/>
+        <ellipse class="run-4-p run-4-e" cx="118" cy="40" rx="6" ry="10" fill="#0a6e66"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Spur</b><small>Versetzte Abdrücke ziehen als Punktreihe vorbei.</small></figcaption>
+  <style>
+    .run-4-row{animation:run-4-slide 1.4s linear infinite}
+    @keyframes run-4-slide{from{transform:translateX(0)}to{transform:translateX(-28px)}}
+    .run-4-p{animation:run-4-fade 1.4s linear infinite}
+    .run-4-a{animation-delay:0s}
+    .run-4-b{animation-delay:.28s}
+    .run-4-c{animation-delay:.56s}
+    .run-4-d{animation-delay:.84s}
+    .run-4-e{animation-delay:1.12s}
+    @keyframes run-4-fade{0%{opacity:0}20%{opacity:1}80%{opacity:1}100%{opacity:0}}
+    @media (prefers-reduced-motion:reduce){.run-4-row,.run-4-p{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <g class="lift-1-bar">
+        <!-- bar -->
+        <rect x="34" y="46" width="52" height="4" rx="2" fill="#14201f"/>
+        <!-- left plates -->
+        <rect x="28" y="38" width="6" height="20" rx="2" fill="#0a6e66"/>
+        <rect x="22" y="41" width="6" height="14" rx="2" fill="#5cb8af"/>
+        <!-- right plates -->
+        <rect x="86" y="38" width="6" height="20" rx="2" fill="#0a6e66"/>
+        <rect x="92" y="41" width="6" height="14" rx="2" fill="#5cb8af"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Wiederholungen</b><small>Langhantel gleitet sauber durch die Rep hoch und runter</small></figcaption>
+  <style>
+    .lift-1-bar{transform-box:fill-box;transform-origin:center;animation:lift-1-rep 1.8s ease-in-out infinite}
+    @keyframes lift-1-rep{
+      0%,100%{transform:translateY(14px)}
+      45%,55%{transform:translateY(-14px)}
+    }
+    @media (prefers-reduced-motion: reduce){.lift-1-bar{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <!-- pivot point -->
+      <circle cx="60" cy="20" r="2.5" fill="#14201f"/>
+      <g class="lift-2-swing">
+        <!-- handle line -->
+        <line x1="60" y1="20" x2="60" y2="58" stroke="#5cb8af" stroke-width="3" stroke-linecap="round"/>
+        <!-- bell -->
+        <path d="M52 60 q8 -10 16 0 q3 12 -8 12 q-11 0 -8 -12 Z" fill="#0a6e66"/>
+        <rect x="55" y="55" width="10" height="6" rx="3" fill="none" stroke="#0a6e66" stroke-width="3"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Kettlebell-Schwung</b><small>Pendel an einem Drehpunkt, gleichmäßig hin und her</small></figcaption>
+  <style>
+    .lift-2-swing{transform-box:fill-box;transform-origin:60px 20px;animation:lift-2-pend 2s ease-in-out infinite}
+    @keyframes lift-2-pend{
+      0%,100%{transform:rotate(26deg)}
+      50%{transform:rotate(-26deg)}
+    }
+    @media (prefers-reduced-motion: reduce){.lift-2-swing{animation:none;transform:rotate(0)}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <!-- ground bar -->
+      <rect x="30" y="78" width="60" height="4" rx="2" fill="#14201f"/>
+      <rect class="lift-3-p1" x="46" y="68" width="28" height="8" rx="3" fill="#0a6e66"/>
+      <rect class="lift-3-p2" x="48" y="58" width="24" height="8" rx="3" fill="#5cb8af"/>
+      <rect class="lift-3-p3" x="50" y="48" width="20" height="8" rx="3" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Scheiben stapeln</b><small>Hantelscheiben legen sich Lage für Lage übereinander</small></figcaption>
+  <style>
+    .lift-3-p1,.lift-3-p2,.lift-3-p3{transform-box:fill-box;animation:lift-3-stack 2.4s ease-in-out infinite}
+    .lift-3-p1{animation-delay:0s}
+    .lift-3-p2{animation-delay:.3s}
+    .lift-3-p3{animation-delay:.6s}
+    @keyframes lift-3-stack{
+      0%{transform:translateY(-26px);opacity:0}
+      18%,82%{transform:translateY(0);opacity:1}
+      100%{transform:translateY(0);opacity:1}
+    }
+    @media (prefers-reduced-motion: reduce){.lift-3-p1,.lift-3-p2,.lift-3-p3{animation:none;opacity:1}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <!-- rep counter dots -->
+      <circle class="lift-4-d1" cx="42" cy="20" r="3" fill="#5cb8af"/>
+      <circle class="lift-4-d2" cx="60" cy="20" r="3" fill="#5cb8af"/>
+      <circle class="lift-4-d3" cx="78" cy="20" r="3" fill="#5cb8af"/>
+      <g class="lift-4-bar">
+        <rect x="34" y="56" width="52" height="4" rx="2" fill="#14201f"/>
+        <rect x="26" y="48" width="6" height="20" rx="2" fill="#0a6e66"/>
+        <rect x="88" y="48" width="6" height="20" rx="2" fill="#0a6e66"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Federnde Stange</b><small>Gewichtsstange schwingt aus, Rep-Punkte leuchten im Takt</small></figcaption>
+  <style>
+    .lift-4-bar{transform-box:fill-box;transform-origin:center;animation:lift-4-flex 2.1s ease-in-out infinite}
+    @keyframes lift-4-flex{
+      0%,100%{transform:translateY(0) scaleX(1)}
+      30%{transform:translateY(4px) scaleX(.97)}
+      50%{transform:translateY(-2px) scaleX(1.01)}
+      70%{transform:translateY(1px) scaleX(1)}
+    }
+    .lift-4-d1,.lift-4-d2,.lift-4-d3{transform-box:fill-box;transform-origin:center;animation:lift-4-blink 2.1s ease-in-out infinite}
+    .lift-4-d1{animation-delay:0s}
+    .lift-4-d2{animation-delay:.7s}
+    .lift-4-d3{animation-delay:1.4s}
+    @keyframes lift-4-blink{
+      0%,60%,100%{fill:#5cb8af;transform:scale(1)}
+      15%{fill:#0a6e66;transform:scale(1.5)}
+    }
+    @media (prefers-reduced-motion: reduce){.lift-4-bar,.lift-4-d1,.lift-4-d2,.lift-4-d3{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <path class="puls-1-trace"
+            d="M6 48 H40 l5 0 l4 -22 l6 44 l5 -22 l3 0 H78 l4 -10 l4 10 H114"
+            fill="none" stroke="#0a6e66" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <figcaption><b>EKG-Linie</b><small>Herzschlag zeichnet sich Schlag für Schlag</small></figcaption>
+  <style>
+    .puls-1-trace{
+      stroke-dasharray:260;
+      stroke-dashoffset:260;
+      animation:puls-1-draw 2s linear infinite;
+    }
+    @keyframes puls-1-draw{
+      0%{stroke-dashoffset:260}
+      55%{stroke-dashoffset:0}
+      100%{stroke-dashoffset:-260}
+    }
+    @media (prefers-reduced-motion:reduce){.puls-1-trace{animation:none;stroke-dashoffset:0}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle class="puls-2-ring puls-2-r1" cx="60" cy="48" r="10" fill="none" stroke="#0a6e66" stroke-width="2.5"/>
+      <circle class="puls-2-ring puls-2-r2" cx="60" cy="48" r="10" fill="none" stroke="#5cb8af" stroke-width="2.5"/>
+      <circle cx="60" cy="48" r="6" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Pulsringe</b><small>konzentrische Wellen breiten sich nach außen aus</small></figcaption>
+  <style>
+    .puls-2-ring{transform-box:fill-box;transform-origin:center}
+    .puls-2-r1{animation:puls-2-wave 2s ease-out infinite}
+    .puls-2-r2{animation:puls-2-wave 2s ease-out infinite;animation-delay:1s}
+    @keyframes puls-2-wave{
+      0%{transform:scale(.4);opacity:0}
+      15%{opacity:1}
+      100%{transform:scale(3.4);opacity:0}
+    }
+    @media (prefers-reduced-motion:reduce){.puls-2-r1,.puls-2-r2{animation:none;opacity:0}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle class="puls-3-halo" cx="60" cy="48" r="26" fill="#5cb8af" opacity="0.18"/>
+      <circle class="puls-3-core" cx="60" cy="48" r="18" fill="none" stroke="#0a6e66" stroke-width="3"/>
+    </svg>
+  </div>
+  <figcaption><b>Atmender Kreis</b><small>ruhiges Ein- und Ausatmen als Skalierung</small></figcaption>
+  <style>
+    .puls-3-halo{transform-box:fill-box;transform-origin:center;animation:puls-3-breathe 4s ease-in-out infinite}
+    .puls-3-core{transform-box:fill-box;transform-origin:center;animation:puls-3-breathe 4s ease-in-out infinite}
+    @keyframes puls-3-breathe{
+      0%,100%{transform:scale(.85)}
+      50%{transform:scale(1.12)}
+    }
+    @media (prefers-reduced-motion:reduce){.puls-3-halo,.puls-3-core{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <line x1="20" y1="48" x2="100" y2="48" stroke="#e2e7e8" stroke-width="2"/>
+      <circle class="puls-4-glow" cx="60" cy="48" r="9" fill="#5cb8af" opacity="0.25"/>
+      <circle class="puls-4-dot" cx="60" cy="48" r="7" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>BPM-Punkt</b><small>ein Taktpunkt, der im Herzschlag pocht</small></figcaption>
+  <style>
+    .puls-4-dot{transform-box:fill-box;transform-origin:center;animation:puls-4-beat 1.2s cubic-bezier(.4,0,.2,1) infinite}
+    .puls-4-glow{transform-box:fill-box;transform-origin:center;animation:puls-4-pop 1.2s cubic-bezier(.4,0,.2,1) infinite}
+    @keyframes puls-4-beat{
+      0%,100%{transform:scale(1)}
+      14%{transform:scale(1.45)}
+      28%{transform:scale(1)}
+      42%{transform:scale(1.25)}
+      56%{transform:scale(1)}
+    }
+    @keyframes puls-4-pop{
+      0%{transform:scale(1);opacity:.25}
+      14%{transform:scale(2.2);opacity:0}
+      100%{transform:scale(1);opacity:.25}
+    }
+    @media (prefers-reduced-motion:reduce){.puls-4-dot,.puls-4-glow{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <rect class="data-1-bar data-1-b1" x="20" y="36" width="10" height="24" rx="2" fill="#0a6e66"/>
+      <rect class="data-1-bar data-1-b2" x="36" y="36" width="10" height="24" rx="2" fill="#0a6e66"/>
+      <rect class="data-1-bar data-1-b3" x="52" y="36" width="10" height="24" rx="2" fill="#5cb8af"/>
+      <rect class="data-1-bar data-1-b4" x="68" y="36" width="10" height="24" rx="2" fill="#0a6e66"/>
+      <rect class="data-1-bar data-1-b5" x="84" y="36" width="10" height="24" rx="2" fill="#5cb8af"/>
+    </svg>
+  </div>
+  <figcaption><b>Equalizer-Welle</b><small>Aktivitätsbalken pulsieren rhythmisch wie ein Frequenzband</small></figcaption>
+  <style>
+    .data-1-bar{transform-box:fill-box;transform-origin:center bottom}
+    .data-1-b1{animation:data-1-eq 1.2s ease-in-out infinite}
+    .data-1-b2{animation:data-1-eq 1.2s ease-in-out -0.24s infinite}
+    .data-1-b3{animation:data-1-eq 1.2s ease-in-out -0.48s infinite}
+    .data-1-b4{animation:data-1-eq 1.2s ease-in-out -0.72s infinite}
+    .data-1-b5{animation:data-1-eq 1.2s ease-in-out -0.96s infinite}
+    @keyframes data-1-eq{0%,100%{transform:scaleY(0.35)}50%{transform:scaleY(1.5)}}
+    @media(prefers-reduced-motion:reduce){.data-1-bar{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle cx="60" cy="48" r="28" fill="none" stroke="#e2e7e8" stroke-width="6"/>
+      <circle class="data-2-arc" cx="60" cy="48" r="28" fill="none" stroke="#0a6e66" stroke-width="6" stroke-linecap="round" stroke-dasharray="176" transform="rotate(-90 60 48)"/>
+    </svg>
+  </div>
+  <figcaption><b>Fortschrittsbogen</b><small>Ein Ladering füllt sich gleichmäßig und setzt sich nahtlos zurück</small></figcaption>
+  <style>
+    .data-2-arc{animation:data-2-fill 1.8s ease-in-out infinite}
+    @keyframes data-2-fill{0%{stroke-dashoffset:176}45%{stroke-dashoffset:18}55%{stroke-dashoffset:18}100%{stroke-dashoffset:-140}}
+    @media(prefers-reduced-motion:reduce){.data-2-arc{animation:none;stroke-dashoffset:60}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <line x1="18" y1="74" x2="102" y2="74" stroke="#e2e7e8" stroke-width="2"/>
+      <polyline class="data-3-line" points="18,68 38,56 58,60 78,38 102,24" fill="none" stroke="#0a6e66" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="120" stroke-dashoffset="120"/>
+      <circle class="data-3-dot" cx="102" cy="24" r="4" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Trend-Linie</b><small>Eine Mini-Liniengrafik zeichnet sich steigend selbst nach</small></figcaption>
+  <style>
+    .data-3-line{animation:data-3-draw 2s ease-in-out infinite}
+    .data-3-dot{transform-box:fill-box;transform-origin:center;animation:data-3-pop 2s ease-in-out infinite}
+    @keyframes data-3-draw{0%{stroke-dashoffset:120}55%{stroke-dashoffset:0}85%{stroke-dashoffset:0}100%{stroke-dashoffset:120}}
+    @keyframes data-3-pop{0%,50%{opacity:0;transform:scale(0)}62%{opacity:1;transform:scale(1.3)}70%,85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0)}}
+    @media(prefers-reduced-motion:reduce){.data-3-line{animation:none;stroke-dashoffset:0}.data-3-dot{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle cx="60" cy="48" r="26" fill="none" stroke="#e2e7e8" stroke-width="10"/>
+      <circle class="data-4-ring" cx="60" cy="48" r="26" fill="none" stroke="#5cb8af" stroke-width="10" stroke-linecap="round" stroke-dasharray="163" transform="rotate(-90 60 48)"/>
+      <circle class="data-4-core" cx="60" cy="48" r="9" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Donut-Füllung</b><small>Ein Ziel-Donut füllt sich und atmet im Kern den Puls mit</small></figcaption>
+  <style>
+    .data-4-ring{animation:data-4-fill 2.2s ease-in-out infinite}
+    .data-4-core{transform-box:fill-box;transform-origin:center;animation:data-4-beat 2.2s ease-in-out infinite}
+    @keyframes data-4-fill{0%{stroke-dashoffset:163}50%{stroke-dashoffset:24}75%{stroke-dashoffset:24}100%{stroke-dashoffset:163}}
+    @keyframes data-4-beat{0%,40%{transform:scale(0.8)}50%{transform:scale(1.15)}65%{transform:scale(0.95)}75%,100%{transform:scale(0.8)}}
+    @media(prefers-reduced-motion:reduce){.data-4-ring{animation:none;stroke-dashoffset:60}.data-4-core{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <ellipse class="play-1-shadow" cx="60" cy="82" rx="18" ry="4" fill="#0a6e66" opacity="0.18"/>
+      <g class="play-1-ball">
+        <circle class="play-1-body" cx="60" cy="48" r="16" fill="none" stroke="#0a6e66" stroke-width="3"/>
+        <line x1="44" y1="48" x2="76" y2="48" stroke="#5cb8af" stroke-width="2"/>
+        <line x1="60" y1="32" x2="60" y2="64" stroke="#5cb8af" stroke-width="2"/>
+        <circle cx="60" cy="48" r="3" fill="#0a6e66"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Medizinball</b><small>springt mit Squash &amp; Stretch auf und ab</small></figcaption>
+  <style>
+    .play-1-ball{transform-box:fill-box;transform-origin:center bottom;animation:play-1-jump 1.3s cubic-bezier(.5,0,.5,1) infinite}
+    .play-1-body{transform-box:fill-box;transform-origin:center bottom;animation:play-1-squash 1.3s cubic-bezier(.5,0,.5,1) infinite}
+    .play-1-shadow{transform-box:fill-box;transform-origin:center;animation:play-1-sh 1.3s cubic-bezier(.5,0,.5,1) infinite}
+    @keyframes play-1-jump{0%,100%{transform:translateY(22px)}50%{transform:translateY(-12px)}}
+    @keyframes play-1-squash{0%,100%{transform:scale(1.18,.82)}18%,82%{transform:scale(1,1)}50%{transform:scale(.94,1.08)}}
+    @keyframes play-1-sh{0%,100%{transform:scale(1.1);opacity:.22}50%{transform:scale(.6);opacity:.08}}
+    @media(prefers-reduced-motion:reduce){.play-1-ball,.play-1-body,.play-1-shadow{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle cx="30" cy="40" r="4" fill="#0a6e66"/>
+      <circle cx="90" cy="40" r="4" fill="#0a6e66"/>
+      <path class="play-2-rope" d="M30 40 Q60 40 90 40" fill="none" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+      <line x1="60" y1="78" x2="60" y2="84" stroke="#5cb8af" stroke-width="3" stroke-linecap="round"/>
+      <line x1="50" y1="84" x2="70" y2="84" stroke="#5cb8af" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <figcaption><b>Springseil</b><small>der Seilbogen schwingt von oben nach unten</small></figcaption>
+  <style>
+    .play-2-rope{animation:play-2-swing 1s ease-in-out infinite}
+    @keyframes play-2-swing{0%,100%{d:path("M30 40 Q60 6 90 40")}50%{d:path("M30 40 Q60 74 90 40")}}
+    @media(prefers-reduced-motion:reduce){.play-2-rope{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle class="play-3-d1" cx="24" cy="48" r="5" fill="#0a6e66"/>
+      <circle class="play-3-d2" cx="42" cy="48" r="5" fill="#0a6e66"/>
+      <circle class="play-3-d3" cx="60" cy="48" r="5" fill="#5cb8af"/>
+      <circle class="play-3-d4" cx="78" cy="48" r="5" fill="#0a6e66"/>
+      <circle class="play-3-d5" cx="96" cy="48" r="5" fill="#0a6e66"/>
+    </svg>
+  </div>
+  <figcaption><b>Hüpfwelle</b><small>Punktreihe hüpft als laufende Welle</small></figcaption>
+  <style>
+    .play-3-d1,.play-3-d2,.play-3-d3,.play-3-d4,.play-3-d5{animation:play-3-hop 1.2s ease-in-out infinite}
+    .play-3-d2{animation-delay:.12s}
+    .play-3-d3{animation-delay:.24s}
+    .play-3-d4{animation-delay:.36s}
+    .play-3-d5{animation-delay:.48s}
+    @keyframes play-3-hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-16px)}}
+    @media(prefers-reduced-motion:reduce){.play-3-d1,.play-3-d2,.play-3-d3,.play-3-d4,.play-3-d5{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <line x1="60" y1="16" x2="60" y2="22" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+      <line x1="52" y1="14" x2="68" y2="14" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="60" cy="54" r="26" fill="none" stroke="#0a6e66" stroke-width="3"/>
+      <circle cx="60" cy="54" r="26" fill="none" stroke="#5cb8af" stroke-width="3" stroke-dasharray="2 9" opacity="0.6"/>
+      <line class="play-4-hand" x1="60" y1="54" x2="60" y2="34" stroke="#0a6e66" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="60" cy="54" r="3" fill="#14201f"/>
+    </svg>
+  </div>
+  <figcaption><b>Stoppuhr</b><small>der Zeiger kreist gleichmäßig herum</small></figcaption>
+  <style>
+    .play-4-hand{transform-box:fill-box;transform-origin:bottom center;animation:play-4-tick 1.6s linear infinite}
+    @keyframes play-4-tick{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.play-4-hand{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle cx="60" cy="48" r="28" fill="none" stroke="#e2e7e8" stroke-width="1.5"/>
+      <g class="orbit-1-sys">
+        <circle class="orbit-1-d1" cx="88" cy="48" r="4.5" fill="#0a6e66"/>
+      </g>
+      <g class="orbit-1-sys2">
+        <circle class="orbit-1-d2" cx="32" cy="48" r="3" fill="#5cb8af"/>
+      </g>
+      <circle cx="60" cy="48" r="6" fill="#14201f"/>
+    </svg>
+  </div>
+  <figcaption><b>Orbit-Punkte</b><small>zwei Satelliten kreisen gleichmäßig um den Kern</small></figcaption>
+  <style>
+    .orbit-1-sys{transform-box:fill-box;transform-origin:60px 48px;animation:orbit-1-spin 3s linear infinite}
+    .orbit-1-sys2{transform-box:fill-box;transform-origin:60px 48px;animation:orbit-1-spin 3s linear infinite reverse}
+    .orbit-1-sys,.orbit-1-sys2{transform-origin:60px 48px}
+    @keyframes orbit-1-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @media (prefers-reduced-motion:reduce){.orbit-1-sys,.orbit-1-sys2{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle class="orbit-2-a1" cx="60" cy="48" r="30" fill="none" stroke="#0a6e66" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="60 130"/>
+      <circle class="orbit-2-a2" cx="60" cy="48" r="22" fill="none" stroke="#5cb8af" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="40 98"/>
+      <circle class="orbit-2-a3" cx="60" cy="48" r="14" fill="none" stroke="#14201f" stroke-width="2" stroke-linecap="round" stroke-dasharray="22 66"/>
+    </svg>
+  </div>
+  <figcaption><b>Verschachtelte Bögen</b><small>konzentrische Ringe rotieren gegenläufig ineinander</small></figcaption>
+  <style>
+    .orbit-2-a1{transform-box:fill-box;transform-origin:center;animation:orbit-2-cw 2.4s linear infinite}
+    .orbit-2-a2{transform-box:fill-box;transform-origin:center;animation:orbit-2-ccw 1.9s linear infinite}
+    .orbit-2-a3{transform-box:fill-box;transform-origin:center;animation:orbit-2-cw 1.4s linear infinite}
+    @keyframes orbit-2-cw{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes orbit-2-ccw{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+    @media (prefers-reduced-motion:reduce){.orbit-2-a1,.orbit-2-a2,.orbit-2-a3{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <div class="orbit-3-wrap">
+      <div class="orbit-3-blob"></div>
+    </div>
+  </div>
+  <figcaption><b>Atmender Blob</b><small>organische Form morpht und pulst sanft im Kreis</small></figcaption>
+  <style>
+    .orbit-3-wrap{width:120px;height:96px;display:flex;align-items:center;justify-content:center}
+    .orbit-3-blob{width:46px;height:46px;background:linear-gradient(135deg,#0a6e66,#5cb8af);border-radius:42% 58% 56% 44% / 48% 42% 58% 52%;animation:orbit-3-morph 4s ease-in-out infinite}
+    @keyframes orbit-3-morph{
+      0%,100%{border-radius:42% 58% 56% 44% / 48% 42% 58% 52%;transform:rotate(0deg) scale(1)}
+      33%{border-radius:62% 38% 40% 60% / 56% 60% 40% 44%;transform:rotate(120deg) scale(1.08)}
+      66%{border-radius:38% 62% 64% 36% / 40% 50% 50% 60%;transform:rotate(240deg) scale(0.96)}
+    }
+    @media (prefers-reduced-motion:reduce){.orbit-3-blob{animation:none}}
+  </style>
+</section>
+<section class="card">
+  <div class="stage">
+    <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+      <circle cx="60" cy="48" r="30" fill="none" stroke="#e2e7e8" stroke-width="1"/>
+      <g class="orbit-4-sys">
+        <circle cx="90" cy="48" r="8" fill="#5cb8af" opacity="0.18"/>
+        <circle cx="90" cy="48" r="5.5" fill="#5cb8af" opacity="0.4"/>
+        <circle cx="90" cy="48" r="3.5" fill="#0a6e66"/>
+      </g>
+    </svg>
+  </div>
+  <figcaption><b>Komet</b><small>Lichtpunkt zieht mit verblassendem Schweif seine Bahn</small></figcaption>
+  <style>
+    .orbit-4-sys{transform-box:fill-box;transform-origin:60px 48px;animation:orbit-4-orbit 2.6s linear infinite}
+    @keyframes orbit-4-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @media (prefers-reduced-motion:reduce){.orbit-4-sys{animation:none}}
+  </style>
+</section>
+  </div>
+
+  <p class="foot">Themen in dieser Reihenfolge: Fortbewegung · Kraft · Vitalwerte · Analytics × Sport · Verspielt · Abstrakt. Erzeugt mit einem 6-Agenten-Workflow.</p>
+</div>
+<script>
+  const QUIPS=["Überrede die Hanteln, leichter zu wirken","Glätte die Ausreißer weg","Bestiche die Waage","Suche nach versteckten Gains","Korreliere Kraft und Kaffee","Frag die Beinpresse nach Geheimnissen","Lass die Tonnage Anlauf nehmen","Poliere die Statistik, bis sie glänzt","Zähl die Tropfen im Eimer","Verhandle mit der Schwerkraft (zäh)"];
+  let i=0;const q=document.getElementById("quip");
+  function rot(){q.textContent=QUIPS[i%QUIPS.length]+" …";i++}
+  rot();setInterval(rot,2600);
+  document.getElementById("bg").onclick=()=>document.body.classList.toggle("modal");
+</script>
+</body>
+</html>

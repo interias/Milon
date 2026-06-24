@@ -9,46 +9,66 @@ const LABELS: Record<string, string> = {
   weekly: "Der Coach schreibt den Wochenreport",
 };
 
-const CSS = `
-.ct-runner{animation:ctBob .52s ease-in-out infinite}
-.ct-legA{transform-box:view-box;transform-origin:118px 76px;animation:ctSwingA .52s ease-in-out infinite}
-.ct-legB{transform-box:view-box;transform-origin:118px 76px;animation:ctSwingB .52s ease-in-out infinite}
-.ct-armA{transform-box:view-box;transform-origin:128px 50px;animation:ctArmA .52s ease-in-out infinite}
-.ct-armB{transform-box:view-box;transform-origin:128px 50px;animation:ctArmB .52s ease-in-out infinite}
-.ct-ground{stroke-dasharray:9 7;animation:ctGround .52s linear infinite}
-@keyframes ctBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3.5px)}}
-@keyframes ctSwingA{0%,100%{transform:rotate(27deg)}50%{transform:rotate(-25deg)}}
-@keyframes ctSwingB{0%,100%{transform:rotate(-25deg)}50%{transform:rotate(27deg)}}
-@keyframes ctArmA{0%,100%{transform:rotate(-32deg)}50%{transform:rotate(26deg)}}
-@keyframes ctArmB{0%,100%{transform:rotate(26deg)}50%{transform:rotate(-32deg)}}
-@keyframes ctGround{to{stroke-dashoffset:-16}}
-@keyframes ctFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.ct-quip{animation:ctFade .4s ease}
-@media (prefers-reduced-motion:reduce){.ct-runner,.ct-legA,.ct-legB,.ct-armA,.ct-armB,.ct-ground{animation:none}}
-`;
+// Vier ausgewählte Lade-Animationen (aus der Design-Galerie, #5/#9/#15/#20). Pro Aufruf wird
+// zufällig eine gezeigt → Abwechslung. Jede ist selbstständig (SVG + scoped CSS, eindeutig
+// präfixierte Klassen/Keyframes), eingespielt per dangerouslySetInnerHTML.
+const ANIMS: string[] = [
+  // Wiederholungen — Langhantel federt durch die Rep
+  `<svg viewBox="0 0 120 96" aria-hidden="true">
+     <g class="lift-1-bar">
+       <rect x="34" y="46" width="52" height="4" rx="2" fill="#14201f"/>
+       <rect x="28" y="38" width="6" height="20" rx="2" fill="#0a6e66"/>
+       <rect x="22" y="41" width="6" height="14" rx="2" fill="#5cb8af"/>
+       <rect x="86" y="38" width="6" height="20" rx="2" fill="#0a6e66"/>
+       <rect x="92" y="41" width="6" height="14" rx="2" fill="#5cb8af"/>
+     </g>
+   </svg>
+   <style>.lift-1-bar{transform-box:fill-box;transform-origin:center;animation:lift-1-rep 1.8s ease-in-out infinite}
+   @keyframes lift-1-rep{0%,100%{transform:translateY(14px)}45%,55%{transform:translateY(-14px)}}
+   @media(prefers-reduced-motion:reduce){.lift-1-bar{animation:none}}</style>`,
+  // EKG-Linie — Herzschlag zeichnet sich
+  `<svg viewBox="0 0 120 96" aria-hidden="true">
+     <path class="puls-1-trace" d="M6 48 H40 l5 0 l4 -22 l6 44 l5 -22 l3 0 H78 l4 -10 l4 10 H114" fill="none" stroke="#0a6e66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+   </svg>
+   <style>.puls-1-trace{stroke-dasharray:260;stroke-dashoffset:260;animation:puls-1-draw 2s linear infinite}
+   @keyframes puls-1-draw{0%{stroke-dashoffset:260}55%{stroke-dashoffset:0}100%{stroke-dashoffset:-260}}
+   @media(prefers-reduced-motion:reduce){.puls-1-trace{animation:none;stroke-dashoffset:0}}</style>`,
+  // Trend-Linie — Mini-Liniengrafik zeichnet sich steigend nach
+  `<svg viewBox="0 0 120 96" aria-hidden="true">
+     <line x1="18" y1="74" x2="102" y2="74" stroke="#e2e7e8" stroke-width="2"/>
+     <polyline class="data-3-line" points="18,68 38,56 58,60 78,38 102,24" fill="none" stroke="#0a6e66" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="120" stroke-dashoffset="120"/>
+     <circle class="data-3-dot" cx="102" cy="24" r="4" fill="#0a6e66"/>
+   </svg>
+   <style>.data-3-line{animation:data-3-draw 2s ease-in-out infinite}
+   .data-3-dot{transform-box:fill-box;transform-origin:center;animation:data-3-pop 2s ease-in-out infinite}
+   @keyframes data-3-draw{0%{stroke-dashoffset:120}55%{stroke-dashoffset:0}85%{stroke-dashoffset:0}100%{stroke-dashoffset:120}}
+   @keyframes data-3-pop{0%,50%{opacity:0;transform:scale(0)}62%{opacity:1;transform:scale(1.3)}70%,85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0)}}
+   @media(prefers-reduced-motion:reduce){.data-3-line{animation:none;stroke-dashoffset:0}.data-3-dot{animation:none}}</style>`,
+  // Stoppuhr — Zeiger kreist
+  `<svg viewBox="0 0 120 96" aria-hidden="true">
+     <line x1="60" y1="16" x2="60" y2="22" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+     <line x1="52" y1="14" x2="68" y2="14" stroke="#0a6e66" stroke-width="3" stroke-linecap="round"/>
+     <circle cx="60" cy="54" r="26" fill="none" stroke="#0a6e66" stroke-width="3"/>
+     <circle cx="60" cy="54" r="26" fill="none" stroke="#5cb8af" stroke-width="3" stroke-dasharray="2 9" opacity="0.6"/>
+     <line class="play-4-hand" x1="60" y1="54" x2="60" y2="34" stroke="#0a6e66" stroke-width="2.5" stroke-linecap="round"/>
+     <circle cx="60" cy="54" r="3" fill="#14201f"/>
+   </svg>
+   <style>.play-4-hand{transform-box:fill-box;transform-origin:bottom center;animation:play-4-tick 1.6s linear infinite}
+   @keyframes play-4-tick{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+   @media(prefers-reduced-motion:reduce){.play-4-hand{animation:none}}</style>`,
+];
 
-function Runner() {
-  return (
-    <svg viewBox="0 0 240 130" width="186" height="100" className="mx-auto text-accent"
-         role="img" aria-label="Läuft" fill="none" stroke="currentColor"
-         strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <line className="ct-ground" x1="18" y1="116" x2="222" y2="116" stroke="var(--color-line)" strokeWidth="3" />
-      <g className="ct-runner">
-        <g className="ct-legB"><path d="M118 76 L124 96 L118 110" /><line x1="118" y1="110" x2="127" y2="110" /></g>
-        <g className="ct-armB"><path d="M128 50 L139 63 L133 73" /></g>
-        <line x1="128" y1="50" x2="118" y2="76" />
-        <circle cx="134" cy="38" r="9" />
-        <g className="ct-legA"><path d="M118 76 L124 96 L118 110" /><line x1="118" y1="110" x2="127" y2="110" /></g>
-        <g className="ct-armA"><path d="M128 50 L139 63 L133 73" /></g>
-      </g>
-    </svg>
-  );
-}
+const STAGE_CSS =
+  ".ct-stage{display:grid;place-items:center;min-height:112px}" +
+  ".ct-stage svg{height:104px;width:auto}" +
+  ".ct-quip{animation:ctFade .4s ease}" +
+  "@keyframes ctFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}";
 
-/** Vollflächiges Lade-Overlay mit Läufer-Animation + rotierenden Sprüchen, solange der Coach arbeitet. */
+/** Lade-Overlay, solange der Coach arbeitet: eine zufällige von vier Sport-Animationen + rotierende Sprüche. */
 export function CoachThinking({ busy }: { busy: "chat" | "daily" | "weekly" | null }) {
   const active = busy !== null;
   const [i, setI] = useState(0);
+  const [ani, setAni] = useState(0);
   const [secs, setSecs] = useState(0);
   const [hidden, setHidden] = useState(false);
 
@@ -57,6 +77,7 @@ export function CoachThinking({ busy }: { busy: "chat" | "daily" | "weekly" | nu
     setHidden(false);
     setSecs(0);
     setI(Math.floor(Math.random() * COACH_QUIPS.length));
+    setAni(Math.floor(Math.random() * ANIMS.length));
     const quip = setInterval(
       () => setI((p) => {
         let n = p;
@@ -83,7 +104,7 @@ export function CoachThinking({ busy }: { busy: "chat" | "daily" | "weekly" | nu
         className="w-full max-w-sm rounded-card border border-line bg-surface p-6 text-center shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <Runner />
+        <div className="ct-stage" dangerouslySetInnerHTML={{ __html: ANIMS[ani] }} />
         <p className="mt-4 text-sm font-semibold text-ink">{label} …</p>
         <p key={i} className="ct-quip mt-1 min-h-[2.5em] text-sm text-accent">{COACH_QUIPS[i]} …</p>
         <p className="mt-4 text-[11px] text-muted">
@@ -91,7 +112,7 @@ export function CoachThinking({ busy }: { busy: "chat" | "daily" | "weekly" | nu
           <span className="mt-0.5 block opacity-80">Esc oder Klick blendet aus — der Coach rechnet weiter.</span>
         </p>
       </div>
-      <style>{CSS}</style>
+      <style>{STAGE_CSS}</style>
     </div>
   );
 }
