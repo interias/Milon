@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type Report, type CoachStats } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
+import { CoachThinking } from "@/components/CoachThinking";
 import { dm } from "@/lib/format";
 
 const fmtUsd = (n: number, known: boolean) => (known ? "$" + n.toFixed(n < 1 ? 4 : 2) : "n/v");
@@ -68,6 +69,7 @@ export default function Coach() {
 
   return (
     <>
+      <CoachThinking busy={busy} />
       <PageTitle title="Coach" sub="Frag deine Daten – ehrlich-motivierend" />
 
       {stats && (
