@@ -162,6 +162,36 @@ Ab Phase 2 erledigt das ein **Scheduler** automatisch (Hevy alle 6 h, FDDB tägl
 täglich 05:00 + Ordner-Scan). Für den **Drive-Pull**: die Export-Zip in Drive auf „Jeder mit dem
 Link" freigeben, den Datei-Link kopieren und die ID daraus als `HC_DRIVE_FILE_ID` in `server/.env`.
 
+### 5) Alternativ: Docker (docker-compose)
+
+Statt Backend und Frontend einzeln zu starten, gibt es ein schlankes Zwei-Container-Setup für
+**Docker Desktop**. Voraussetzung: `server/.env` existiert (siehe Schritt 1).
+
+```bash
+docker compose up -d --build      # baut & startet server + client
+docker compose logs -f            # Logs verfolgen
+docker compose down               # stoppen
+```
+
+Aufruf danach: **`http://localhost`** (Port 80). Im Heim-WLAN erreicht das Handy das Dashboard über
+`http://<PC-IP>` — z. B. `http://192.168.0.26`.
+
+- **Nur das Frontend ist von außen erreichbar.** Der FastAPI-Server hat **keinen** Host-Port; er lebt
+  nur im internen Compose-Netz (Servicename `server`) und wird vom Frontend serverseitig unter `/api/*`
+  angesprochen. Die Host-Ports **3000 und 8000 bleiben frei** für andere Projekte.
+- **Frontend-Port** ist per `WEB_PORT` überschreibbar (z. B. `WEB_PORT=8080` in einer `.env` im
+  Repo-Root, falls Port 80 belegt ist).
+- **Persistenz:** `data/` (SQLite-DB, `incoming/`, Fortschritts-Fotos) und `server/.env` sind als
+  Volumes gemountet — Daten und Secrets überleben Rebuilds; die Settings-Seite schreibt nach `server/.env` zurück.
+- **RAM:** ~150 MB im Leerlauf (Server ~110 MB, Client ~35 MB), kurze Spitzen beim großen
+  Health-Connect-Import. Das Grundrauschen von Docker Desktop selbst (WSL2-VM, ~1–2 GB) kommt hinzu.
+- Der **MCP-Server** läuft nicht im Container — er liest `data/tracker.db` direkt und wird über
+  `.mcp.json` gestartet (siehe Beispiel-Workflows).
+
+> Der Next-Rewrite-Proxy backt sein Backend-Ziel zur **Build-Zeit** ein; das Compose reicht es daher
+> als Build-Arg `API_PROXY_TARGET=http://server:8000` durch. Wer den Server unter anderem Namen/Port
+> fährt, baut den Client neu (`docker compose up -d --build client`).
+
 ## Beispiel-Workflows
 
 - **Frag deine Daten:** Reiter *Coach* → „Wie ist mein Kraft-Trend diese Woche?" — der Coach ruft
@@ -182,6 +212,7 @@ client/   Next.js: app/ (9 Seiten) · components/ · lib/
 design/   „Klar & Klinisch"-Studie + Foto-Schablonen + Asset-Tooling
 data/     tracker.db + incoming/ (lokal, gitignored)
 docs/     README-Bilder
+docker-compose.yml · server/Dockerfile · client/Dockerfile   schlankes Container-Setup
 ```
 
 ## Sicherheit & Privatsphäre
@@ -201,6 +232,7 @@ ohne Namensnennung. (Marken-/Patentrechte sind davon nicht berührt.)
 ## Status
 
 Phasen **1–3** umgesetzt: Ingest (inkl. Health-Connect-Auto-Pull aus Google Drive) + Metriken +
-Dashboards · Auto-Syncs (Scheduler) · MCP-Server. Offen: **Phase 4** (Hosting).
+Dashboards · Auto-Syncs (Scheduler) · MCP-Server. **Phase 4** (Hosting) angefangen: schlankes
+`docker-compose`-Setup für Docker Desktop (nur das Frontend nach außen, Server intern).
 
 <sub>Source of Truth für Architektur & Plan: <code>ARCHITECTURE.md</code>. Projekt-Memory: <code>CLAUDE.md</code>.</sub>
