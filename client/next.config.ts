@@ -6,6 +6,9 @@ import type { NextConfig } from "next";
 const API = process.env.API_PROXY_TARGET || "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // Schlankes Docker-Image: nur die wirklich benötigten Dateien + minimaler server.js
+  // (kein volles node_modules) werden nach .next/standalone getracet. Siehe client/Dockerfile.
+  output: "standalone",
   // Dev-Server-Zugriff (HMR/Live-Reload) von anderen Geräten im Heim-WLAN über die LAN-IP
   // erlauben — sonst blockt Next 16 den cross-origin Dev-Request und die HMR-WebSocket
   // schlägt fehl. Eigene IP(s) hier ergänzen, falls sie sich ändert.

@@ -1,0 +1,49 @@
+# Milon — schlankes Zwei-Service-Setup für Docker Desktop.
+#   server  = FastAPI (:8000), APScheduler-Jobs, SQLite unter ./data
+#   client  = Next.js (:3000), proxied /api/* serverseitig an den Server (kein CORS nötig)
+#
+# Start:   docker compose up -d --build
+# Aufruf:  http://localhost:3000   (im Heim-WLAN vom Handy: http://<PC-IP>:3000)
+# Logs:    docker compose logs -f
+# Stop:    docker compose down
+
+services:
+  server:
+    build: ./server
+    restart: unless-stopped
+    volumes:
+      # App-DB, incoming/ und progress/ liegen persistent auf dem Host (nicht im Image)
+      - ./data:/app/data
+      # Secrets: pydantic-settings liest server/.env; die Settings-Seite schreibt hierher zurück
+      - ./server/.env:/app/server/.env
+    # KEIN Host-Port: der Server ist NUR im internen Compose-Netz erreichbar (Servicename "server").
+    # Port 8000 bleibt damit auf dem Host frei für andere Projekte. Der Client spricht ihn intern an.
+    # expose dient nur der Doku (kein Host-Mapping):
+    expose:
+      - "8000"
+    # Optionales RAM-Limit (bei OOM während großer HC-Importe erhöhen/entfernen):
+    # mem_limit: 768m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  client:
+    build:
+      context: ./client
+      args:
+        # Next-Rewrite-Ziel: wird zur BUILD-Zeit in die routes-manifest.json eingebacken
+        # (Runtime-Env würde nicht greifen). Der Server ist im Compose-Netz per Servicename da.
+        API_PROXY_TARGET: http://server:8000
+    restart: unless-stopped
+    # Nur das Frontend ist von außen erreichbar — standardmäßig auf Port 80, damit die URL
+    # ohne :3000 auskommt (http://milon.local). Über WEB_PORT in .env überschreibbar.
+    # Port 3000 bleibt auf dem Host frei für andere Projekte.
+    ports:
+      - "${WEB_PORT:-80}:3000"
+    depends_on:
+      server:
+        condition: service_started
+    # mem_limit: 256m
