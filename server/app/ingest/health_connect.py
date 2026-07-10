@@ -4,7 +4,8 @@ schreibt Körper-, Lauf-/Cardio-, VO2max- und Schritt-Daten in die App-DB.
 Verifizierte Format-Notizen (siehe CLAUDE.md / ARCHITECTURE.md §3):
 - Zeitstempel = epoch-Millisekunden (UTC) + *_zone_offset in Sekunden (lokale Wandzeit = utc+offset).
 - Gewicht in GRAMM (-> /1000 kg). Körperfett als percentage. VO2 = ml/min/kg.
-- Distanz in METERN als feingranulare Segmente -> pro Session im Zeitfenster summieren.
+- Distanz in METERN als feingranulare Segmente -> pro Session im Zeitfenster summieren,
+  aber JE APP (mehrere Apps spiegeln dieselbe Strecke): Watch bevorzugt, sonst Max je App.
 - exercise_type (android.health.connect ExerciseSessionType): 4=Radfahren, 33=Laufen, 45=Kraft,
   53=Gehen, 58=Laufband. Höhenmeter nicht vorhanden.
 - Herzfrequenz: Einzelwerte liegen in heart_rate_record_series_table (epoch_millis /
@@ -125,10 +126,20 @@ def read_health_connect(db_path: str | Path) -> dict:
         if t is not None:
             body.setdefault(t, {})["body_fat_pct"] = r["percentage"]
 
-    # --- Distanz-Segmente (Meter), sortiert nach UTC-Start, für Fenster-Summe je Session ---
+    # --- Distanz-Segmente (Meter) je App, sortiert nach UTC-Start, für Fenster-Summe je Session.
+    # WICHTIG (am echten Export 2026-07-10 verifiziert): Mehrere Apps spiegeln dieselbe Strecke
+    # (Google Fit/Strava/Samsung schreiben parallel nahezu identische Segmente). NIE über alle
+    # Apps summieren — das ergab im März/April 2026 die 2–3-fache Distanz (Pace 2:00–3:30 min/km).
+    # Watch-App bevorzugen (steps_source_package, wie Schritte/HF), sonst Maximum je App. ---
+    watch_ids: set[int] = set()
+    if settings.steps_source_package:
+        watch_ids = {row[0] for row in cur.execute(
+            "SELECT row_id FROM application_info_table WHERE package_name = ?",
+            (settings.steps_source_package,))}
     seg = [
-        (_utc(r["start_time"]), _utc(r["end_time"]), r["distance"])
-        for r in cur.execute("SELECT start_time, end_time, distance FROM distance_record_table")
+        (_utc(r["start_time"]), _utc(r["end_time"]), r["distance"], r["app_info_id"])
+        for r in cur.execute(
+            "SELECT start_time, end_time, distance, app_info_id FROM distance_record_table")
     ]
     seg = [s for s in seg if s[0] is not None]
     seg.sort(key=lambda s: s[0])
@@ -137,14 +148,17 @@ def read_health_connect(db_path: str | Path) -> dict:
     def session_distance_m(start_utc: datetime | None, end_utc: datetime | None) -> float:
         if start_utc is None or end_utc is None:
             return 0.0
-        total = 0.0
+        per_app: dict[int | None, float] = {}
         i = bisect.bisect_left(seg_starts, start_utc)
         while i < len(seg) and seg[i][0] <= end_utc:
-            s, e, d = seg[i]
+            s, e, d, app = seg[i]
             if d and (e is None or e <= end_utc):
-                total += d
+                per_app[app] = per_app.get(app, 0.0) + d
             i += 1
-        return total
+        if not per_app:
+            return 0.0
+        watch = sum(v for a, v in per_app.items() if a in watch_ids)
+        return watch if watch > 0 else max(per_app.values())
 
     # --- Herzfrequenz-Serie (epoch_millis + bpm), einmal sortiert laden -> Fenster je Session.
     # Bevorzugt die Watch-App (steps_source_package = Samsung Health), damit parallel
@@ -174,26 +188,42 @@ def read_health_connect(db_path: str | Path) -> dict:
                     out["hr_drift_pct"] = round((a2 / a1 - 1) * 100, 1)
         return out
 
-    # --- Sessions (Lauf/Kraft/Gehen/…) ---
-    sessions = []
-    for r in cur.execute(
-        "SELECT uuid, start_time, start_zone_offset, end_time, exercise_type, title "
+    # --- Sessions (Lauf/Kraft/Gehen/…). Duplikate entfernen: Strava/Google Fit spiegeln
+    # Watch-Sessions als eigene Records (identisches Zeitfenster, eigene uuid) — im April 2026
+    # lag jeder Lauf doppelt vor. Watch-Sessions gewinnen; weitere Sessions gleichen Typs mit
+    # überlappendem Zeitfenster werden verworfen. ---
+    raw_sessions = list(cur.execute(
+        "SELECT uuid, start_time, start_zone_offset, end_time, exercise_type, app_info_id "
         "FROM exercise_session_record_table"
-    ):
-        start_utc, end_utc = _utc(r["start_time"]), _utc(r["end_time"])
+    ))
+    raw_sessions.sort(key=lambda r: (r["app_info_id"] not in watch_ids, r["start_time"] or 0))
+    kept_windows: dict[int, list[tuple[int, int]]] = {}
+    sessions = []
+    skipped_dupes = 0
+    for r in raw_sessions:
+        st, en = r["start_time"], r["end_time"]
+        if st is not None and en is not None:
+            windows = kept_windows.setdefault(r["exercise_type"], [])
+            if any(st < e and en > s for s, e in windows):
+                skipped_dupes += 1
+                continue
+            windows.append((st, en))
+        start_utc, end_utc = _utc(st), _utc(en)
         dist_m = session_distance_m(start_utc, end_utc)
         uuid = r["uuid"]
         sessions.append(
             dict(
                 external_id=uuid.hex() if isinstance(uuid, (bytes, bytearray)) else str(uuid),
                 exercise_type=r["exercise_type"],
-                started_at=_local(r["start_time"], r["start_zone_offset"]),
-                ended_at=_local(r["end_time"], r["start_zone_offset"]),
+                started_at=_local(st, r["start_zone_offset"]),
+                ended_at=_local(en, r["start_zone_offset"]),
                 distance_km=round(dist_m / 1000.0, 3) if dist_m else None,
                 source=SOURCE,
-                **session_hr(r["start_time"], r["end_time"]),
+                **session_hr(st, en),
             )
         )
+    if skipped_dupes:
+        log.info("%d doppelte Sessions (parallel schreibende Apps) übersprungen", skipped_dupes)
 
     # --- VO2max ---
     vo2 = [
