@@ -7,6 +7,10 @@ Verifizierte Format-Notizen (siehe CLAUDE.md / ARCHITECTURE.md §3):
 - Distanz in METERN als feingranulare Segmente -> pro Session im Zeitfenster summieren.
 - exercise_type (android.health.connect ExerciseSessionType): 4=Radfahren, 33=Laufen, 45=Kraft,
   53=Gehen, 58=Laufband. Höhenmeter nicht vorhanden.
+- Herzfrequenz: Einzelwerte liegen in heart_rate_record_series_table (epoch_millis /
+  beats_per_minute, parent_key -> heart_rate_record_table.row_id). Pro Session im Zeitfenster
+  aggregieren (Ø/Max + Drift 2. vs. 1. Hälfte). Quelle bevorzugt die Watch-App
+  (settings.steps_source_package), Fallback = alle Apps.
 - HC-Export ist ein Vollabzug -> idempotent durch Ersetzen aller source='health_connect'-Zeilen.
 """
 from __future__ import annotations
@@ -14,6 +18,7 @@ from __future__ import annotations
 import bisect
 import logging
 import sqlite3
+from array import array
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -29,6 +34,54 @@ from ..models import BodyMeasurement, ExerciseSession, StepsDaily, Vo2Max
 SOURCE = "health_connect"
 BIKE, RUN, STRENGTH, WALK = 4, 33, 45, 53
 EPOCH = date(1970, 1, 1)
+HR_MIN_BPM, HR_MAX_BPM = 25, 250  # Sanity-Grenzen fuer HF-Samples
+HR_MIN_SAMPLES = 5  # Mindest-Samples, bevor Ø/Max/Drift berechnet werden
+
+
+def _read_hr_series(cur: sqlite3.Cursor) -> tuple[array, array]:
+    """Laedt die komplette HF-Serie (epoch_millis aufsteigend, bpm) als kompakte Arrays.
+    Defensive gegen Schema-Abweichungen (Tabelle/Spalten fehlen -> leere Serie, nur Warnung).
+    Bevorzugt Samples der Watch-App (settings.steps_source_package via parent-Record),
+    faellt bei 0 Treffern auf alle Apps zurueck."""
+    times, bpm = array("q"), array("d")
+    tables = {row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "heart_rate_record_series_table" not in tables:
+        log.warning("heart_rate_record_series_table fehlt im Export -> keine HF-Daten")
+        return times, bpm
+    cols = {row[1] for row in cur.execute("PRAGMA table_info(heart_rate_record_series_table)")}
+    if not {"epoch_millis", "beats_per_minute"} <= cols:
+        log.warning("HF-Serie hat unerwartete Spalten %s -> keine HF-Daten", sorted(cols))
+        return times, bpm
+
+    base = ("SELECT s.epoch_millis, s.beats_per_minute FROM heart_rate_record_series_table s{join} "
+            "ORDER BY s.epoch_millis")
+    queries: list[tuple[str, tuple]] = []
+    if (settings.steps_source_package and "parent_key" in cols
+            and "heart_rate_record_table" in tables):
+        app_ids = [row[0] for row in cur.execute(
+            "SELECT row_id FROM application_info_table WHERE package_name = ?",
+            (settings.steps_source_package,))]
+        if app_ids:
+            ph = ",".join("?" * len(app_ids))
+            queries.append((base.format(
+                join=" JOIN heart_rate_record_table p ON s.parent_key = p.row_id"
+                     f" AND p.app_info_id IN ({ph})"), tuple(app_ids)))
+    queries.append((base.format(join=""), ()))
+
+    for sql, params in queries:
+        t_acc, b_acc = array("q"), array("d")
+        try:
+            for t, v in cur.execute(sql, params):
+                if t is not None and v is not None and HR_MIN_BPM <= v <= HR_MAX_BPM:
+                    t_acc.append(int(t))
+                    b_acc.append(float(v))
+        except sqlite3.Error as exc:  # z. B. abweichendes parent-Schema -> Fallback probieren
+            log.warning("HF-Abfrage fehlgeschlagen (%s) -> Fallback", exc)
+            continue
+        if t_acc:
+            times, bpm = t_acc, b_acc
+            break
+    return times, bpm
 
 
 def _utc(ms: int | None) -> datetime | None:
@@ -93,6 +146,34 @@ def read_health_connect(db_path: str | Path) -> dict:
             i += 1
         return total
 
+    # --- Herzfrequenz-Serie (epoch_millis + bpm), einmal sortiert laden -> Fenster je Session.
+    # Bevorzugt die Watch-App (steps_source_package = Samsung Health), damit parallel
+    # schreibende Apps (Handy-Sensoren o. ä.) Ø/Max nicht verfälschen; Fallback = alle Apps.
+    hr_times, hr_bpm = _read_hr_series(cur)
+
+    def session_hr(start_ms: int | None, end_ms: int | None) -> dict:
+        """Ø-/Max-HF + Drift (Ø 2. Hälfte vs. Ø 1. Hälfte, %) im Session-Fenster."""
+        out = {"avg_hr": None, "max_hr": None, "hr_drift_pct": None}
+        if start_ms is None or end_ms is None or end_ms <= start_ms or not hr_times:
+            return out
+        i = bisect.bisect_left(hr_times, start_ms)
+        j = bisect.bisect_right(hr_times, end_ms)
+        window = hr_bpm[i:j]
+        if len(window) < HR_MIN_SAMPLES:
+            return out
+        out["avg_hr"] = round(sum(window) / len(window), 1)
+        out["max_hr"] = round(max(window), 0)
+        # Drift nur für längere Einheiten (>= 15 min) mit genug Datenpunkten je Hälfte —
+        # klassisches Decoupling-Signal bei Dauerläufen.
+        if end_ms - start_ms >= 15 * 60_000:
+            mid = bisect.bisect_right(hr_times, (start_ms + end_ms) // 2, i, j)
+            first, second = hr_bpm[i:mid], hr_bpm[mid:j]
+            if len(first) >= HR_MIN_SAMPLES and len(second) >= HR_MIN_SAMPLES:
+                a1, a2 = sum(first) / len(first), sum(second) / len(second)
+                if a1 > 0:
+                    out["hr_drift_pct"] = round((a2 / a1 - 1) * 100, 1)
+        return out
+
     # --- Sessions (Lauf/Kraft/Gehen/…) ---
     sessions = []
     for r in cur.execute(
@@ -110,6 +191,7 @@ def read_health_connect(db_path: str | Path) -> dict:
                 ended_at=_local(r["end_time"], r["start_zone_offset"]),
                 distance_km=round(dist_m / 1000.0, 3) if dist_m else None,
                 source=SOURCE,
+                **session_hr(r["start_time"], r["end_time"]),
             )
         )
 
@@ -186,8 +268,13 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         sess_rows = [d for d in data["sessions"] if d["started_at"] is not None]
         vo2_rows = [d for d in data["vo2"] if d["measured_at"] is not None]
 
+        # HF kam spaeter dazu: liefert der Export HF, werden bestehende Sessions per
+        # DO UPDATE retro-gefuellt; ohne HF bleibt der Upsert append-only (nichts ueberschreiben).
+        sessions_with_hr = sum(1 for d in sess_rows if d.get("avg_hr") is not None)
+        hr_update = ["avg_hr", "max_hr", "hr_drift_pct"] if sessions_with_hr else None
+
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
-        upsert(s, ExerciseSession, sess_rows, ["external_id"])
+        upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update)
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
         s.commit()
@@ -200,6 +287,7 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         "new_vo2max": after["Vo2Max"] - before["Vo2Max"],
         "new_steps_days": after["StepsDaily"] - before["StepsDaily"],
         "total_sessions": after["ExerciseSession"],
+        "sessions_with_hr": sessions_with_hr,
     }
 
 
@@ -248,3 +336,17 @@ if __name__ == "__main__":
         ).first()
         if vo2_latest:
             print(f"Letzter VO2max: {vo2_latest[1]:.1f} am {vo2_latest[0]:%Y-%m-%d}")
+
+        n_hr = s.execute(
+            select(func.count()).select_from(ExerciseSession).where(ExerciseSession.avg_hr.is_not(None))
+        ).scalar_one()
+        print(f"Sessions mit HF: {n_hr}")
+        last_run_hr = s.execute(
+            select(ExerciseSession.started_at, ExerciseSession.avg_hr,
+                   ExerciseSession.max_hr, ExerciseSession.hr_drift_pct)
+            .where(ExerciseSession.exercise_type == RUN, ExerciseSession.avg_hr.is_not(None))
+            .order_by(ExerciseSession.started_at.desc()).limit(1)
+        ).first()
+        if last_run_hr:
+            print(f"Letzter Lauf mit HF: {last_run_hr[0]:%Y-%m-%d} — Ø {last_run_hr[1]:.0f} / "
+                  f"max {last_run_hr[2]:.0f} bpm, Drift {last_run_hr[3]}%")

@@ -53,6 +53,8 @@ def snapshot_text() -> str:
         "",
         f"LAUFEN: letzte Woche {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
+        f"Ø-HF {r.get('avg_hr') or '–'} bpm (max {r.get('max_hr') or '–'}), "
+        f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %. "
         f"Wochenvolumen (4 Wo, km): {vol}. Höhenmeter: nicht verfügbar.",
         "",
         f"KRAFT: Top-e1RM {k.get('top_lift')} {k.get('top_e1rm')} kg; Wochen-Tonnage ~{(k.get('week_tonnage_kg') or 0)/1000:.1f} t; "

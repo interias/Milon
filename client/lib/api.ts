@@ -39,7 +39,8 @@ export type BodySummary = {
 };
 export type RunSummary = {
   week_km: number | null; week_runs: number | null; pace: number | null;
-  vo2max: number | null; elevation: null;
+  vo2max: number | null; avg_hr: number | null; max_hr: number | null;
+  ef: number | null; hr_drift: number | null; elevation: null;
 };
 export type Lift = { exercise: string; e1rm: number; peak: number; sets: number };
 export type StrengthSummary = {
@@ -117,6 +118,10 @@ export type Tdee = {
 export type VolPoint = { week: string; km: number; runs: number };
 export type PacePoint = { week: string; pace: number };
 export type Vo2Point = { date: string; vo2: number };
+export type HrPoint = {
+  week: string; avg_hr: number; max_hr: number | null; ef: number | null;
+  drift: number | null; runs: number;
+};
 export type TonnagePoint = { week: string; tonnage_kg: number };
 export type RpePoint = { week: string; rpe: number };
 export type E1rmPoint = { date: string; e1rm: number };
@@ -210,6 +215,7 @@ export const api = {
   runVolume: (weeks = 26) => get<VolPoint[]>(`/metrics/running/volume?weeks=${weeks}`),
   runPace: (weeks = 26) => get<PacePoint[]>(`/metrics/running/pace?weeks=${weeks}`),
   runVo2: (days = 365) => get<Vo2Point[]>(`/metrics/running/vo2?days=${days}`),
+  runHeartRate: (weeks = 26) => get<HrPoint[]>(`/metrics/running/heart-rate?weeks=${weeks}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),
   strengthTonnage: (weeks = 26) => get<TonnagePoint[]>(`/metrics/strength/tonnage?weeks=${weeks}`),

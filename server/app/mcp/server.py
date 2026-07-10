@@ -69,6 +69,13 @@ def get_vo2max_trend(days: int = 365) -> list:
 
 
 @mcp.tool()
+def get_run_heart_rate(weeks: int = 12) -> list:
+    """Herzfrequenz je Woche über alle Läufe mit HF: Ø-HF, Max-HF, aerobe Effizienz ef
+    (Meter pro Herzschlag, höher = fitter) + Ø-Drift (HF 2. vs. 1. Hälfte in %)."""
+    return running.heart_rate_trend(weeks)
+
+
+@mcp.tool()
 def get_strength_summary() -> dict:
     """Kraft-Überblick: Hauptübungen (e1RM/Peak/Sätze), Wochen-Tonnage, Ø-RPE."""
     return strength.summary()

@@ -73,6 +73,8 @@ class ExerciseSession(SQLModel, table=True):
     ended_at: Optional[datetime] = None
     distance_km: Optional[float] = None
     avg_hr: Optional[float] = None
+    max_hr: Optional[float] = None
+    hr_drift_pct: Optional[float] = None  # Ø-HF 2. Hälfte vs. 1. Hälfte in % (kardiale Drift)
     source: str = "health_connect"
 
 

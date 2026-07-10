@@ -37,6 +37,10 @@ TOOLS = [
         {"weeks": {"type": "integer"}}),
     _fn("get_vo2_trend", "VO2max-Verlauf (Uhr-Schaetzung, Trend zaehlt).",
         {"days": {"type": "integer"}}),
+    _fn("get_run_heart_rate", "Herzfrequenz je Woche ueber alle Laeufe mit HF: Oe-HF, Max-HF, "
+        "aerobe Effizienz ef (Meter pro Herzschlag, hoeher = fitter — gleiche Pace bei "
+        "niedrigerer HF), Oe-Drift (HF 2. vs. 1. Haelfte in %, hoch = Ausdauerdefizit/Hitze).",
+        {"weeks": {"type": "integer", "description": "Default 12"}}),
     _fn("get_strength_summary", "Kraft-Ueberblick: Hauptuebungen mit e1RM/Peak/Saetzen, Wochen-Tonnage, Durchschnitts-RPE."),
     _fn("get_tonnage", "Wochen-Tonnage (kg) der letzten N Wochen.", {"weeks": {"type": "integer"}}),
     _fn("get_rpe_trend", "Woechentlicher Durchschnitts-RPE (Ermuedungssignal).", {"weeks": {"type": "integer"}}),
@@ -77,6 +81,8 @@ def dispatch(name: str, args: dict):
         return running.pace_trend(int(args.get("weeks", 12)))
     if name == "get_vo2_trend":
         return _thin(running.vo2_trend(int(args.get("days", 365))))
+    if name == "get_run_heart_rate":
+        return running.heart_rate_trend(int(args.get("weeks", 12)))
     if name == "get_strength_summary":
         return strength.summary()
     if name == "get_tonnage":

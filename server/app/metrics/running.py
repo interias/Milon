@@ -1,4 +1,5 @@
-"""Lauf-Metriken (ARCHITECTURE.md §5.2): Wochenvolumen, Pace-Trend, VO2max-Trend.
+"""Lauf-Metriken (ARCHITECTURE.md §5.2): Wochenvolumen, Pace-Trend, VO2max-Trend,
+Herzfrequenz (Ø/Max je Lauf) + aerobe Effizienz (Meter pro Herzschlag) + HF-Drift.
 exercise_type 33 = Laufen. Höhenmeter sind NICHT verfügbar (HC liefert keine)."""
 from __future__ import annotations
 
@@ -16,8 +17,8 @@ def _read(sql: str, **kw) -> pd.DataFrame:
 
 def _runs() -> pd.DataFrame:
     df = _read(
-        "SELECT started_at, ended_at, distance_km FROM exercise_sessions "
-        f"WHERE exercise_type = {RUN}",
+        "SELECT started_at, ended_at, distance_km, avg_hr, max_hr, hr_drift_pct "
+        f"FROM exercise_sessions WHERE exercise_type = {RUN}",
         parse_dates=["started_at", "ended_at"],
     )
     if df.empty:
@@ -28,6 +29,10 @@ def _runs() -> pd.DataFrame:
             & (df["dur_min"] > 5) & (df["dur_min"] < 600)].copy()
     df["pace"] = df["dur_min"] / df["distance_km"]  # min/km
     df = df[(df["pace"] >= 3) & (df["pace"] <= 12)]  # plausible Pace
+    # Aerobe Effizienz (Efficiency Factor): Meter pro Herzschlag = Speed (m/min) / HF (bpm).
+    # Höher = fitter; aussagekräftiger als Pace allein, weil sie die "Kosten" mitmisst.
+    speed_m_min = df["distance_km"] * 1000 / df["dur_min"]
+    df["ef"] = (speed_m_min / df["avg_hr"]).where(df["avg_hr"] > 0)
     return df
 
 
@@ -73,6 +78,33 @@ def pace_trend(weeks: int = 26) -> list[dict]:
     return [{"week": w.isoformat(), "pace": round(float(p), 2)} for w, p in zip(g["week"], g["pace"])]
 
 
+def heart_rate_trend(weeks: int = 26) -> list[dict]:
+    """Wochenwerte über Läufe MIT HF: Ø-HF, Max-HF, aerobe Effizienz (m/Herzschlag),
+    Ø-Drift (Ø-HF 2. vs. 1. Hälfte, %). Wochen ohne HF-Läufe fehlen bewusst."""
+    df = _runs()
+    if df.empty:
+        return []
+    df = df[df["avg_hr"].notna()]
+    if df.empty:
+        return []
+    df["week"] = df["started_at"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
+    g = df.groupby("week").agg(
+        avg_hr=("avg_hr", "mean"), max_hr=("max_hr", "max"),
+        ef=("ef", "mean"), drift=("hr_drift_pct", "mean"), runs=("avg_hr", "size"),
+    ).reset_index().sort_values("week").tail(weeks)
+    return [
+        {
+            "week": r["week"].isoformat(),
+            "avg_hr": round(float(r["avg_hr"]), 1),
+            "max_hr": round(float(r["max_hr"]), 0) if pd.notna(r["max_hr"]) else None,
+            "ef": round(float(r["ef"]), 2) if pd.notna(r["ef"]) else None,
+            "drift": round(float(r["drift"]), 1) if pd.notna(r["drift"]) else None,
+            "runs": int(r["runs"]),
+        }
+        for _, r in g.iterrows()
+    ]
+
+
 def vo2_trend(days: int = 365) -> list[dict]:
     df = _read("SELECT measured_at, vo2 FROM vo2max ORDER BY measured_at", parse_dates=["measured_at"])
     if df.empty:
@@ -89,10 +121,15 @@ def summary() -> dict:
     vol = weekly_volume(weeks=4)
     pace = pace_trend(weeks=4)
     vo2 = vo2_trend(days=365)
+    hr = heart_rate_trend(weeks=4)
     return {
         "week_km": vol[-1]["km"] if vol else None,
         "week_runs": vol[-1]["runs"] if vol else None,
         "pace": pace[-1]["pace"] if pace else None,
         "vo2max": vo2[-1]["vo2"] if vo2 else None,
+        "avg_hr": hr[-1]["avg_hr"] if hr else None,  # Ø-HF der letzten Woche mit HF-Läufen
+        "max_hr": hr[-1]["max_hr"] if hr else None,
+        "ef": hr[-1]["ef"] if hr else None,  # Meter pro Herzschlag (höher = fitter)
+        "hr_drift": hr[-1]["drift"] if hr else None,
         "elevation": None,  # bewusst: Höhenmeter nicht verfügbar
     }

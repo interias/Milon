@@ -38,6 +38,10 @@ def _run_migrations() -> None:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")
         if "detail" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN detail TEXT")
+        ex_cols = cols("exercise_sessions")
+        for col in ("max_hr", "hr_drift_pct"):
+            if col not in ex_cols:
+                con.exec_driver_sql(f"ALTER TABLE exercise_sessions ADD COLUMN {col} REAL")
 
 
 def get_session() -> Iterator[Session]:

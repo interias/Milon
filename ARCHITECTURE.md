@@ -89,6 +89,7 @@ Die Automatisierbarkeit ist **asymmetrisch** — ehrlich pro Quelle:
   - *Caveat:* reine KI-FoodScan-Einträge fehlen lt. FDDB evtl. im Export — einmal stichprobenartig prüfen.
 - **Hevy-CSV/API:** Felder `title, start_time, exercise_title, set_type (normal/warmup), weight_kg, reps, rpe`. Für Kraft-Metriken nur `set_type='normal'`.
 - **Health-Connect-`.db`:** SQLite. Zeitstempel = **Epoch-Millisekunden** (UTC → `Europe/Berlin` konvertieren). Relevante Tabellen: `exercise_session_record_table`, `distance_record_table`, `vo2_max_record_table`, `steps_record_table`, `heart_rate_record_*`, `weight_record_table`, `body_fat_record_table`. `exercise_type` ist ein Integer-Code (**an deinen Daten verifiziert: 33 = Laufen, 45 = Kraft, 53 = Gehen** — vor Produktion gegenchecken). `energy` in `total_calories_burned` ist in **cal → /1000 für kcal** (und dort unvollständig/aktiv-only → **nicht** als TDEE nutzen). `elevation_gained_record_table` ist bei dir leer → **keine Höhenmeter** (siehe §5.2).
+  - **Herzfrequenz:** Einzelwerte in `heart_rate_record_series_table` (`parent_key` → `heart_rate_record_table.row_id`, `epoch_millis`, `beats_per_minute`). Pro Session im Zeitfenster aggregiert (Ø/Max + Drift 2. vs. 1. Hälfte); Quelle bevorzugt die Watch-App (`steps_source_package`), Fallback alle Apps; Sanity 25–250 bpm.
 
 ---
 
@@ -139,6 +140,7 @@ CREATE TABLE exercise_sessions (
   exercise_type INTEGER,                      -- 33 run / 45 strength / 53 walk
   started_at TIMESTAMP, ended_at TIMESTAMP,
   distance_km REAL, avg_hr REAL,
+  max_hr REAL, hr_drift_pct REAL,             -- HF je Session (aus heart_rate_record_series_table)
   source TEXT NOT NULL DEFAULT 'health_connect'
 );
 CREATE TABLE vo2max (

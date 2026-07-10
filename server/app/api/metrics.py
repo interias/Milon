@@ -156,6 +156,11 @@ def running_vo2(days: int = 365) -> list[dict]:
     return running.vo2_trend(days)
 
 
+@router.get("/running/heart-rate")
+def running_heart_rate(weeks: int = 26) -> list[dict]:
+    return running.heart_rate_trend(weeks)
+
+
 # --- Kraft ---
 @router.get("/strength/summary")
 def strength_summary() -> dict:
