@@ -29,7 +29,7 @@ from sqlmodel import Session
 
 from ..config import settings
 from ..db import count_rows, engine, upsert
-from ..models import BodyMeasurement, ExerciseSession, StepsDaily, Vo2Max
+from ..models import BodyMeasurement, ExerciseSession, RestingHrDaily, StepsDaily, Vo2Max
 
 SOURCE = "health_connect"
 BIKE, RUN, STRENGTH, WALK = 4, 33, 45, 53
@@ -240,21 +240,50 @@ def read_health_connect(db_path: str | Path) -> dict:
         for r in cur.execute(steps_sql, steps_params)
     ]
 
+    # --- Ruhepuls: resting_heart_rate_record_table (Instant-Record der Watch). Pro lokalem
+    # Tag die NIEDRIGSTE Messung (= echter Ruhewert). Defensiv: Tabelle/Spalten koennen fehlen. ---
+    resting: list[dict] = []
+    tables = {row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "resting_heart_rate_record_table" in tables:
+        rcols = {row[1] for row in cur.execute("PRAGMA table_info(resting_heart_rate_record_table)")}
+        if {"time", "beats_per_minute"} <= rcols:
+            rwhere, rparams = "", ()
+            if step_ids and "app_info_id" in rcols:  # Watch bevorzugen (wie Schritte/HF)
+                ph = ",".join("?" * len(step_ids))
+                rwhere, rparams = f" WHERE app_info_id IN ({ph})", tuple(step_ids)
+            sel_off = "zone_offset" if "zone_offset" in rcols else "NULL AS zone_offset"
+            per_day: dict[date, float] = {}
+            for r in cur.execute(
+                f"SELECT time, {sel_off}, beats_per_minute FROM resting_heart_rate_record_table{rwhere}",
+                rparams,
+            ):
+                t = _local(r["time"], r["zone_offset"])
+                v = r["beats_per_minute"]
+                if t is None or v is None or not (HR_MIN_BPM <= v <= HR_MAX_BPM):
+                    continue
+                d = t.date()
+                per_day[d] = min(per_day.get(d, 999.0), float(v))
+            resting = [{"day": d, "bpm": v, "source": SOURCE} for d, v in per_day.items()]
+        else:
+            log.warning("resting_heart_rate_record_table hat unerwartete Spalten %s", sorted(rcols))
+
     con.close()
-    return {"body": body, "sessions": sessions, "vo2": vo2, "steps": steps}
+    return {"body": body, "sessions": sessions, "vo2": vo2, "steps": steps, "resting": resting}
 
 
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
     """Importiert die HC-DB idempotent (Append: nur neue Zeilen werden geschrieben).
     full=True macht eine Voll-Reconciliation (loescht source-Zeilen vorher -> spiegelt auch Loeschungen)."""
     data = read_health_connect(db_path)
-    models_ = (BodyMeasurement, ExerciseSession, Vo2Max, StepsDaily)
+    models_ = (BodyMeasurement, ExerciseSession, Vo2Max, StepsDaily, RestingHrDaily)
     with Session(engine) as s:
         if full:
             for m in models_:
-                # Schritte nie löschen, wenn der Import keine liefert (Fehlkonfiguration/leer)
-                # -> schützt die Schritt-Historie vor versehentlichem Leeren.
+                # Tageswert-Historien nie löschen, wenn der Import keine liefert
+                # (Fehlkonfiguration/leerer Export) -> schützt vor versehentlichem Leeren.
                 if m is StepsDaily and not data["steps"]:
+                    continue
+                if m is RestingHrDaily and not data["resting"]:
                     continue
                 s.execute(delete(m).where(m.source == SOURCE))
         before = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
@@ -279,6 +308,7 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
+        upsert(s, RestingHrDaily, data["resting"], ["day"], update_cols=["bpm"])
         s.commit()
         after = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
 
@@ -288,6 +318,7 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         "new_sessions": after["ExerciseSession"] - before["ExerciseSession"],
         "new_vo2max": after["Vo2Max"] - before["Vo2Max"],
         "new_steps_days": after["StepsDaily"] - before["StepsDaily"],
+        "new_resting_hr_days": after["RestingHrDaily"] - before["RestingHrDaily"],
         "total_sessions": after["ExerciseSession"],
         "sessions_with_hr": sessions_with_hr,
     }

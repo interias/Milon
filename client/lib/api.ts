@@ -122,6 +122,28 @@ export type HrPoint = {
   week: string; avg_hr: number; max_hr: number | null; ef: number | null;
   drift: number | null; runs: number;
 };
+export type TrendVerdict = "besser" | "schlechter" | "unklar" | "wenig_daten";
+export type FitTrend = {
+  verdict: TrendVerdict; label: string; significant?: boolean; n?: number; days?: number;
+  r2?: number; slope_per_week?: number; ci_per_week?: number; delta?: number;
+  delta_sec_per_km?: number | null; sec_per_km_per_month?: number | null;
+};
+export type PaceAtHr = {
+  ref_hr?: number; window_weeks?: number; series?: { week: string; pace: number | null }[];
+  points?: number; current?: number | null; trend?: FitTrend; caveat?: string;
+};
+export type EasyHr = {
+  pace_lo?: number; pace_hi?: number; runs?: number;
+  series?: { week: string; avg_hr: number; runs: number }[]; trend?: FitTrend; caveat?: string;
+};
+export type Trimp = {
+  hr_rest?: number; hr_max?: number; series?: { week: string; trimp: number; runs: number }[];
+  avg4?: number | null; caveat?: string;
+};
+export type RestingHr = {
+  series?: { date: string; bpm: number; avg7: number }[]; last?: number; last_day?: string;
+  avg7?: number; trend_days?: number; trend?: FitTrend;
+};
 export type TonnagePoint = { week: string; tonnage_kg: number };
 export type RpePoint = { week: string; rpe: number };
 export type E1rmPoint = { date: string; e1rm: number };
@@ -216,6 +238,10 @@ export const api = {
   runPace: (weeks = 26) => get<PacePoint[]>(`/metrics/running/pace?weeks=${weeks}`),
   runVo2: (days = 365) => get<Vo2Point[]>(`/metrics/running/vo2?days=${days}`),
   runHeartRate: (weeks = 26) => get<HrPoint[]>(`/metrics/running/heart-rate?weeks=${weeks}`),
+  runPaceAtHr: () => get<PaceAtHr>("/metrics/running/pace-at-hr"),
+  runEasyHr: () => get<EasyHr>("/metrics/running/easy-hr"),
+  runTrimp: (weeks = 26) => get<Trimp>(`/metrics/running/trimp?weeks=${weeks}`),
+  healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),
   strengthTonnage: (weeks = 26) => get<TonnagePoint[]>(`/metrics/strength/tonnage?weeks=${weeks}`),

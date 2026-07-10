@@ -41,6 +41,12 @@ TOOLS = [
         "aerobe Effizienz ef (Meter pro Herzschlag, hoeher = fitter — gleiche Pace bei "
         "niedrigerer HF), Oe-Drift (HF 2. vs. 1. Haelfte in %, hoch = Ausdauerdefizit/Hitze).",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
+    _fn("get_run_fitness_trends", "Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, "
+        "Lauf-Level-Regression): pace_at_hr (Pace bei Referenzpuls — schneller bei gleichem "
+        "Puls = fitter), easy_hr (Oe-HF im Locker-Pace-Korridor — niedriger = fitter), "
+        "trimp (Wochen-Trainingslast Banister), resting_hr (Ruhepuls-Trend). Jedes trend-Objekt "
+        "hat verdict (besser/schlechter/unklar/wenig_daten) — NUR bei significant=true als echten "
+        "Trend deuten, sonst als Rauschen benennen."),
     _fn("get_strength_summary", "Kraft-Ueberblick: Hauptuebungen mit e1RM/Peak/Saetzen, Wochen-Tonnage, Durchschnitts-RPE."),
     _fn("get_tonnage", "Wochen-Tonnage (kg) der letzten N Wochen.", {"weeks": {"type": "integer"}}),
     _fn("get_rpe_trend", "Woechentlicher Durchschnitts-RPE (Ermuedungssignal).", {"weeks": {"type": "integer"}}),
@@ -83,6 +89,17 @@ def dispatch(name: str, args: dict):
         return _thin(running.vo2_trend(int(args.get("days", 365))))
     if name == "get_run_heart_rate":
         return running.heart_rate_trend(int(args.get("weeks", 12)))
+    if name == "get_run_fitness_trends":
+        pah = running.pace_at_hr()
+        easy = running.easy_hr_trend()
+        trimp = running.trimp_weekly()
+        resting = health.resting_hr_trend()
+        return {  # Serien ausduennen, Kennzahlen/Urteile komplett behalten
+            "pace_at_hr": {**pah, "series": _thin(pah.get("series", []))} if pah else {},
+            "easy_hr": {**easy, "series": _thin(easy.get("series", []))} if easy else {},
+            "trimp": {**trimp, "series": trimp.get("series", [])[-8:]} if trimp else {},
+            "resting_hr": ({k: v for k, v in resting.items() if k != "series"} if resting else {}),
+        }
     if name == "get_strength_summary":
         return strength.summary()
     if name == "get_tonnage":

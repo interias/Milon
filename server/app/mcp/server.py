@@ -77,6 +77,20 @@ def get_run_heart_rate(weeks: int = 12) -> list:
 
 
 @mcp.tool()
+def get_run_fitness_trends() -> dict:
+    """Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, Lauf-Level-Regression):
+    pace_at_hr (Pace bei Referenzpuls), easy_hr (Ø-HF im Locker-Korridor), trimp
+    (Wochen-Trainingslast), resting_hr (Ruhepuls). trend.verdict nur bei significant=true
+    als echten Trend deuten."""
+    return {
+        "pace_at_hr": running.pace_at_hr(),
+        "easy_hr": running.easy_hr_trend(),
+        "trimp": running.trimp_weekly(),
+        "resting_hr": health.resting_hr_trend(),
+    }
+
+
+@mcp.tool()
 def get_strength_summary() -> dict:
     """Kraft-Überblick: Hauptübungen (e1RM/Peak/Sätze), Wochen-Tonnage, Ø-RPE."""
     return strength.summary()

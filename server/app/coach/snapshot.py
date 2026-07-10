@@ -26,6 +26,7 @@ def build_snapshot() -> dict:
         "kraft_rpe_6w": strength.rpe_trend(6),
         "schritte": health.steps_summary(),
         "radfahren": health.cycling_summary(),
+        "ruhepuls": health.resting_hr_trend(days=30),
         "gewicht_prognose": body.weight_forecast(),
         "kfa_prognose": body.bodyfat_forecast(),
         "kraft_index": strength.strength_index("3m"),
@@ -71,7 +72,9 @@ def snapshot_text() -> str:
         f"GESUNDHEIT: Schritte heute {st.get('last')}, Ø {st.get('avg7')}/Tag (7 T), Ø {st.get('avg30')}/Tag (30 T). "
         f"Radfahren: {rad.get('total_km')} km gesamt / {rad.get('rides')} Fahrten, "
         f"{rad.get('km_30d')} km in den letzten 30 T (heute-relativ), Ø {rad.get('avg_speed')} km/h, "
-        f"zuletzt {rad.get('last_day')}.",
+        f"zuletzt {rad.get('last_day')}."
+        + (lambda rp: f" Ruhepuls {rp.get('last'):.0f} bpm (Ø7 {rp.get('avg7')})."
+           if rp and rp.get("last") is not None else "")(snap.get("ruhepuls") or {}),
         "",
         "PROGNOSE (30 T, linearer Trend): "
         + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp else "Gewicht –")

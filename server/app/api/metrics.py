@@ -135,6 +135,11 @@ def health_cycling_recent(limit: int = 8) -> list[dict]:
     return health.cycling_recent(limit)
 
 
+@router.get("/health/resting-hr")
+def health_resting_hr(days: int = 365) -> dict:
+    return health.resting_hr_trend(days)
+
+
 # --- Laufen ---
 @router.get("/running/summary")
 def running_summary() -> dict:
@@ -159,6 +164,21 @@ def running_vo2(days: int = 365) -> list[dict]:
 @router.get("/running/heart-rate")
 def running_heart_rate(weeks: int = 26) -> list[dict]:
     return running.heart_rate_trend(weeks)
+
+
+@router.get("/running/pace-at-hr")
+def running_pace_at_hr(ref_hr: int | None = None, window_weeks: int = 8) -> dict:
+    return running.pace_at_hr(ref_hr, window_weeks)
+
+
+@router.get("/running/easy-hr")
+def running_easy_hr(band_pct: float = 5.0) -> dict:
+    return running.easy_hr_trend(band_pct)
+
+
+@router.get("/running/trimp")
+def running_trimp(weeks: int = 26) -> dict:
+    return running.trimp_weekly(weeks)
 
 
 # --- Kraft ---

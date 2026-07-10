@@ -95,6 +95,15 @@ class StepsDaily(SQLModel, table=True):
     source: str = "health_connect"
 
 
+class RestingHrDaily(SQLModel, table=True):
+    """Ruhepuls je Tag (niedrigste Messung; sinkend = Fitness, ploetzlich hoch = Ermuedung)."""
+    __tablename__ = "resting_hr_daily"
+
+    day: date = Field(primary_key=True)
+    bpm: float
+    source: str = "health_connect"
+
+
 class CoachReport(SQLModel, table=True):
     __tablename__ = "coach_reports"
 
