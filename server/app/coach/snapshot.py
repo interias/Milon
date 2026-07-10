@@ -43,6 +43,12 @@ def snapshot_text() -> str:
     lifts = ", ".join(f'{m["exercise"]}: {m["e1rm"]:.0f} kg' for m in (k.get("main_lifts") or [])[:5]) or "–"
     ton = " / ".join(f'{w["tonnage_kg"]/1000:.1f}t' for w in snap["kraft_tonnage_6w"]) or "–"
 
+    # HF-Werte stammen aus der letzten Woche MIT HF-Läufen — ist die älter als die letzte
+    # Lauf-Woche (Watch nicht getragen), explizit kennzeichnen statt "letzte Woche" zu suggerieren.
+    cur_week = snap["lauf_volumen_4w"][-1]["week"] if snap["lauf_volumen_4w"] else None
+    hr_week = r.get("hr_week")
+    hr_note = f" (Werte aus Woche vom {hr_week}, seitdem keine HF-Läufe)" if hr_week and hr_week != cur_week else ""
+
     lines = [
         f"Stand: {snap['stand']}",
         "",
@@ -54,7 +60,7 @@ def snapshot_text() -> str:
         f"LAUFEN: letzte Woche {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
         f"Ø-HF {r.get('avg_hr') or '–'} bpm (max {r.get('max_hr') or '–'}), "
-        f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %. "
+        f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %{hr_note}. "
         f"Wochenvolumen (4 Wo, km): {vol}. Höhenmeter: nicht verfügbar.",
         "",
         f"KRAFT: Top-e1RM {k.get('top_lift')} {k.get('top_e1rm')} kg; Wochen-Tonnage ~{(k.get('week_tonnage_kg') or 0)/1000:.1f} t; "

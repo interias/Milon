@@ -40,7 +40,7 @@ export type BodySummary = {
 export type RunSummary = {
   week_km: number | null; week_runs: number | null; pace: number | null;
   vo2max: number | null; avg_hr: number | null; max_hr: number | null;
-  ef: number | null; hr_drift: number | null; elevation: null;
+  ef: number | null; hr_drift: number | null; hr_week: string | null; elevation: null;
 };
 export type Lift = { exercise: string; e1rm: number; peak: number; sets: number };
 export type StrengthSummary = {

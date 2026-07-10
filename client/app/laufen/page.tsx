@@ -26,6 +26,10 @@ export default function Laufen() {
   if (!sum) return (<><PageTitle title="Laufen" /><Loading /></>);
 
   const hasHr = hr.length > 0;
+  // HF-Werte stammen aus der letzten Woche MIT HF-Läufen — ist die älter als die
+  // letzte Lauf-Woche (Watch nicht getragen), die Woche im KPI ausweisen.
+  const lastVolWeek = vol.length > 0 ? vol[vol.length - 1].week : null;
+  const hrStale = !!(sum.hr_week && lastVolWeek && sum.hr_week !== lastVolWeek);
 
   return (
     <>
@@ -45,7 +49,12 @@ export default function Laufen() {
           value={de0(sum.vo2max)}
         />
         <Kpi
-          label="Ø-Puls" sub={sum.max_hr != null ? `max ${de0(sum.max_hr)} bpm` : "letzte Woche mit HF"}
+          label="Ø-Puls"
+          sub={
+            sum.avg_hr == null ? "noch keine HF-Daten"
+            : hrStale ? `max ${de0(sum.max_hr)} · Wo. ${dm(sum.hr_week!)}`
+            : `max ${de0(sum.max_hr)} bpm`
+          }
           value={de0(sum.avg_hr)} unit={sum.avg_hr != null ? "bpm" : undefined}
         />
       </div>

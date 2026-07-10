@@ -269,12 +269,14 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         vo2_rows = [d for d in data["vo2"] if d["measured_at"] is not None]
 
         # HF kam spaeter dazu: liefert der Export HF, werden bestehende Sessions per
-        # DO UPDATE retro-gefuellt; ohne HF bleibt der Upsert append-only (nichts ueberschreiben).
+        # DO UPDATE retro-gefuellt; ohne HF bleibt der Upsert append-only. coalesce=True
+        # haertet zusaetzlich pro Zeile: eine Session, die im aktuellen Export keine
+        # Fenster-Samples hat, nullt nie einen frueher berechneten Wert (full=True ersetzt).
         sessions_with_hr = sum(1 for d in sess_rows if d.get("avg_hr") is not None)
         hr_update = ["avg_hr", "max_hr", "hr_drift_pct"] if sessions_with_hr else None
 
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
-        upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update)
+        upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
         s.commit()

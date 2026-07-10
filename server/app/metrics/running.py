@@ -121,6 +121,9 @@ def summary() -> dict:
     vol = weekly_volume(weeks=4)
     pace = pace_trend(weeks=4)
     vo2 = vo2_trend(days=365)
+    # WICHTIG: hr[-1] ist die letzte Woche MIT HF-Läufen — die kann älter sein als die
+    # letzte Lauf-Woche (watch-lose Läufe). hr_week macht das für Snapshot/UI sichtbar,
+    # damit alte HF-Werte nicht als "letzte Woche" gelesen werden.
     hr = heart_rate_trend(weeks=4)
     return {
         "week_km": vol[-1]["km"] if vol else None,
@@ -131,5 +134,6 @@ def summary() -> dict:
         "max_hr": hr[-1]["max_hr"] if hr else None,
         "ef": hr[-1]["ef"] if hr else None,  # Meter pro Herzschlag (höher = fitter)
         "hr_drift": hr[-1]["drift"] if hr else None,
+        "hr_week": hr[-1]["week"] if hr else None,  # Woche, aus der die HF-Werte stammen
         "elevation": None,  # bewusst: Höhenmeter nicht verfügbar
     }

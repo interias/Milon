@@ -9,6 +9,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from ..coach import snapshot
+from ..db import init_db
 from ..metrics import activity, body, health, running, strength
 
 mcp = FastMCP("Milon")
@@ -147,6 +148,10 @@ def get_strength_energy() -> dict:
 
 
 def main() -> None:
+    # MCP liest tracker.db direkt (laeuft NICHT im Container) -> Spalten-Migrationen
+    # muessen auch hier laufen, sonst bricht die Metrik-Schicht nach einem git pull,
+    # bevor der FastAPI-Server einmal mit dem neuen Code gestartet wurde.
+    init_db()
     mcp.run()  # stdio
 
 
