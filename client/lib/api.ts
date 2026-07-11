@@ -144,6 +144,16 @@ export type RestingHr = {
   series?: { date: string; bpm: number; avg7: number }[]; last?: number; last_day?: string;
   avg7?: number; trend_days?: number; trend?: FitTrend;
 };
+export type EfTrend = {
+  series?: { date: string; ef: number; smooth: number }[];
+  current?: number; runs?: number; trend?: FitTrend; caveat?: string;
+};
+export type PaceByZone = {
+  zone_width?: number; weeks?: string[];
+  zones?: { zone: string; lo: number; runs: number; series: (number | null)[];
+            sec_per_km_per_month?: number | null }[];
+  hidden_runs?: number; caveat?: string;
+};
 export type TonnagePoint = { week: string; tonnage_kg: number };
 export type RpePoint = { week: string; rpe: number };
 export type E1rmPoint = { date: string; e1rm: number };
@@ -241,6 +251,8 @@ export const api = {
   runPaceAtHr: () => get<PaceAtHr>("/metrics/running/pace-at-hr"),
   runEasyHr: () => get<EasyHr>("/metrics/running/easy-hr"),
   runTrimp: (weeks = 26) => get<Trimp>(`/metrics/running/trimp?weeks=${weeks}`),
+  runPaceByZone: () => get<PaceByZone>("/metrics/running/pace-by-zone"),
+  runEf: () => get<EfTrend>("/metrics/running/ef"),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),

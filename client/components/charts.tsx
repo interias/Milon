@@ -216,12 +216,14 @@ export function MultiTrend({
   height = 200,
   unit,
   format = (n) => de(n, 1),
+  equalWeight = false,
 }: {
   series: { values: (number | null)[]; label: string; color: string }[];
   labels?: string[];
   height?: number;
   unit?: string;
   format?: Fmt;
+  equalWeight?: boolean; // alle Linien gleich stark (statt letzte Serie hervorzuheben)
 }) {
   const allY = series.flatMap((s) => s.values.filter((v): v is number => v != null));
   if (allY.length < 2) {
@@ -255,7 +257,7 @@ export function MultiTrend({
             ))}
             {series.map((s, si) => (
               <path key={si} d={path(s.values)} fill="none" stroke={s.color}
-                    strokeWidth={si === series.length - 1 ? 2.2 : 1.3}
+                    strokeWidth={equalWeight ? 1.7 : si === series.length - 1 ? 2.2 : 1.3}
                     strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             ))}
           </svg>

@@ -80,12 +80,15 @@ def get_run_heart_rate(weeks: int = 12) -> list:
 def get_run_fitness_trends() -> dict:
     """Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, Lauf-Level-Regression):
     pace_at_hr (Pace bei Referenzpuls), easy_hr (Ø-HF im Locker-Korridor), trimp
-    (Wochen-Trainingslast), resting_hr (Ruhepuls). trend.verdict nur bei significant=true
-    als echten Trend deuten."""
+    (Wochen-Trainingslast), pace_by_zone (Ø-Pace je 10er-Puls-Band, Δ/Monat als
+    Punkt-Schätzer OHNE Signifikanz; ACHTUNG Zonen-Wanderung: fittere Läufe rutschen
+    in tiefere Bänder — Zonen-Slopes unterschätzen den Fortschritt systematisch),
+    resting_hr (Ruhepuls). trend.verdict nur bei significant=true als echten Trend deuten."""
     return {
         "pace_at_hr": running.pace_at_hr(),
         "easy_hr": running.easy_hr_trend(),
         "trimp": running.trimp_weekly(),
+        "pace_by_zone": running.pace_by_hr_zone(),
         "resting_hr": health.resting_hr_trend(),
     }
 

@@ -108,6 +108,34 @@ def heart_rate_trend(weeks: int = 26) -> list[dict]:
     ]
 
 
+def ef_trend(alpha: float = 0.25) -> dict:
+    """Aerobe Effizienz je LAUF (Meter pro Herzschlag) statt Wochen-Ø — feiner aufgelöst,
+    plus kausale EWMA-Glättung (α wie beim Stärke-Index) gegen Intensitäts-/Tagesform-
+    Rauschen. Urteil (95%-CI) aus der Lauf-Level-Regression EF ~ Zeit (Läufe ~unabhängig,
+    Ehrliche-Statistik-Regel); die geglättete Kurve ist reine Anzeige."""
+    df = _runs()
+    if df.empty:
+        return {}
+    df = df[df["ef"].notna()].sort_values("started_at").copy()
+    if len(df) < 4:
+        return {}
+    smooth = df["ef"].ewm(alpha=alpha).mean()
+    series = [
+        {"date": d.date().isoformat(), "ef": round(float(e), 3), "smooth": round(float(s), 3)}
+        for d, e, s in zip(df["started_at"], df["ef"], smooth)
+    ]
+    xs = ((df["started_at"] - df["started_at"].min()).dt.total_seconds() / 86_400).tolist()
+    trend = stats.assess(stats.linear_trend(xs, df["ef"].tolist()), down_is_good=False)
+    return {
+        "series": series,
+        "current": series[-1]["smooth"],
+        "runs": int(len(df)),
+        "trend": trend,
+        "caveat": "EF = Speed/Ø-HF je Lauf; Temperatur/Terrain/Intensität nicht kontrolliert. "
+                  "Urteil aus Einzel-Läufen, EWMA-Kurve nur zur Anzeige.",
+    }
+
+
 def pace_at_hr(ref_hr: int | None = None, window_weeks: int = 8) -> dict:
     """„Welche Pace läufst du bei X bpm?" — Fitness-Kennzahl, die die Intensität herauskontrolliert.
 
@@ -215,6 +243,61 @@ def easy_hr_trend(band_pct: float = 5.0) -> dict:
         "series": series, "trend": trend,
         "caveat": f"Nur Läufe mit Pace {lo:.2f}–{hi:.2f} min/km (Median ±{band_pct:.0f} %); "
                   "Urteil aus Einzel-Läufen, Wochenkurve nur zur Anzeige.",
+    }
+
+
+def pace_by_hr_zone(zone_width: int = 10, min_runs: int = 3, min_weeks: int = 2) -> dict:
+    """Pace-Wochenkurven je Puls-Zone: Läufe nach Ø-HF in 10er-bpm-Bänder (130–139, …)
+    einsortiert, je Zone der Wochen-Ø der Pace. Beantwortet „bei Puls X — werde ich
+    schneller?" über alle Intensitäten gleichzeitig. BEWUSST ohne Signifikanz-Badge:
+    pro Zone sind es wenige Läufe und 4+ parallele Tests (Multiple-Comparisons) —
+    das belastbare Urteil liefert pace_at_hr(); Δ/Monat hier nur als Punkt-Schätzer."""
+    df = _runs()
+    if df.empty:
+        return {}
+    df = df[df["avg_hr"].notna()].copy()
+    if df.empty:
+        return {}
+    df["zone_lo"] = (df["avg_hr"] // zone_width * zone_width).astype(int)
+    df["week"] = df["started_at"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
+    # durchgehende Wochenachse (inkl. Lücken) — Linien bleiben zeitlinear
+    weeks_idx = [p.start_time.date() for p in
+                 pd.period_range(df["started_at"].min(), df["started_at"].max(), freq="W-SUN")]
+
+    zones: list[dict] = []
+    hidden_runs = 0
+    for lo, grp in sorted(df.groupby("zone_lo"), key=lambda kv: kv[0]):
+        wk = grp.groupby("week")["pace"].mean()
+        if len(grp) < min_runs or wk.size < min_weeks:
+            hidden_runs += int(len(grp))
+            continue
+        # Δ s/km pro Monat als deskriptiver Punkt-Schätzer (Lauf-Level-OLS pace ~ Zeit)
+        slope_month = None
+        if len(grp) >= 3:
+            xs = (grp["started_at"] - grp["started_at"].min()).dt.total_seconds().to_numpy() / 86_400
+            if xs.max() > 0:
+                slope, _ = np.polyfit(xs, grp["pace"].to_numpy(float), 1)
+                slope_month = round(float(slope) * 30 * 60, 1)  # min/km je Tag -> s/km je Monat
+        zones.append({
+            "zone": f"{int(lo)}–{int(lo) + zone_width - 1}",
+            "lo": int(lo),
+            "runs": int(len(grp)),
+            "series": [round(float(wk[w]), 2) if w in wk.index else None for w in weeks_idx],
+            "sec_per_km_per_month": slope_month,
+        })
+    if not zones:
+        return {}
+    return {
+        "zone_width": zone_width,
+        "weeks": [w.isoformat() for w in weeks_idx],
+        "zones": zones,
+        "hidden_runs": hidden_runs,
+        "caveat": f"Zonen mit < {min_runs} Läufen oder < {min_weeks} Wochen ausgeblendet"
+                  f"{f' ({hidden_runs} Läufe)' if hidden_runs else ''}; Δ/Monat ist ein "
+                  "Punkt-Schätzer ohne Signifikanz. WICHTIG — Zonen-Wanderung: mit steigender "
+                  "Fitness rutschen Läufe bei gleicher Pace in tiefere Bänder, die Zonen-Linien "
+                  "unterschätzen den Fortschritt dadurch systematisch (Selektions-Bias); das "
+                  "belastbare Urteil liefert Pace@Referenzpuls.",
     }
 
 

@@ -2,12 +2,23 @@
 
 import { useEffect, useState } from "react";
 import {
-  api, type RunSummary, type VolPoint, type PacePoint, type Vo2Point, type HrPoint,
-  type PaceAtHr, type EasyHr, type Trimp, type RestingHr, type FitTrend,
+  api, type RunSummary, type VolPoint, type PacePoint, type Vo2Point, type EfTrend,
+  type PaceAtHr, type EasyHr, type Trimp, type PaceByZone, type FitTrend,
 } from "@/lib/api";
 import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
 import { AreaTrend, Bars, MultiTrend } from "@/components/charts";
 import { de, de0, pace, dm } from "@/lib/format";
+
+// Puls-Zonen-Farben: kühl (locker) → warm (hart), Zuordnung folgt der ZONE (nicht dem
+// Index — Filtern/Ausblenden färbt nichts um). Als Set validiert (dataviz-Checks:
+// CVD-ΔE ≥ 15, Kontrast ≥ 3:1 auf Weiß, Lightness-Band).
+function zoneColor(lo: number): string {
+  if (lo < 130) return "#2a78d6"; // blau — sehr locker
+  if (lo < 140) return "#00917d"; // teal
+  if (lo < 150) return "#ab7f00"; // amber
+  if (lo < 160) return "#b53415"; // rotorange
+  return "#8f2e64"; // dunkelmagenta — hart
+}
 
 // Signifikanz-Badge: nur ein statistisch belastbarer Trend (95%-CI) wird als
 // besser/schlechter eingefärbt — sonst ehrlich "kein belastbarer Trend".
@@ -34,11 +45,11 @@ export default function Laufen() {
   const [vol, setVol] = useState<VolPoint[]>([]);
   const [pc, setPc] = useState<PacePoint[]>([]);
   const [vo2, setVo2] = useState<Vo2Point[]>([]);
-  const [hr, setHr] = useState<HrPoint[]>([]);
+  const [eft, setEft] = useState<EfTrend | null>(null);
   const [pah, setPah] = useState<PaceAtHr | null>(null);
   const [easy, setEasy] = useState<EasyHr | null>(null);
   const [trimp, setTrimp] = useState<Trimp | null>(null);
-  const [rhr, setRhr] = useState<RestingHr | null>(null);
+  const [pbz, setPbz] = useState<PaceByZone | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,17 +57,17 @@ export default function Laufen() {
     api.runVolume(12).then(setVol).catch(() => {});
     api.runPace(12).then(setPc).catch(() => {});
     api.runVo2(365).then(setVo2).catch(() => {});
-    api.runHeartRate(26).then(setHr).catch(() => {});
+    api.runEf().then(setEft).catch(() => {});
     api.runPaceAtHr().then(setPah).catch(() => {});
     api.runEasyHr().then(setEasy).catch(() => {});
     api.runTrimp(26).then(setTrimp).catch(() => {});
-    api.healthRestingHr(365).then(setRhr).catch(() => {});
+    api.runPaceByZone().then(setPbz).catch(() => {});
   }, []);
 
   if (err) return (<><PageTitle title="Laufen" /><ApiError error={err} /></>);
   if (!sum) return (<><PageTitle title="Laufen" /><Loading /></>);
 
-  const hasHr = hr.length > 0;
+  const hasHr = (eft?.series?.length ?? 0) > 0;
   // HF-Werte stammen aus der letzten Woche MIT HF-Läufen — ist die älter als die
   // letzte Lauf-Woche (Watch nicht getragen), die Woche im KPI ausweisen.
   const lastVolWeek = vol.length > 0 ? vol[vol.length - 1].week : null;
@@ -107,43 +118,31 @@ export default function Laufen() {
         </Card>
 
         {hasHr && (
-          <>
-            <Card>
-              <CardTitle title="Herzfrequenz · Wochen" sub="Ø und Max über alle Läufe mit HF" />
-              <MultiTrend
-                height={170}
-                unit="bpm"
-                format={(n) => de(n, 0)}
-                labels={hr.map((p) => dm(p.week))}
-                series={[
-                  { values: hr.map((p) => p.max_hr), label: "Max-HF", color: "var(--color-muted)" },
-                  { values: hr.map((p) => p.avg_hr), label: "Ø-HF", color: "var(--color-accent)" },
-                ]}
-              />
-            </Card>
-
-            <Card>
-              <CardTitle title="Aerobe Effizienz" sub="Meter pro Herzschlag — höher = fitter (gleiche Pace bei weniger Puls)" />
-              <AreaTrend
-                values={hr.map((p) => p.ef)}
-                labels={hr.map((p) => dm(p.week))}
-                format={(n) => de(n, 2)}
-                height={170}
-              />
-            </Card>
-
-            <Card>
-              <CardTitle title="HF-Drift" sub="Ø-HF 2. vs. 1. Hälfte je Lauf — niedriger = stabilere Ausdauer" />
-              <AreaTrend
-                values={hr.map((p) => p.drift)}
-                labels={hr.map((p) => dm(p.week))}
-                format={(n) => de(n, 1)}
-                unit="%"
-                height={170}
-                className="text-accent-2"
-              />
-            </Card>
-          </>
+          <Card>
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">Aerobe Effizienz</h3>
+                <p className="text-[11px] text-muted">
+                  Meter pro Herzschlag je Lauf + EWMA-Glättung — höher = fitter (gleiche Pace bei weniger Puls)
+                </p>
+              </div>
+              <TrendBadge t={eft?.trend} />
+            </div>
+            <MultiTrend
+              height={170}
+              format={(n) => de(n, 2)}
+              labels={(eft?.series ?? []).map((p) => dm(p.date))}
+              series={[
+                { values: (eft?.series ?? []).map((p) => p.ef), label: "je Lauf", color: "var(--color-accent-2)" },
+                { values: (eft?.series ?? []).map((p) => p.smooth), label: "geglättet (EWMA)", color: "var(--color-accent)" },
+              ]}
+            />
+            {eft?.trend?.delta != null && eft.trend.verdict !== "wenig_daten" && (
+              <p className="mt-2 text-[11px] text-muted">
+                Δ {de(eft.trend.delta, 2)} m/Herzschlag über {eft.trend.days} Tage · {eft.runs} Läufe
+              </p>
+            )}
+          </Card>
         )}
       </div>
 
@@ -222,32 +221,33 @@ export default function Laufen() {
             </Card>
 
             <Card>
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold">Ruhepuls</h3>
-                  <p className="text-[11px] text-muted">niedriger = fitter · plötzlich erhöht = Ermüdung/Infekt</p>
-                </div>
-                <TrendBadge t={rhr?.trend} />
-              </div>
-              {rhr?.series?.length ? (
+              <CardTitle
+                title="Pace je Puls-Zone"
+                sub="Ø-Pace je 10er-Puls-Band. Vorsicht Zonen-Wanderung: fittere Läufe rutschen in tiefere Bänder — die Linien unterschätzen den Fortschritt; belastbar ist die Pace-bei-Referenzpuls-Karte"
+              />
+              {pbz?.zones?.length ? (
                 <>
                   <MultiTrend
                     height={170}
-                    unit="bpm"
-                    format={(n) => de(n, 0)}
-                    labels={rhr.series.map((p) => dm(p.date))}
-                    series={[
-                      { values: rhr.series.map((p) => p.bpm), label: "Tageswert", color: "var(--color-muted)" },
-                      { values: rhr.series.map((p) => p.avg7), label: "7-Tage", color: "var(--color-accent)" },
-                    ]}
+                    format={pace}
+                    equalWeight
+                    labels={(pbz.weeks ?? []).map(dm)}
+                    series={pbz.zones.map((z) => ({
+                      values: z.series,
+                      label: `${z.zone} bpm (${z.runs})`,
+                      color: zoneColor(z.lo),
+                    }))}
                   />
                   <p className="mt-2 text-[11px] text-muted">
-                    aktuell {de0(rhr.last)} bpm · Ø 7 Tage {de(rhr.avg7, 1)} · Trend über {rhr.trend_days} Tage
+                    Δ s/km pro Monat (Punkt-Schätzer, ohne Signifikanz):{" "}
+                    {pbz.zones
+                      .map((z) => `${z.zone}: ${z.sec_per_km_per_month != null ? de(z.sec_per_km_per_month, 0) : "—"}`)
+                      .join(" · ")}
                   </p>
                 </>
               ) : (
                 <div style={{ height: 170 }} className="grid place-items-center text-xs text-muted">
-                  keine Ruhepuls-Daten im Export — erscheint nach dem nächsten HC-Import
+                  zu wenig Läufe mit HF für Zonen-Kurven
                 </div>
               )}
             </Card>

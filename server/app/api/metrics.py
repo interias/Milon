@@ -181,6 +181,16 @@ def running_trimp(weeks: int = 26) -> dict:
     return running.trimp_weekly(weeks)
 
 
+@router.get("/running/pace-by-zone")
+def running_pace_by_zone() -> dict:
+    return running.pace_by_hr_zone()
+
+
+@router.get("/running/ef")
+def running_ef() -> dict:
+    return running.ef_trend()
+
+
 # --- Kraft ---
 @router.get("/strength/summary")
 def strength_summary() -> dict:
