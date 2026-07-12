@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..metrics import activity, body, health, nutrition, running, strength
+from ..metrics import achievements, activity, body, health, nutrition, running, strength
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -156,6 +156,11 @@ def running_pace(weeks: int = 26) -> list[dict]:
     return running.pace_trend(weeks)
 
 
+@router.get("/running/pace-detail")
+def running_pace_detail() -> dict:
+    return running.pace_detail()
+
+
 @router.get("/running/vo2")
 def running_vo2(days: int = 365) -> list[dict]:
     return running.vo2_trend(days)
@@ -189,6 +194,16 @@ def running_pace_by_zone() -> dict:
 @router.get("/running/ef")
 def running_ef() -> dict:
     return running.ef_trend()
+
+
+@router.get("/running/best-efforts")
+def running_best_efforts(top: int = 3) -> dict:
+    return running.best_efforts(top)
+
+
+@router.get("/running/achievements")
+def running_achievements() -> dict:
+    return achievements.evaluate()
 
 
 # --- Kraft ---

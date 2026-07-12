@@ -81,6 +81,32 @@ def pace_trend(weeks: int = 26) -> list[dict]:
     return [{"week": w.isoformat(), "pace": round(float(p), 2)} for w, p in zip(g["week"], g["pace"])]
 
 
+def pace_detail(alpha: float = 0.25) -> dict:
+    """Pace je LAUF statt Wochen-Ø — ~3× feinere Auflösung — plus kausale EWMA-Glättung
+    (α wie Stärke-Index/EF) für einen ruhigen Verlauf trotz Intensitäts-Rauschens.
+    BEWUSST ohne Signifikanz-Urteil: rohe Pace mischt Intervall-/Locker-Läufe, ein
+    Pace~Zeit-Trend wäre irreführend (mehr Locker-Läufe ⇒ „langsamer" trotz Fitness) —
+    das belastbare Urteil liefert pace_at_hr(), das die Intensität herauskontrolliert."""
+    df = _runs()
+    if df.empty:
+        return {}
+    df = df.sort_values("started_at").copy()
+    if len(df) < 2:
+        return {}
+    smooth = df["pace"].ewm(alpha=alpha).mean()
+    series = [
+        {"date": d.date().isoformat(), "pace": round(float(p), 2), "smooth": round(float(s), 2)}
+        for d, p, s in zip(df["started_at"], df["pace"], smooth)
+    ]
+    return {
+        "series": series,
+        "runs": int(len(df)),
+        "current": series[-1]["smooth"],
+        "caveat": "Pace je Lauf (Intervall-/Locker-Läufe gemischt) + EWMA-Glättung nur zur "
+                  "Anzeige. Belastbares Fitness-Urteil: Pace bei Referenzpuls.",
+    }
+
+
 def heart_rate_trend(weeks: int = 26) -> list[dict]:
     """Wochenwerte über Läufe MIT HF: Ø-HF, Max-HF, aerobe Effizienz (m/Herzschlag),
     Ø-Drift (Ø-HF 2. vs. 1. Hälfte, %). Wochen ohne HF-Läufe fehlen bewusst."""
@@ -246,19 +272,46 @@ def easy_hr_trend(band_pct: float = 5.0) -> dict:
     }
 
 
-def pace_by_hr_zone(zone_width: int = 10, min_runs: int = 3, min_weeks: int = 2) -> dict:
-    """Pace-Wochenkurven je Puls-Zone: Läufe nach Ø-HF in 10er-bpm-Bänder (130–139, …)
-    einsortiert, je Zone der Wochen-Ø der Pace. Beantwortet „bei Puls X — werde ich
-    schneller?" über alle Intensitäten gleichzeitig. BEWUSST ohne Signifikanz-Badge:
-    pro Zone sind es wenige Läufe und 4+ parallele Tests (Multiple-Comparisons) —
-    das belastbare Urteil liefert pace_at_hr(); Δ/Monat hier nur als Punkt-Schätzer."""
+# Physiologische Lauf-Puls-Zonen als Anteil des Maximalpulses (%HFmax). 4 Zonen bei
+# 70/80/90 %: (Kürzel, Name, untere Grenze, obere Grenze) — obere Grenze der Top-Zone offen.
+_ZONE_DEFS = [
+    ("Z1", "Locker", 0.00, 0.70),
+    ("Z2", "Grundlage", 0.70, 0.80),
+    ("Z3", "Tempo", 0.80, 0.90),
+    ("Z4", "Hart", 0.90, 1.01),
+]
+
+
+def _resolved_hr_max(df: pd.DataFrame) -> tuple[float, str]:
+    """Maximalpuls für die Zonen: Einstellung (robust) vor Datenableitung. 0/leer in der
+    Einstellung ⇒ robustes 95.-Perzentil der max_hr (gegen Sensor-Spikes), Boden 180."""
+    from ..config import settings
+    configured = float(getattr(settings, "run_hr_max", 0) or 0)
+    if configured > 0:
+        return configured, "einstellung"
+    if not df.empty and df["max_hr"].notna().any():
+        return max(float(df["max_hr"].quantile(0.95)), 180.0), "daten"
+    return 180.0, "standard"
+
+
+def pace_by_hr_zone(min_runs: int = 3, min_weeks: int = 2, hr_max: float | None = None) -> dict:
+    """Pace-Wochenkurven je physiologischer Puls-Zone (%HFmax): Läufe nach Ø-HF in 4 Zonen
+    (Z1 Locker <70 %, Z2 Grundlage 70–80 %, Z3 Tempo 80–90 %, Z4 Hart ≥90 % des Maximalpulses)
+    einsortiert, je Zone der Wochen-Ø der Pace. Beantwortet „bei Puls-Zone X — werde ich
+    schneller?". BEWUSST ohne Signifikanz-Badge: pro Zone wenige Läufe + parallele Tests
+    (Multiple-Comparisons); Δ/Monat nur als deskriptiver Punkt-Schätzer."""
     df = _runs()
     if df.empty:
         return {}
     df = df[df["avg_hr"].notna()].copy()
     if df.empty:
         return {}
-    df["zone_lo"] = (df["avg_hr"] // zone_width * zone_width).astype(int)
+    hrmax, hr_src = (float(hr_max), "einstellung") if hr_max and hr_max > 0 else _resolved_hr_max(df)
+    edges_lo = np.array([lo * hrmax for _, _, lo, _ in _ZONE_DEFS])  # untere Grenzen in bpm
+    # Zone-Index je Lauf: Anzahl unterer Grenzen ≤ Ø-HF, minus 1 (geklemmt auf 0..3)
+    df["zone"] = df["avg_hr"].apply(
+        lambda h: int(min(len(_ZONE_DEFS) - 1, max(0, int((edges_lo <= h).sum()) - 1)))
+    )
     df["week"] = df["started_at"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
     # durchgehende Wochenachse (inkl. Lücken) — Linien bleiben zeitlinear
     weeks_idx = [p.start_time.date() for p in
@@ -266,7 +319,7 @@ def pace_by_hr_zone(zone_width: int = 10, min_runs: int = 3, min_weeks: int = 2)
 
     zones: list[dict] = []
     hidden_runs = 0
-    for lo, grp in sorted(df.groupby("zone_lo"), key=lambda kv: kv[0]):
+    for z, grp in sorted(df.groupby("zone"), key=lambda kv: kv[0]):
         wk = grp.groupby("week")["pace"].mean()
         if len(grp) < min_runs or wk.size < min_weeks:
             hidden_runs += int(len(grp))
@@ -278,24 +331,41 @@ def pace_by_hr_zone(zone_width: int = 10, min_runs: int = 3, min_weeks: int = 2)
             if xs.max() > 0:
                 slope, _ = np.polyfit(xs, grp["pace"].to_numpy(float), 1)
                 slope_month = round(float(slope) * 30 * 60, 1)  # min/km je Tag -> s/km je Monat
+        code, name, lo_f, hi_f = _ZONE_DEFS[z]
+        top = z == len(_ZONE_DEFS) - 1
+        raw_series = [round(float(wk[w]), 2) if w in wk.index else None for w in weeks_idx]
+        # geglättete Trendlinie je Zone: kausale EWMA über die vorhandenen Wochenwerte
+        # (Lücken bleiben Lücken) — macht die Richtung besser erkennbar (wie Pace-Trend/EF).
+        obs = [(i, v) for i, v in enumerate(raw_series) if v is not None]
+        smooth_series: list[float | None] = [None] * len(raw_series)
+        if len(obs) >= 2:
+            ewm = pd.Series([v for _, v in obs]).ewm(alpha=0.4).mean().tolist()
+            for (i, _), sv in zip(obs, ewm):
+                smooth_series[i] = round(float(sv), 2)
         zones.append({
-            "zone": f"{int(lo)}–{int(lo) + zone_width - 1}",
-            "lo": int(lo),
+            "zone": code,
+            "name": name,
+            "idx": z + 1,
+            "lo": round(lo_f * hrmax),
+            "hi": None if top else round(hi_f * hrmax),
+            "pct": f"{int(lo_f * 100)}–{int(hi_f * 100)} %" if not top else f"≥{int(lo_f * 100)} %",
             "runs": int(len(grp)),
-            "series": [round(float(wk[w]), 2) if w in wk.index else None for w in weeks_idx],
+            "series": raw_series,
+            "smooth": smooth_series,
             "sec_per_km_per_month": slope_month,
         })
     if not zones:
         return {}
     return {
-        "zone_width": zone_width,
+        "hr_max": round(hrmax),
+        "hr_max_source": hr_src,
         "weeks": [w.isoformat() for w in weeks_idx],
         "zones": zones,
         "hidden_runs": hidden_runs,
-        "caveat": f"Zonen mit < {min_runs} Läufen oder < {min_weeks} Wochen ausgeblendet"
-                  f"{f' ({hidden_runs} Läufe)' if hidden_runs else ''}; Δ/Monat ist ein "
-                  "Punkt-Schätzer ohne Signifikanz. WICHTIG — Zonen-Wanderung: mit steigender "
-                  "Fitness rutschen Läufe bei gleicher Pace in tiefere Bänder, die Zonen-Linien "
+        "caveat": f"Zonen (in % von HFmax {round(hrmax)}) mit < {min_runs} Läufen oder < {min_weeks} "
+                  f"Wochen ausgeblendet{f' ({hidden_runs} Läufe)' if hidden_runs else ''}; Δ/Monat ist "
+                  "ein Punkt-Schätzer ohne Signifikanz. WICHTIG — Zonen-Wanderung: mit steigender "
+                  "Fitness rutschen Läufe bei gleicher Pace in tiefere Zonen, die Zonen-Linien "
                   "unterschätzen den Fortschritt dadurch systematisch (Selektions-Bias); das "
                   "belastbare Urteil liefert Pace@Referenzpuls.",
     }
@@ -333,6 +403,59 @@ def trimp_weekly(weeks: int = 26) -> dict:
         "caveat": "Banister-TRIMP aus Ø-HF je Lauf; HFmax/Ruhepuls geschätzt — Vergleich "
                   "über Wochen zählt, nicht der Absolutwert.",
     }
+
+
+_BEST_EFFORT_DISTANCES = (1000, 5000, 10000, 15000, 20000)
+
+
+def _dist_label(m: int) -> str:
+    return f"{m // 1000} km" if m % 1000 == 0 else f"{m} m"
+
+
+def best_efforts(top: int = 3) -> dict:
+    """Top-`top` Bestzeiten je Standard-Distanz — Best-Effort-Splits (schnellstes X-km-Fenster
+    innerhalb eines Laufs, aus den HC-Distanz-Segmenten, à la Strava/Garmin). Distanzen ohne
+    qualifizierten Lauf (nie so weit gelaufen) kommen mit leerer Liste zurück."""
+    try:
+        df = _read("SELECT distance_m, seconds, started_at FROM run_best_efforts",
+                   parse_dates=["started_at"])
+    except Exception:
+        df = pd.DataFrame()
+    out: list[dict] = []
+    for d in _BEST_EFFORT_DISTANCES:
+        entries: list[dict] = []
+        if not df.empty:
+            sub = df[df["distance_m"] == d].sort_values("seconds").head(top)
+            entries = [
+                {"seconds": round(float(r["seconds"]), 1),
+                 "pace": round(float(r["seconds"]) / 60 / (d / 1000), 2),  # min/km
+                 "date": r["started_at"].date().isoformat()}
+                for _, r in sub.iterrows()
+            ]
+        out.append({"distance_m": d, "km": d / 1000, "label": _dist_label(d), "entries": entries})
+    return {"distances": out, "top": top, "records": _run_records()}
+
+
+def _run_records() -> dict:
+    """Weitere Lauf-Rekorde (aus den Session-Daten): längster Lauf, größte Wochendistanz,
+    beste aerobe Effizienz eines Einzellaufs."""
+    df = _runs()
+    if df.empty:
+        return {}
+    rec: dict = {}
+    longest = df.loc[df["distance_km"].idxmax()]
+    rec["longest_run"] = {"km": round(float(longest["distance_km"]), 1),
+                          "date": longest["started_at"].date().isoformat()}
+    ef_df = df[df["ef"].notna()]
+    if not ef_df.empty:
+        be = ef_df.loc[ef_df["ef"].idxmax()]
+        rec["best_ef"] = {"ef": round(float(be["ef"]), 2),
+                          "date": be["started_at"].date().isoformat()}
+    vol = weekly_volume(weeks=999)
+    if vol:
+        bw = max(vol, key=lambda w: w["km"])
+        rec["biggest_week"] = {"km": bw["km"], "week": bw["week"], "runs": bw["runs"]}
+    return rec
 
 
 def vo2_trend(days: int = 365) -> list[dict]:

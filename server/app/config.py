@@ -52,6 +52,11 @@ class Settings(BaseSettings):
 
     scheduler_enabled: bool = True
 
+    # Maximalpuls für die Lauf-Puls-Zonen (%HFmax). Fester Wert ist robuster als die
+    # Datenableitung (einzelne Sensor-Spikes verschieben das beobachtete Max). 0 = aus
+    # den Daten ableiten (robustes 95.-Perzentil der max_hr, Boden 180).
+    run_hr_max: float = 180.0
+
     def resolved_database_url(self) -> str:
         """Bindet eine relative sqlite-URL (sqlite:///./...) an die Repo-Root,
         damit die DB unabhaengig vom Arbeitsverzeichnis immer am selben Ort liegt."""

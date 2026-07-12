@@ -118,6 +118,32 @@ export type Tdee = {
 export type VolPoint = { week: string; km: number; runs: number };
 export type PacePoint = { week: string; pace: number };
 export type Vo2Point = { date: string; vo2: number };
+export type BestEffortEntry = { seconds: number; pace: number; date: string };
+export type BestEffortDist = { distance_m: number; km: number; label: string; entries: BestEffortEntry[] };
+export type RunRecords = {
+  longest_run?: { km: number; date: string };
+  best_ef?: { ef: number; date: string };
+  biggest_week?: { km: number; week: string; runs: number };
+};
+export type BestEfforts = { distances: BestEffortDist[]; top: number; records?: RunRecords };
+export type Rarity = "grau" | "weiss" | "gruen" | "blau" | "lila" | "orange" | "rot";
+export type Achievement = {
+  id: string; category: string; name: string; desc: string; points: number; icon: string;
+  rarity: Rarity; rarity_label: string; flavor: string;
+  earned: boolean; earned_date: string | null;
+  progress: number; progress_label: string | null;
+};
+export type AchievementSummary = {
+  points: number; points_possible: number; earned: number; total: number;
+  rarity_counts: Record<Rarity, { earned: number; total: number }>;
+  level: number; title: string; floor: number; next_points: number | null;
+  to_next: number; progress: number;
+};
+export type Achievements = { achievements: Achievement[]; summary: AchievementSummary };
+export type PaceDetail = {
+  series?: { date: string; pace: number; smooth: number }[];
+  current?: number; runs?: number; caveat?: string;
+};
 export type HrPoint = {
   week: string; avg_hr: number; max_hr: number | null; ef: number | null;
   drift: number | null; runs: number;
@@ -149,8 +175,9 @@ export type EfTrend = {
   current?: number; runs?: number; trend?: FitTrend; caveat?: string;
 };
 export type PaceByZone = {
-  zone_width?: number; weeks?: string[];
-  zones?: { zone: string; lo: number; runs: number; series: (number | null)[];
+  hr_max?: number; hr_max_source?: "einstellung" | "daten" | "standard"; weeks?: string[];
+  zones?: { zone: string; name: string; idx: number; lo: number; hi: number | null; pct: string;
+            runs: number; series: (number | null)[]; smooth?: (number | null)[];
             sec_per_km_per_month?: number | null }[];
   hidden_runs?: number; caveat?: string;
 };
@@ -200,11 +227,11 @@ export type ProgressPhotos = { front: string | null; side: string | null; back: 
 export type ProgressEntry = { id: number; taken_on: string; note: string | null; photos: ProgressPhotos; created_at: string | null };
 export type SettingsKey = { set: boolean; hint: string };
 export type AppSettings = {
-  openrouter_model: string; timezone: string; scheduler_enabled: boolean; fddb_user_masked: string;
+  openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; fddb_user_masked: string;
   keys: { openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
-  openrouter_model?: string; scheduler_enabled?: boolean; openrouter_api_key?: string; hevy_api_key?: string;
+  openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null };
@@ -246,6 +273,7 @@ export const api = {
   runSummary: () => get<RunSummary>("/metrics/running/summary"),
   runVolume: (weeks = 26) => get<VolPoint[]>(`/metrics/running/volume?weeks=${weeks}`),
   runPace: (weeks = 26) => get<PacePoint[]>(`/metrics/running/pace?weeks=${weeks}`),
+  runPaceDetail: () => get<PaceDetail>("/metrics/running/pace-detail"),
   runVo2: (days = 365) => get<Vo2Point[]>(`/metrics/running/vo2?days=${days}`),
   runHeartRate: (weeks = 26) => get<HrPoint[]>(`/metrics/running/heart-rate?weeks=${weeks}`),
   runPaceAtHr: () => get<PaceAtHr>("/metrics/running/pace-at-hr"),
@@ -253,6 +281,8 @@ export const api = {
   runTrimp: (weeks = 26) => get<Trimp>(`/metrics/running/trimp?weeks=${weeks}`),
   runPaceByZone: () => get<PaceByZone>("/metrics/running/pace-by-zone"),
   runEf: () => get<EfTrend>("/metrics/running/ef"),
+  runBestEfforts: (top = 3) => get<BestEfforts>(`/metrics/running/best-efforts?top=${top}`),
+  runAchievements: () => get<Achievements>("/metrics/running/achievements"),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),

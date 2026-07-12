@@ -12,6 +12,16 @@ export const pace = (p: number | null | undefined): string => {
   return `${m}:${String(s).padStart(2, "0")}`;
 };
 
+// Dauer (Sekunden) als m:ss bzw. h:mm:ss.
+export const dur = (sec: number | null | undefined): string => {
+  if (sec == null) return "–";
+  const t = Math.round(sec);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+};
+
 // Kürzt ISO-Datum auf TT.MM.
 export const dm = (iso: string): string => {
   const d = new Date(iso);

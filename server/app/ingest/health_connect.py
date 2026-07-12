@@ -30,13 +30,16 @@ from sqlmodel import Session
 
 from ..config import settings
 from ..db import count_rows, engine, upsert
-from ..models import BodyMeasurement, ExerciseSession, RestingHrDaily, StepsDaily, Vo2Max
+from ..models import (BodyMeasurement, ExerciseSession, RestingHrDaily, RunBestEffort,
+                      StepsDaily, Vo2Max)
 
 SOURCE = "health_connect"
 BIKE, RUN, STRENGTH, WALK = 4, 33, 45, 53
 EPOCH = date(1970, 1, 1)
 HR_MIN_BPM, HR_MAX_BPM = 25, 250  # Sanity-Grenzen fuer HF-Samples
 HR_MIN_SAMPLES = 5  # Mindest-Samples, bevor Ø/Max/Drift berechnet werden
+# Standard-Distanzen (m) für Best-Effort-Splits (schnellste X km innerhalb eines Laufs).
+BEST_EFFORT_DISTANCES = (1000, 5000, 10000, 15000, 20000)
 
 
 def _read_hr_series(cur: sqlite3.Cursor) -> tuple[array, array]:
@@ -160,6 +163,46 @@ def read_health_connect(db_path: str | Path) -> dict:
         watch = sum(v for a, v in per_app.items() if a in watch_ids)
         return watch if watch > 0 else max(per_app.values())
 
+    def session_best_efforts(start_utc: datetime | None, end_utc: datetime | None) -> dict[int, float]:
+        """Beste Zeit (s) für jede Standard-Distanz INNERHALB des Laufs (schnellstes
+        zusammenhängendes X-km-Fenster). Nur Watch-Segmente (parallel schreibende Apps
+        würden die Strecke doppeln); lineare Interpolation an den Fenster-Rändern für Präzision."""
+        if start_utc is None or end_utc is None or not watch_ids:
+            return {}
+        i = bisect.bisect_left(seg_starts, start_utc)
+        ts: list[datetime] = []
+        cum: list[float] = []
+        total = 0.0
+        while i < len(seg) and seg[i][0] <= end_utc:
+            s, e, d, app = seg[i]
+            if d and e is not None and e <= end_utc and e > s and app in watch_ids:
+                if not ts:
+                    ts.append(s); cum.append(0.0)
+                total += d
+                ts.append(e); cum.append(total)
+            i += 1
+        if total < BEST_EFFORT_DISTANCES[0] or len(cum) < 2:
+            return {}
+        out: dict[int, float] = {}
+        for target in BEST_EFFORT_DISTANCES:
+            if total < target:
+                continue
+            best: float | None = None
+            a = 0
+            for b in range(1, len(cum)):
+                while cum[b] - cum[a] >= target:
+                    # exakte Startzeit im Segment a..a+1, sodass genau `target` m im Fenster liegen
+                    seg_d = cum[a + 1] - cum[a]
+                    frac = 0.0 if seg_d <= 0 else (cum[b] - target - cum[a]) / seg_d
+                    t_start = ts[a] + frac * (ts[a + 1] - ts[a])
+                    dt = (ts[b] - t_start).total_seconds()
+                    if best is None or dt < best:
+                        best = dt
+                    a += 1
+            if best is not None and best > 0:
+                out[target] = round(best, 1)
+        return out
+
     # --- Herzfrequenz-Serie (epoch_millis + bpm), einmal sortiert laden -> Fenster je Session.
     # Bevorzugt die Watch-App (steps_source_package = Samsung Health), damit parallel
     # schreibende Apps (Handy-Sensoren o. ä.) Ø/Max nicht verfälschen; Fallback = alle Apps.
@@ -199,6 +242,7 @@ def read_health_connect(db_path: str | Path) -> dict:
     raw_sessions.sort(key=lambda r: (r["app_info_id"] not in watch_ids, r["start_time"] or 0))
     kept_windows: dict[int, list[tuple[int, int]]] = {}
     sessions = []
+    best_efforts: list[dict] = []
     skipped_dupes = 0
     for r in raw_sessions:
         st, en = r["start_time"], r["end_time"]
@@ -211,17 +255,24 @@ def read_health_connect(db_path: str | Path) -> dict:
         start_utc, end_utc = _utc(st), _utc(en)
         dist_m = session_distance_m(start_utc, end_utc)
         uuid = r["uuid"]
+        ext_id = uuid.hex() if isinstance(uuid, (bytes, bytearray)) else str(uuid)
+        started_local = _local(st, r["start_zone_offset"])
         sessions.append(
             dict(
-                external_id=uuid.hex() if isinstance(uuid, (bytes, bytearray)) else str(uuid),
+                external_id=ext_id,
                 exercise_type=r["exercise_type"],
-                started_at=_local(st, r["start_zone_offset"]),
+                started_at=started_local,
                 ended_at=_local(en, r["start_zone_offset"]),
                 distance_km=round(dist_m / 1000.0, 3) if dist_m else None,
                 source=SOURCE,
                 **session_hr(st, en),
             )
         )
+        # Best-Effort-Splits nur für Läufe (exercise_type 33)
+        if r["exercise_type"] == RUN and started_local is not None:
+            for target, secs in session_best_efforts(start_utc, end_utc).items():
+                best_efforts.append(dict(external_id=ext_id, distance_m=target,
+                                         seconds=secs, started_at=started_local, source=SOURCE))
     if skipped_dupes:
         log.info("%d doppelte Sessions (parallel schreibende Apps) übersprungen", skipped_dupes)
 
@@ -298,22 +349,25 @@ def read_health_connect(db_path: str | Path) -> dict:
             log.warning("resting_heart_rate_record_table hat unerwartete Spalten %s", sorted(rcols))
 
     con.close()
-    return {"body": body, "sessions": sessions, "vo2": vo2, "steps": steps, "resting": resting}
+    return {"body": body, "sessions": sessions, "best_efforts": best_efforts,
+            "vo2": vo2, "steps": steps, "resting": resting}
 
 
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
     """Importiert die HC-DB idempotent (Append: nur neue Zeilen werden geschrieben).
     full=True macht eine Voll-Reconciliation (loescht source-Zeilen vorher -> spiegelt auch Loeschungen)."""
     data = read_health_connect(db_path)
-    models_ = (BodyMeasurement, ExerciseSession, Vo2Max, StepsDaily, RestingHrDaily)
+    models_ = (BodyMeasurement, ExerciseSession, RunBestEffort, Vo2Max, StepsDaily, RestingHrDaily)
     with Session(engine) as s:
         if full:
             for m in models_:
-                # Tageswert-Historien nie löschen, wenn der Import keine liefert
-                # (Fehlkonfiguration/leerer Export) -> schützt vor versehentlichem Leeren.
+                # Historien nie löschen, wenn der Import keine liefert (Fehlkonfiguration/leerer
+                # Export bzw. Export ohne Distanz-Segmente) -> schützt vor versehentlichem Leeren.
                 if m is StepsDaily and not data["steps"]:
                     continue
                 if m is RestingHrDaily and not data["resting"]:
+                    continue
+                if m is RunBestEffort and not data["best_efforts"]:
                     continue
                 s.execute(delete(m).where(m.source == SOURCE))
         before = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
@@ -336,6 +390,10 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
 
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
         upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
+        # Best-Efforts kommen (wie HF) nachträglich rein: DO UPDATE retro-füllt bestehende Läufe,
+        # sobald der Export Distanz-Segmente liefert (deterministisch aus den Segmenten neu berechnet).
+        upsert(s, RunBestEffort, data["best_efforts"], ["external_id", "distance_m"],
+               update_cols=["seconds", "started_at"])
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
         upsert(s, RestingHrDaily, data["resting"], ["day"], update_cols=["bpm"])
@@ -349,6 +407,7 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         "new_vo2max": after["Vo2Max"] - before["Vo2Max"],
         "new_steps_days": after["StepsDaily"] - before["StepsDaily"],
         "new_resting_hr_days": after["RestingHrDaily"] - before["RestingHrDaily"],
+        "new_best_efforts": after["RunBestEffort"] - before["RunBestEffort"],
         "total_sessions": after["ExerciseSession"],
         "sessions_with_hr": sessions_with_hr,
     }

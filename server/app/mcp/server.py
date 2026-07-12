@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..coach import snapshot
 from ..db import init_db
-from ..metrics import activity, body, health, running, strength
+from ..metrics import achievements, activity, body, health, running, strength
 
 mcp = FastMCP("Milon")
 
@@ -77,12 +77,30 @@ def get_run_heart_rate(weeks: int = 12) -> list:
 
 
 @mcp.tool()
+def get_run_achievements() -> dict:
+    """Lauf-Achievements (sammelbare Trophäen, WoW-Style): summary (Gesamtpunkte, erreichte/
+    gesamte Trophäen, Läufer-Level + Titel) + vollständige Liste aller Erfolge mit earned-Status,
+    Punkten, Stufe (bronze/silber/gold/platin) und Fortschritt. Gut zum Motivieren/Feiern."""
+    return achievements.evaluate()
+
+
+@mcp.tool()
+def get_run_records() -> dict:
+    """Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz (1/5/10/15/20 km =
+    schnellstes zusammenhängendes Fenster INNERHALB eines Laufs, nicht die Gesamtzeit) +
+    weitere Rekorde (längster Lauf, größte Wochendistanz, beste aerobe Effizienz).
+    Distanzen ohne qualifizierten Lauf haben eine leere entries-Liste (nie so weit gelaufen)."""
+    return running.best_efforts()
+
+
+@mcp.tool()
 def get_run_fitness_trends() -> dict:
     """Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, Lauf-Level-Regression):
     pace_at_hr (Pace bei Referenzpuls), easy_hr (Ø-HF im Locker-Korridor), trimp
-    (Wochen-Trainingslast), pace_by_zone (Ø-Pace je 10er-Puls-Band, Δ/Monat als
-    Punkt-Schätzer OHNE Signifikanz; ACHTUNG Zonen-Wanderung: fittere Läufe rutschen
-    in tiefere Bänder — Zonen-Slopes unterschätzen den Fortschritt systematisch),
+    (Wochen-Trainingslast), pace_by_zone (Ø-Pace je physiologischer Puls-Zone Z1-Z4 in
+    %HFmax: Z1<70/Z2 70-80/Z3 80-90/Z4≥90 %, Δ/Monat als Punkt-Schätzer OHNE Signifikanz;
+    ACHTUNG Zonen-Wanderung: fittere Läufe rutschen in tiefere Zonen — Zonen-Slopes
+    unterschätzen den Fortschritt systematisch),
     resting_hr (Ruhepuls). trend.verdict nur bei significant=true als echten Trend deuten."""
     return {
         "pace_at_hr": running.pace_at_hr(),
