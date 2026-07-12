@@ -127,6 +127,35 @@ def cycling_summary() -> dict:
     }
 
 
+# ---------------- Ruhepuls ----------------
+def resting_hr_trend(days: int = 365) -> dict:
+    """Ruhepuls-Tagesserie + 7-Tage-Mittel. Sinkend = Fitness; plötzlich erhöht =
+    Ermüdung/Krankheit. Trend-Urteil über die letzten 90 Tage (Tageswerte)."""
+    df = _read("SELECT day, bpm FROM resting_hr_daily ORDER BY day", parse_dates=["day"])
+    if df.empty:
+        return {}
+    from . import stats  # lazy: vermeidet Import bei reinen Schritt-/Rad-Abfragen
+
+    s = df.set_index("day")["bpm"].sort_index()
+    avg7 = s.rolling("7D").mean()
+    cutoff = s.index.max() - pd.Timedelta(days=days)
+    series = [
+        {"date": d.date().isoformat(), "bpm": round(float(v), 0), "avg7": round(float(a), 1)}
+        for d, v, a in zip(s.index, s.to_numpy(), avg7.to_numpy()) if d >= cutoff
+    ]
+    win = s[s.index > s.index.max() - pd.Timedelta(days=90)]
+    xs = [(d - win.index.min()).days for d in win.index]
+    trend = stats.assess(stats.linear_trend(xs, [float(v) for v in win.to_numpy()]), down_is_good=True)
+    return {
+        "series": series,
+        "last": round(float(s.iloc[-1]), 0),
+        "last_day": s.index.max().date().isoformat(),
+        "avg7": round(float(avg7.iloc[-1]), 1),
+        "trend_days": 90,
+        "trend": trend,
+    }
+
+
 def overview() -> dict:
     """Allgemeine Gesundheitswerte gebündelt (Schritte + Radfahren)."""
     return {"steps": steps_summary(), "cycling": cycling_summary()}

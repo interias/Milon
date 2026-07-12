@@ -4,9 +4,14 @@ schreibt Körper-, Lauf-/Cardio-, VO2max- und Schritt-Daten in die App-DB.
 Verifizierte Format-Notizen (siehe CLAUDE.md / ARCHITECTURE.md §3):
 - Zeitstempel = epoch-Millisekunden (UTC) + *_zone_offset in Sekunden (lokale Wandzeit = utc+offset).
 - Gewicht in GRAMM (-> /1000 kg). Körperfett als percentage. VO2 = ml/min/kg.
-- Distanz in METERN als feingranulare Segmente -> pro Session im Zeitfenster summieren.
+- Distanz in METERN als feingranulare Segmente -> pro Session im Zeitfenster summieren,
+  aber JE APP (mehrere Apps spiegeln dieselbe Strecke): Watch bevorzugt, sonst Max je App.
 - exercise_type (android.health.connect ExerciseSessionType): 4=Radfahren, 33=Laufen, 45=Kraft,
   53=Gehen, 58=Laufband. Höhenmeter nicht vorhanden.
+- Herzfrequenz: Einzelwerte liegen in heart_rate_record_series_table (epoch_millis /
+  beats_per_minute, parent_key -> heart_rate_record_table.row_id). Pro Session im Zeitfenster
+  aggregieren (Ø/Max + Drift 2. vs. 1. Hälfte). Quelle bevorzugt die Watch-App
+  (settings.steps_source_package), Fallback = alle Apps.
 - HC-Export ist ein Vollabzug -> idempotent durch Ersetzen aller source='health_connect'-Zeilen.
 """
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 import bisect
 import logging
 import sqlite3
+from array import array
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,11 +30,62 @@ from sqlmodel import Session
 
 from ..config import settings
 from ..db import count_rows, engine, upsert
-from ..models import BodyMeasurement, ExerciseSession, StepsDaily, Vo2Max
+from ..models import (BodyMeasurement, ExerciseSession, RestingHrDaily, RunBestEffort,
+                      StepsDaily, Vo2Max)
 
 SOURCE = "health_connect"
 BIKE, RUN, STRENGTH, WALK = 4, 33, 45, 53
 EPOCH = date(1970, 1, 1)
+HR_MIN_BPM, HR_MAX_BPM = 25, 250  # Sanity-Grenzen fuer HF-Samples
+HR_MIN_SAMPLES = 5  # Mindest-Samples, bevor Ø/Max/Drift berechnet werden
+# Standard-Distanzen (m) für Best-Effort-Splits (schnellste X km innerhalb eines Laufs).
+BEST_EFFORT_DISTANCES = (1000, 5000, 10000, 15000, 20000)
+
+
+def _read_hr_series(cur: sqlite3.Cursor) -> tuple[array, array]:
+    """Laedt die komplette HF-Serie (epoch_millis aufsteigend, bpm) als kompakte Arrays.
+    Defensive gegen Schema-Abweichungen (Tabelle/Spalten fehlen -> leere Serie, nur Warnung).
+    Bevorzugt Samples der Watch-App (settings.steps_source_package via parent-Record),
+    faellt bei 0 Treffern auf alle Apps zurueck."""
+    times, bpm = array("q"), array("d")
+    tables = {row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "heart_rate_record_series_table" not in tables:
+        log.warning("heart_rate_record_series_table fehlt im Export -> keine HF-Daten")
+        return times, bpm
+    cols = {row[1] for row in cur.execute("PRAGMA table_info(heart_rate_record_series_table)")}
+    if not {"epoch_millis", "beats_per_minute"} <= cols:
+        log.warning("HF-Serie hat unerwartete Spalten %s -> keine HF-Daten", sorted(cols))
+        return times, bpm
+
+    base = ("SELECT s.epoch_millis, s.beats_per_minute FROM heart_rate_record_series_table s{join} "
+            "ORDER BY s.epoch_millis")
+    queries: list[tuple[str, tuple]] = []
+    if (settings.steps_source_package and "parent_key" in cols
+            and "heart_rate_record_table" in tables):
+        app_ids = [row[0] for row in cur.execute(
+            "SELECT row_id FROM application_info_table WHERE package_name = ?",
+            (settings.steps_source_package,))]
+        if app_ids:
+            ph = ",".join("?" * len(app_ids))
+            queries.append((base.format(
+                join=" JOIN heart_rate_record_table p ON s.parent_key = p.row_id"
+                     f" AND p.app_info_id IN ({ph})"), tuple(app_ids)))
+    queries.append((base.format(join=""), ()))
+
+    for sql, params in queries:
+        t_acc, b_acc = array("q"), array("d")
+        try:
+            for t, v in cur.execute(sql, params):
+                if t is not None and v is not None and HR_MIN_BPM <= v <= HR_MAX_BPM:
+                    t_acc.append(int(t))
+                    b_acc.append(float(v))
+        except sqlite3.Error as exc:  # z. B. abweichendes parent-Schema -> Fallback probieren
+            log.warning("HF-Abfrage fehlgeschlagen (%s) -> Fallback", exc)
+            continue
+        if t_acc:
+            times, bpm = t_acc, b_acc
+            break
+    return times, bpm
 
 
 def _utc(ms: int | None) -> datetime | None:
@@ -72,10 +129,20 @@ def read_health_connect(db_path: str | Path) -> dict:
         if t is not None:
             body.setdefault(t, {})["body_fat_pct"] = r["percentage"]
 
-    # --- Distanz-Segmente (Meter), sortiert nach UTC-Start, für Fenster-Summe je Session ---
+    # --- Distanz-Segmente (Meter) je App, sortiert nach UTC-Start, für Fenster-Summe je Session.
+    # WICHTIG (am echten Export 2026-07-10 verifiziert): Mehrere Apps spiegeln dieselbe Strecke
+    # (Google Fit/Strava/Samsung schreiben parallel nahezu identische Segmente). NIE über alle
+    # Apps summieren — das ergab im März/April 2026 die 2–3-fache Distanz (Pace 2:00–3:30 min/km).
+    # Watch-App bevorzugen (steps_source_package, wie Schritte/HF), sonst Maximum je App. ---
+    watch_ids: set[int] = set()
+    if settings.steps_source_package:
+        watch_ids = {row[0] for row in cur.execute(
+            "SELECT row_id FROM application_info_table WHERE package_name = ?",
+            (settings.steps_source_package,))}
     seg = [
-        (_utc(r["start_time"]), _utc(r["end_time"]), r["distance"])
-        for r in cur.execute("SELECT start_time, end_time, distance FROM distance_record_table")
+        (_utc(r["start_time"]), _utc(r["end_time"]), r["distance"], r["app_info_id"])
+        for r in cur.execute(
+            "SELECT start_time, end_time, distance, app_info_id FROM distance_record_table")
     ]
     seg = [s for s in seg if s[0] is not None]
     seg.sort(key=lambda s: s[0])
@@ -84,34 +151,130 @@ def read_health_connect(db_path: str | Path) -> dict:
     def session_distance_m(start_utc: datetime | None, end_utc: datetime | None) -> float:
         if start_utc is None or end_utc is None:
             return 0.0
-        total = 0.0
+        per_app: dict[int | None, float] = {}
         i = bisect.bisect_left(seg_starts, start_utc)
         while i < len(seg) and seg[i][0] <= end_utc:
-            s, e, d = seg[i]
+            s, e, d, app = seg[i]
             if d and (e is None or e <= end_utc):
-                total += d
+                per_app[app] = per_app.get(app, 0.0) + d
             i += 1
-        return total
+        if not per_app:
+            return 0.0
+        watch = sum(v for a, v in per_app.items() if a in watch_ids)
+        return watch if watch > 0 else max(per_app.values())
 
-    # --- Sessions (Lauf/Kraft/Gehen/…) ---
-    sessions = []
-    for r in cur.execute(
-        "SELECT uuid, start_time, start_zone_offset, end_time, exercise_type, title "
+    def session_best_efforts(start_utc: datetime | None, end_utc: datetime | None) -> dict[int, float]:
+        """Beste Zeit (s) für jede Standard-Distanz INNERHALB des Laufs (schnellstes
+        zusammenhängendes X-km-Fenster). Nur Watch-Segmente (parallel schreibende Apps
+        würden die Strecke doppeln); lineare Interpolation an den Fenster-Rändern für Präzision."""
+        if start_utc is None or end_utc is None or not watch_ids:
+            return {}
+        i = bisect.bisect_left(seg_starts, start_utc)
+        ts: list[datetime] = []
+        cum: list[float] = []
+        total = 0.0
+        while i < len(seg) and seg[i][0] <= end_utc:
+            s, e, d, app = seg[i]
+            if d and e is not None and e <= end_utc and e > s and app in watch_ids:
+                if not ts:
+                    ts.append(s); cum.append(0.0)
+                total += d
+                ts.append(e); cum.append(total)
+            i += 1
+        if total < BEST_EFFORT_DISTANCES[0] or len(cum) < 2:
+            return {}
+        out: dict[int, float] = {}
+        for target in BEST_EFFORT_DISTANCES:
+            if total < target:
+                continue
+            best: float | None = None
+            a = 0
+            for b in range(1, len(cum)):
+                while cum[b] - cum[a] >= target:
+                    # exakte Startzeit im Segment a..a+1, sodass genau `target` m im Fenster liegen
+                    seg_d = cum[a + 1] - cum[a]
+                    frac = 0.0 if seg_d <= 0 else (cum[b] - target - cum[a]) / seg_d
+                    t_start = ts[a] + frac * (ts[a + 1] - ts[a])
+                    dt = (ts[b] - t_start).total_seconds()
+                    if best is None or dt < best:
+                        best = dt
+                    a += 1
+            if best is not None and best > 0:
+                out[target] = round(best, 1)
+        return out
+
+    # --- Herzfrequenz-Serie (epoch_millis + bpm), einmal sortiert laden -> Fenster je Session.
+    # Bevorzugt die Watch-App (steps_source_package = Samsung Health), damit parallel
+    # schreibende Apps (Handy-Sensoren o. ä.) Ø/Max nicht verfälschen; Fallback = alle Apps.
+    hr_times, hr_bpm = _read_hr_series(cur)
+
+    def session_hr(start_ms: int | None, end_ms: int | None) -> dict:
+        """Ø-/Max-HF + Drift (Ø 2. Hälfte vs. Ø 1. Hälfte, %) im Session-Fenster."""
+        out = {"avg_hr": None, "max_hr": None, "hr_drift_pct": None}
+        if start_ms is None or end_ms is None or end_ms <= start_ms or not hr_times:
+            return out
+        i = bisect.bisect_left(hr_times, start_ms)
+        j = bisect.bisect_right(hr_times, end_ms)
+        window = hr_bpm[i:j]
+        if len(window) < HR_MIN_SAMPLES:
+            return out
+        out["avg_hr"] = round(sum(window) / len(window), 1)
+        out["max_hr"] = round(max(window), 0)
+        # Drift nur für längere Einheiten (>= 15 min) mit genug Datenpunkten je Hälfte —
+        # klassisches Decoupling-Signal bei Dauerläufen.
+        if end_ms - start_ms >= 15 * 60_000:
+            mid = bisect.bisect_right(hr_times, (start_ms + end_ms) // 2, i, j)
+            first, second = hr_bpm[i:mid], hr_bpm[mid:j]
+            if len(first) >= HR_MIN_SAMPLES and len(second) >= HR_MIN_SAMPLES:
+                a1, a2 = sum(first) / len(first), sum(second) / len(second)
+                if a1 > 0:
+                    out["hr_drift_pct"] = round((a2 / a1 - 1) * 100, 1)
+        return out
+
+    # --- Sessions (Lauf/Kraft/Gehen/…). Duplikate entfernen: Strava/Google Fit spiegeln
+    # Watch-Sessions als eigene Records (identisches Zeitfenster, eigene uuid) — im April 2026
+    # lag jeder Lauf doppelt vor. Watch-Sessions gewinnen; weitere Sessions gleichen Typs mit
+    # überlappendem Zeitfenster werden verworfen. ---
+    raw_sessions = list(cur.execute(
+        "SELECT uuid, start_time, start_zone_offset, end_time, exercise_type, app_info_id "
         "FROM exercise_session_record_table"
-    ):
-        start_utc, end_utc = _utc(r["start_time"]), _utc(r["end_time"])
+    ))
+    raw_sessions.sort(key=lambda r: (r["app_info_id"] not in watch_ids, r["start_time"] or 0))
+    kept_windows: dict[int, list[tuple[int, int]]] = {}
+    sessions = []
+    best_efforts: list[dict] = []
+    skipped_dupes = 0
+    for r in raw_sessions:
+        st, en = r["start_time"], r["end_time"]
+        if st is not None and en is not None:
+            windows = kept_windows.setdefault(r["exercise_type"], [])
+            if any(st < e and en > s for s, e in windows):
+                skipped_dupes += 1
+                continue
+            windows.append((st, en))
+        start_utc, end_utc = _utc(st), _utc(en)
         dist_m = session_distance_m(start_utc, end_utc)
         uuid = r["uuid"]
+        ext_id = uuid.hex() if isinstance(uuid, (bytes, bytearray)) else str(uuid)
+        started_local = _local(st, r["start_zone_offset"])
         sessions.append(
             dict(
-                external_id=uuid.hex() if isinstance(uuid, (bytes, bytearray)) else str(uuid),
+                external_id=ext_id,
                 exercise_type=r["exercise_type"],
-                started_at=_local(r["start_time"], r["start_zone_offset"]),
-                ended_at=_local(r["end_time"], r["start_zone_offset"]),
+                started_at=started_local,
+                ended_at=_local(en, r["start_zone_offset"]),
                 distance_km=round(dist_m / 1000.0, 3) if dist_m else None,
                 source=SOURCE,
+                **session_hr(st, en),
             )
         )
+        # Best-Effort-Splits nur für Läufe (exercise_type 33)
+        if r["exercise_type"] == RUN and started_local is not None:
+            for target, secs in session_best_efforts(start_utc, end_utc).items():
+                best_efforts.append(dict(external_id=ext_id, distance_m=target,
+                                         seconds=secs, started_at=started_local, source=SOURCE))
+    if skipped_dupes:
+        log.info("%d doppelte Sessions (parallel schreibende Apps) übersprungen", skipped_dupes)
 
     # --- VO2max ---
     vo2 = [
@@ -158,21 +321,53 @@ def read_health_connect(db_path: str | Path) -> dict:
         for r in cur.execute(steps_sql, steps_params)
     ]
 
+    # --- Ruhepuls: resting_heart_rate_record_table (Instant-Record der Watch). Pro lokalem
+    # Tag die NIEDRIGSTE Messung (= echter Ruhewert). Defensiv: Tabelle/Spalten koennen fehlen. ---
+    resting: list[dict] = []
+    tables = {row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "resting_heart_rate_record_table" in tables:
+        rcols = {row[1] for row in cur.execute("PRAGMA table_info(resting_heart_rate_record_table)")}
+        if {"time", "beats_per_minute"} <= rcols:
+            rwhere, rparams = "", ()
+            if step_ids and "app_info_id" in rcols:  # Watch bevorzugen (wie Schritte/HF)
+                ph = ",".join("?" * len(step_ids))
+                rwhere, rparams = f" WHERE app_info_id IN ({ph})", tuple(step_ids)
+            sel_off = "zone_offset" if "zone_offset" in rcols else "NULL AS zone_offset"
+            per_day: dict[date, float] = {}
+            for r in cur.execute(
+                f"SELECT time, {sel_off}, beats_per_minute FROM resting_heart_rate_record_table{rwhere}",
+                rparams,
+            ):
+                t = _local(r["time"], r["zone_offset"])
+                v = r["beats_per_minute"]
+                if t is None or v is None or not (HR_MIN_BPM <= v <= HR_MAX_BPM):
+                    continue
+                d = t.date()
+                per_day[d] = min(per_day.get(d, 999.0), float(v))
+            resting = [{"day": d, "bpm": v, "source": SOURCE} for d, v in per_day.items()]
+        else:
+            log.warning("resting_heart_rate_record_table hat unerwartete Spalten %s", sorted(rcols))
+
     con.close()
-    return {"body": body, "sessions": sessions, "vo2": vo2, "steps": steps}
+    return {"body": body, "sessions": sessions, "best_efforts": best_efforts,
+            "vo2": vo2, "steps": steps, "resting": resting}
 
 
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
     """Importiert die HC-DB idempotent (Append: nur neue Zeilen werden geschrieben).
     full=True macht eine Voll-Reconciliation (loescht source-Zeilen vorher -> spiegelt auch Loeschungen)."""
     data = read_health_connect(db_path)
-    models_ = (BodyMeasurement, ExerciseSession, Vo2Max, StepsDaily)
+    models_ = (BodyMeasurement, ExerciseSession, RunBestEffort, Vo2Max, StepsDaily, RestingHrDaily)
     with Session(engine) as s:
         if full:
             for m in models_:
-                # Schritte nie löschen, wenn der Import keine liefert (Fehlkonfiguration/leer)
-                # -> schützt die Schritt-Historie vor versehentlichem Leeren.
+                # Historien nie löschen, wenn der Import keine liefert (Fehlkonfiguration/leerer
+                # Export bzw. Export ohne Distanz-Segmente) -> schützt vor versehentlichem Leeren.
                 if m is StepsDaily and not data["steps"]:
+                    continue
+                if m is RestingHrDaily and not data["resting"]:
+                    continue
+                if m is RunBestEffort and not data["best_efforts"]:
                     continue
                 s.execute(delete(m).where(m.source == SOURCE))
         before = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
@@ -186,10 +381,22 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         sess_rows = [d for d in data["sessions"] if d["started_at"] is not None]
         vo2_rows = [d for d in data["vo2"] if d["measured_at"] is not None]
 
+        # HF kam spaeter dazu: liefert der Export HF, werden bestehende Sessions per
+        # DO UPDATE retro-gefuellt; ohne HF bleibt der Upsert append-only. coalesce=True
+        # haertet zusaetzlich pro Zeile: eine Session, die im aktuellen Export keine
+        # Fenster-Samples hat, nullt nie einen frueher berechneten Wert (full=True ersetzt).
+        sessions_with_hr = sum(1 for d in sess_rows if d.get("avg_hr") is not None)
+        hr_update = ["avg_hr", "max_hr", "hr_drift_pct"] if sessions_with_hr else None
+
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
-        upsert(s, ExerciseSession, sess_rows, ["external_id"])
+        upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
+        # Best-Efforts kommen (wie HF) nachträglich rein: DO UPDATE retro-füllt bestehende Läufe,
+        # sobald der Export Distanz-Segmente liefert (deterministisch aus den Segmenten neu berechnet).
+        upsert(s, RunBestEffort, data["best_efforts"], ["external_id", "distance_m"],
+               update_cols=["seconds", "started_at"])
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
+        upsert(s, RestingHrDaily, data["resting"], ["day"], update_cols=["bpm"])
         s.commit()
         after = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
 
@@ -199,7 +406,10 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         "new_sessions": after["ExerciseSession"] - before["ExerciseSession"],
         "new_vo2max": after["Vo2Max"] - before["Vo2Max"],
         "new_steps_days": after["StepsDaily"] - before["StepsDaily"],
+        "new_resting_hr_days": after["RestingHrDaily"] - before["RestingHrDaily"],
+        "new_best_efforts": after["RunBestEffort"] - before["RunBestEffort"],
         "total_sessions": after["ExerciseSession"],
+        "sessions_with_hr": sessions_with_hr,
     }
 
 
@@ -248,3 +458,17 @@ if __name__ == "__main__":
         ).first()
         if vo2_latest:
             print(f"Letzter VO2max: {vo2_latest[1]:.1f} am {vo2_latest[0]:%Y-%m-%d}")
+
+        n_hr = s.execute(
+            select(func.count()).select_from(ExerciseSession).where(ExerciseSession.avg_hr.is_not(None))
+        ).scalar_one()
+        print(f"Sessions mit HF: {n_hr}")
+        last_run_hr = s.execute(
+            select(ExerciseSession.started_at, ExerciseSession.avg_hr,
+                   ExerciseSession.max_hr, ExerciseSession.hr_drift_pct)
+            .where(ExerciseSession.exercise_type == RUN, ExerciseSession.avg_hr.is_not(None))
+            .order_by(ExerciseSession.started_at.desc()).limit(1)
+        ).first()
+        if last_run_hr:
+            print(f"Letzter Lauf mit HF: {last_run_hr[0]:%Y-%m-%d} — Ø {last_run_hr[1]:.0f} / "
+                  f"max {last_run_hr[2]:.0f} bpm, Drift {last_run_hr[3]}%")

@@ -35,6 +35,7 @@ def _current() -> dict:
         "openrouter_model": settings.openrouter_model,
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
+        "run_hr_max": settings.run_hr_max,
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
     }
@@ -48,6 +49,7 @@ def get_settings() -> dict:
 class SettingsIn(BaseModel):
     openrouter_model: str | None = None
     scheduler_enabled: bool | None = None
+    run_hr_max: float | None = None
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
     fddb_user: str | None = None
@@ -73,6 +75,11 @@ def update_settings(body: SettingsIn) -> dict:
             scheduler.start_scheduler()
         else:
             scheduler.shutdown_scheduler()
+
+    # Maximalpuls (Zonen-Basis): 0 = wieder aus Daten ableiten; negatives ignorieren.
+    if body.run_hr_max is not None and body.run_hr_max >= 0:
+        settings.run_hr_max = body.run_hr_max
+        env_updates["RUN_HR_MAX"] = str(body.run_hr_max)
 
     if env_updates:
         update_env_file(env_updates)

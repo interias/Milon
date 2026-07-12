@@ -21,6 +21,22 @@
   --radius-card: 10px;
 }
 
+/* WoW-Loot-Seltenheiten (grau→weiß→grün→blau→lila→orange→rot), kontrastsicher auf hellem Grund. */
+:root {
+  --rar-grau: #8b918f;
+  --rar-weiss: #6d7a77;
+  --rar-gruen: #1a9d4b;
+  --rar-blau: #2f7fd6;
+  --rar-lila: #9b46e0;
+  --rar-orange: #de7a17;
+  --rar-rot: #d0392c;
+}
+
+/* Modal-Einblendung (Achievements-Detail) */
+@keyframes achFade { from { opacity: 0 } to { opacity: 1 } }
+.ach-fade { animation: achFade .14s ease-out }
+@media (prefers-reduced-motion: reduce) { .ach-fade { animation: none } }
+
 html, body { height: 100%; }
 body {
   background: var(--color-bg);

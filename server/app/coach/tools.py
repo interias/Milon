@@ -2,7 +2,7 @@
 Dieselbe metrics/-Schicht wie REST/Snapshot - das LLM ruft gezielt, was es fuer eine Frage braucht."""
 from __future__ import annotations
 
-from ..metrics import body, health, running, strength
+from ..metrics import achievements, body, health, running, strength
 
 
 def _thin(items: list, n: int = 16) -> list:
@@ -37,6 +37,27 @@ TOOLS = [
         {"weeks": {"type": "integer"}}),
     _fn("get_vo2_trend", "VO2max-Verlauf (Uhr-Schaetzung, Trend zaehlt).",
         {"days": {"type": "integer"}}),
+    _fn("get_run_heart_rate", "Herzfrequenz je Woche ueber alle Laeufe mit HF: Oe-HF, Max-HF, "
+        "aerobe Effizienz ef (Meter pro Herzschlag, hoeher = fitter — gleiche Pace bei "
+        "niedrigerer HF), Oe-Drift (HF 2. vs. 1. Haelfte in %, hoch = Ausdauerdefizit/Hitze).",
+        {"weeks": {"type": "integer", "description": "Default 12"}}),
+    _fn("get_run_fitness_trends", "Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, "
+        "Lauf-Level-Regression): pace_at_hr (Pace bei Referenzpuls — schneller bei gleichem "
+        "Puls = fitter), easy_hr (Oe-HF im Locker-Pace-Korridor — niedriger = fitter), "
+        "trimp (Wochen-Trainingslast Banister), pace_by_zone (Oe-Pace je physiologischer "
+        "Puls-Zone Z1-Z4 in %HFmax: Z1<70/Z2 70-80/Z3 80-90/Z4>=90 %, "
+        "sec_per_km_per_month = Punkt-Schaetzer OHNE Signifikanz; ACHTUNG Zonen-Wanderung: "
+        "fittere Laeufe rutschen in tiefere Zonen, Zonen-Slopes unterschaetzen den Fortschritt "
+        "systematisch — nie als 'wo verbessere ich mich am meisten' deuten), resting_hr "
+        "(Ruhepuls-Trend). Jedes trend-Objekt hat verdict (besser/schlechter/unklar/wenig_daten) "
+        "— NUR bei significant=true als echten Trend deuten, sonst als Rauschen benennen."),
+    _fn("get_run_records", "Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz "
+        "(1/5/10/15/20 km = schnellstes zusammenhaengendes Fenster INNERHALB eines Laufs, nicht "
+        "die Gesamtzeit) + weitere Rekorde (laengster Lauf, groesste Wochendistanz, beste aerobe "
+        "Effizienz). Distanzen ohne qualifizierten Lauf haben eine leere Liste (nie so weit gelaufen)."),
+    _fn("get_run_achievements", "Lauf-Achievements (sammelbare Trophaeen, WoW-Style): summary "
+        "(Gesamtpunkte, erreichte/gesamte Trophaeen, Laeufer-Level+Titel), Liste der erreichten "
+        "Erfolge und 'almost' (fast geschafft, hoechster Fortschritt) — gut zum Motivieren."),
     _fn("get_strength_summary", "Kraft-Ueberblick: Hauptuebungen mit e1RM/Peak/Saetzen, Wochen-Tonnage, Durchschnitts-RPE."),
     _fn("get_tonnage", "Wochen-Tonnage (kg) der letzten N Wochen.", {"weeks": {"type": "integer"}}),
     _fn("get_rpe_trend", "Woechentlicher Durchschnitts-RPE (Ermuedungssignal).", {"weeks": {"type": "integer"}}),
@@ -77,6 +98,34 @@ def dispatch(name: str, args: dict):
         return running.pace_trend(int(args.get("weeks", 12)))
     if name == "get_vo2_trend":
         return _thin(running.vo2_trend(int(args.get("days", 365))))
+    if name == "get_run_heart_rate":
+        return running.heart_rate_trend(int(args.get("weeks", 12)))
+    if name == "get_run_records":
+        return running.best_efforts()
+    if name == "get_run_achievements":
+        r = achievements.evaluate()
+        earned = [{"name": a["name"], "points": a["points"], "date": a["earned_date"]}
+                  for a in r["achievements"] if a["earned"]]
+        almost = sorted((a for a in r["achievements"] if not a["earned"]),
+                        key=lambda a: -a["progress"])[:6]
+        almost = [{"name": a["name"], "progress": a["progress"], "status": a["progress_label"]}
+                  for a in almost]
+        return {"summary": r["summary"], "earned": earned, "almost": almost}
+    if name == "get_run_fitness_trends":
+        pah = running.pace_at_hr()
+        easy = running.easy_hr_trend()
+        trimp = running.trimp_weekly()
+        zones = running.pace_by_hr_zone()
+        resting = health.resting_hr_trend()
+        return {  # Serien ausduennen, Kennzahlen/Urteile komplett behalten
+            "pace_at_hr": {**pah, "series": _thin(pah.get("series", []))} if pah else {},
+            "easy_hr": {**easy, "series": _thin(easy.get("series", []))} if easy else {},
+            "trimp": {**trimp, "series": trimp.get("series", [])[-8:]} if trimp else {},
+            "pace_by_zone": ({**zones, "weeks": None,
+                              "zones": [{k: v for k, v in z.items() if k != "series"}
+                                        for z in zones.get("zones", [])]} if zones else {}),
+            "resting_hr": ({k: v for k, v in resting.items() if k != "series"} if resting else {}),
+        }
     if name == "get_strength_summary":
         return strength.summary()
     if name == "get_tonnage":

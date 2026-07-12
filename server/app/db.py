@@ -38,6 +38,10 @@ def _run_migrations() -> None:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")
         if "detail" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN detail TEXT")
+        ex_cols = cols("exercise_sessions")
+        for col in ("max_hr", "hr_drift_pct"):
+            if col not in ex_cols:
+                con.exec_driver_sql(f"ALTER TABLE exercise_sessions ADD COLUMN {col} REAL")
 
 
 def get_session() -> Iterator[Session]:
@@ -53,20 +57,25 @@ def count_rows(session: Session, model, source: str | None = None) -> int:
 
 
 def upsert(session: Session, model, rows: list[dict], conflict_cols: list[str],
-           update_cols: list[str] | None = None, chunk: int = 400) -> None:
+           update_cols: list[str] | None = None, chunk: int = 400,
+           coalesce: bool = False) -> None:
     """Idempotentes Einfuegen via SQLite ON CONFLICT.
     - update_cols=None  -> DO NOTHING (Append: nur neue Zeilen werden geschrieben)
-    - update_cols=[...]  -> DO UPDATE der genannten Spalten (z. B. Schritte/Tag)."""
+    - update_cols=[...]  -> DO UPDATE der genannten Spalten (z. B. Schritte/Tag)
+    - coalesce=True     -> DO UPDATE ueberschreibt vorhandene Werte NICHT mit NULL
+                           (COALESCE(neu, alt) — Haertung z. B. fuer HF-Retro-Fill)."""
     for i in range(0, len(rows), chunk):
         batch = rows[i:i + chunk]
         if not batch:
             continue
         stmt = _sqlite_insert(model).values(batch)
         if update_cols:
-            stmt = stmt.on_conflict_do_update(
-                index_elements=conflict_cols,
-                set_={c: getattr(stmt.excluded, c) for c in update_cols},
-            )
+            if coalesce:
+                set_ = {c: func.coalesce(getattr(stmt.excluded, c), model.__table__.c[c])
+                        for c in update_cols}
+            else:
+                set_ = {c: getattr(stmt.excluded, c) for c in update_cols}
+            stmt = stmt.on_conflict_do_update(index_elements=conflict_cols, set_=set_)
         else:
             stmt = stmt.on_conflict_do_nothing(index_elements=conflict_cols)
         session.execute(stmt)

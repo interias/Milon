@@ -12,6 +12,40 @@ function domain(ys: number[]): [number, number] {
   return [min - pad, max + pad];
 }
 
+// Pfad durch die Punkte: gerade Segmente (default) ODER monotone kubische Interpolation
+// (Fritsch–Carlson). Die Kurve läuft durch ALLE echten Punkte und erzeugt keine neuen
+// Extrema/Overshoots — glatter Verlauf ohne erfundene Ausschläge (ehrlich für Trendlinien).
+function linePath(pts: (readonly [number, number])[], smooth = false): string {
+  if (pts.length < 2) return "";
+  if (!smooth || pts.length === 2) {
+    return pts.map((p, k) => (k ? "L" : "M") + p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");
+  }
+  const n = pts.length;
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const dx: number[] = [], m: number[] = [];
+  for (let k = 0; k < n - 1; k++) {
+    const d = xs[k + 1] - xs[k] || 1e-6;
+    dx.push(d);
+    m.push((ys[k + 1] - ys[k]) / d);
+  }
+  const t = new Array<number>(n);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let k = 1; k < n - 1; k++) t[k] = m[k - 1] * m[k] <= 0 ? 0 : (m[k - 1] + m[k]) / 2;
+  for (let k = 0; k < n - 1; k++) {
+    if (m[k] === 0) { t[k] = 0; t[k + 1] = 0; continue; }
+    const a = t[k] / m[k], b = t[k + 1] / m[k], s = a * a + b * b;
+    if (s > 9) { const tau = 3 / Math.sqrt(s); t[k] = tau * a * m[k]; t[k + 1] = tau * b * m[k]; }
+  }
+  let d = `M${xs[0].toFixed(2)} ${ys[0].toFixed(2)}`;
+  for (let k = 0; k < n - 1; k++) {
+    const c1x = xs[k] + dx[k] / 3, c1y = ys[k] + (t[k] * dx[k]) / 3;
+    const c2x = xs[k + 1] - dx[k] / 3, c2y = ys[k + 1] - (t[k + 1] * dx[k]) / 3;
+    d += ` C${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${xs[k + 1].toFixed(2)} ${ys[k + 1].toFixed(2)}`;
+  }
+  return d;
+}
+
 function pickTicks(labels: string[] | undefined, n: number, want = 5): { i: number; label: string }[] {
   if (!labels || labels.length === 0) return [];
   const k = Math.min(want, labels.length);
@@ -30,6 +64,7 @@ export function AreaTrend({
   unit,
   format = (n) => de(n, 1),
   className = "text-accent",
+  smooth = false,
 }: {
   values: (number | null)[];
   labels?: string[];
@@ -37,6 +72,7 @@ export function AreaTrend({
   unit?: string;
   format?: Fmt;
   className?: string;
+  smooth?: boolean; // monotone kubische Kurve statt gerader Segmente
 }) {
   const pts0 = values
     .map((v, i) => ({ i, v }))
@@ -50,7 +86,7 @@ export function AreaTrend({
   const X = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * W);
   const Y = (v: number) => H - ((v - lo) / range) * H;
   const pts = pts0.map((p) => [X(p.i), Y(p.v)] as const);
-  const line = pts.map((p, k) => (k ? "L" : "M") + p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");
+  const line = linePath(pts, smooth);
   const last = pts[pts.length - 1];
   const area = `${line} L${last[0].toFixed(2)} ${H} L${pts[0][0].toFixed(2)} ${H} Z`;
   const yticks = [hi, (hi + lo) / 2, lo];
@@ -216,12 +252,15 @@ export function MultiTrend({
   height = 200,
   unit,
   format = (n) => de(n, 1),
+  equalWeight = false,
 }: {
-  series: { values: (number | null)[]; label: string; color: string }[];
+  series: { values: (number | null)[]; label: string; color: string; smooth?: boolean;
+            opacity?: number; width?: number; hideLabel?: boolean }[];
   labels?: string[];
   height?: number;
   unit?: string;
   format?: Fmt;
+  equalWeight?: boolean; // alle Linien gleich stark (statt letzte Serie hervorzuheben)
 }) {
   const allY = series.flatMap((s) => s.values.filter((v): v is number => v != null));
   if (allY.length < 2) {
@@ -233,10 +272,12 @@ export function MultiTrend({
   const n = Math.max(...series.map((s) => s.values.length), 1);
   const X = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * W);
   const Y = (v: number) => H - ((v - lo) / range) * H;
-  const path = (vals: (number | null)[]) => {
-    const pts = vals.map((v, i) => ({ i, v })).filter((p): p is { i: number; v: number } => p.v != null);
-    if (pts.length < 2) return "";
-    return pts.map((p, k) => (k ? "L" : "M") + X(p.i).toFixed(2) + " " + Y(p.v).toFixed(2)).join(" ");
+  const path = (vals: (number | null)[], smooth = false) => {
+    const pts = vals
+      .map((v, i) => ({ i, v }))
+      .filter((p): p is { i: number; v: number } => p.v != null)
+      .map((p) => [X(p.i), Y(p.v)] as const);
+    return linePath(pts, smooth);
   };
   const yticks = [hi, (hi + lo) / 2, lo];
   const xticks = pickTicks(labels, n);
@@ -254,8 +295,9 @@ export function MultiTrend({
               <line key={g} x1="0" x2={W} y1={g * H} y2={g * H} stroke="var(--color-line)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
             ))}
             {series.map((s, si) => (
-              <path key={si} d={path(s.values)} fill="none" stroke={s.color}
-                    strokeWidth={si === series.length - 1 ? 2.2 : 1.3}
+              <path key={si} d={path(s.values, s.smooth)} fill="none" stroke={s.color}
+                    strokeWidth={s.width ?? (equalWeight ? 1.7 : si === series.length - 1 ? 2.2 : 1.3)}
+                    strokeOpacity={s.opacity ?? 1}
                     strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             ))}
           </svg>
@@ -267,7 +309,7 @@ export function MultiTrend({
         </div>
       )}
       <div className="ml-10 mt-1.5 flex flex-wrap gap-3 sm:ml-14">
-        {series.map((s, i) => (
+        {series.filter((s) => !s.hideLabel).map((s, i) => (
           <span key={i} className="flex items-center gap-1 text-[10px] text-muted">
             <span className="inline-block h-[2px] w-3.5" style={{ background: s.color }} />{s.label}
           </span>

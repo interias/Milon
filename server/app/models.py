@@ -73,6 +73,23 @@ class ExerciseSession(SQLModel, table=True):
     ended_at: Optional[datetime] = None
     distance_km: Optional[float] = None
     avg_hr: Optional[float] = None
+    max_hr: Optional[float] = None
+    hr_drift_pct: Optional[float] = None  # Ø-HF 2. Hälfte vs. 1. Hälfte in % (kardiale Drift)
+    source: str = "health_connect"
+
+
+class RunBestEffort(SQLModel, table=True):
+    """Beste Zeit (Sekunden) für eine Standard-Distanz INNERHALB eines Laufs — Best-Effort-Split
+    aus den feingranularen HC-Distanz-Segmenten (à la Strava/Garmin), nicht die Gesamtlauf-Zeit.
+    `started_at` denormalisiert für schnelle Leaderboard-Queries ohne Join."""
+    __tablename__ = "run_best_efforts"
+    __table_args__ = (UniqueConstraint("external_id", "distance_m", name="uq_best_effort"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    external_id: str = Field(index=True)      # exercise_sessions.external_id des Laufs
+    distance_m: int = Field(index=True)       # 1000 / 5000 / 10000 / …
+    seconds: float
+    started_at: datetime = Field(index=True)  # Lauf-Datum (Denormalisierung)
     source: str = "health_connect"
 
 
@@ -90,6 +107,15 @@ class StepsDaily(SQLModel, table=True):
 
     day: date = Field(primary_key=True)
     steps: int
+    source: str = "health_connect"
+
+
+class RestingHrDaily(SQLModel, table=True):
+    """Ruhepuls je Tag (niedrigste Messung; sinkend = Fitness, ploetzlich hoch = Ermuedung)."""
+    __tablename__ = "resting_hr_daily"
+
+    day: date = Field(primary_key=True)
+    bpm: float
     source: str = "health_connect"
 
 

@@ -13,6 +13,7 @@ export default function Einstellungen() {
   const [err, setErr] = useState<string | null>(null);
   const [model, setModel] = useState("");
   const [scheduler, setScheduler] = useState(true);
+  const [hrMax, setHrMax] = useState("");
   const [fddbUser, setFddbUser] = useState("");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -20,7 +21,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); })
+      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -31,6 +32,8 @@ export default function Einstellungen() {
     try {
       const body: SettingsUpdate = { scheduler_enabled: scheduler };
       if (model && model !== s.openrouter_model) body.openrouter_model = model;
+      const hr = parseFloat(hrMax);
+      if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
       (["openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
         if (secrets[k]?.trim()) body[k] = secrets[k].trim();
@@ -39,6 +42,7 @@ export default function Einstellungen() {
       setS(updated);
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
+      setHrMax(String(updated.run_hr_max ?? ""));
       setSecrets({});
       setFddbUser("");
       setMsg("Gespeichert ✓");
@@ -95,6 +99,23 @@ export default function Einstellungen() {
           </label>
           <p className="mt-2 text-[11px] text-muted">
             Hevy alle 6 h · FDDB täglich · HC-Ordner-Scan alle 10 min. Manuell über „↻ Daten aktualisieren".
+          </p>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardTitle title="Laufen · Puls-Zonen" sub="Basis für die Karte „Pace je Puls-Zone“ auf der Laufen-Seite" />
+          <label className="block max-w-xs">
+            <span className="mb-1 block text-[11px] text-muted">Maximalpuls (HFmax) in bpm</span>
+            <input
+              type="number" inputMode="numeric" min={0} max={230} step={1}
+              value={hrMax} onChange={(e) => setHrMax(e.target.value)}
+              placeholder="z. B. 180" className={INPUT}
+            />
+          </label>
+          <p className="mt-2 text-[11px] text-muted">
+            Zonen-Grenzen: Z1 &lt;70 % · Z2 70–80 % · Z3 80–90 % · Z4 ≥90 % von HFmax.
+            <strong> 0</strong> = automatisch aus den Daten ableiten (robustes 95.-Perzentil, Boden 180) —
+            fest eingetragen ist robuster gegen Sensor-Ausreißer.
           </p>
         </Card>
 
