@@ -21,6 +21,7 @@ RUN pip install \
       "pandas>=3.0" \
       "python-multipart>=0.0.18" \
       "pydantic-settings>=2.5" \
+      "httpx>=0.27,<1" \
       "openai>=2.43" \
       "tzdata>=2025.1" \
       "apscheduler>=3.10" \

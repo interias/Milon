@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import bisect
 import logging
+import math
 import sqlite3
 from array import array
 from datetime import date, datetime, timedelta, timezone
@@ -120,14 +121,27 @@ def read_health_connect(db_path: str | Path) -> dict:
     params = tuple(app_ids)
 
     body: dict[datetime, dict] = {}
+    rejected_times: set[datetime] = set()
     for r in cur.execute(f"SELECT time, zone_offset, weight FROM weight_record_table{where}", params):
         t = _local(r["time"], r["zone_offset"])
         if t is not None:
-            body.setdefault(t, {})["weight_kg"] = (r["weight"] or 0) / 1000.0
+            weight = (r["weight"] or 0) / 1000.0
+            if (not math.isfinite(weight) or weight <= 0
+                    or (settings.body_weight_min_kg is not None and weight < settings.body_weight_min_kg)
+                    or (settings.body_weight_max_kg is not None and weight > settings.body_weight_max_kg)):
+                rejected_times.add(t)
+                continue
+            body.setdefault(t, {})["weight_kg"] = weight
     for r in cur.execute(f"SELECT time, zone_offset, percentage FROM body_fat_record_table{where}", params):
         t = _local(r["time"], r["zone_offset"])
         if t is not None:
             body.setdefault(t, {})["body_fat_pct"] = r["percentage"]
+
+    # Reject the complete measurement so another person's paired body fat cannot leak through.
+    for t in rejected_times:
+        body.pop(t, None)
+    if rejected_times:
+        log.warning("%d Koerpermessungen ausserhalb der Gewichtsgrenzen uebersprungen", len(rejected_times))
 
     # --- Distanz-Segmente (Meter) je App, sortiert nach UTC-Start, für Fenster-Summe je Session.
     # WICHTIG (am echten Export 2026-07-10 verifiziert): Mehrere Apps spiegeln dieselbe Strecke
@@ -350,7 +364,8 @@ def read_health_connect(db_path: str | Path) -> dict:
 
     con.close()
     return {"body": body, "sessions": sessions, "best_efforts": best_efforts,
-            "vo2": vo2, "steps": steps, "resting": resting}
+            "vo2": vo2, "steps": steps, "resting": resting,
+            "skipped_body": len(rejected_times)}
 
 
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
@@ -402,6 +417,7 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
 
     return {
         "mode": "full" if full else "incremental",
+        "skipped_body": data["skipped_body"],
         "new_body": after["BodyMeasurement"] - before["BodyMeasurement"],
         "new_sessions": after["ExerciseSession"] - before["ExerciseSession"],
         "new_vo2max": after["Vo2Max"] - before["Vo2Max"],

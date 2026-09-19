@@ -2,6 +2,7 @@
 import re
 from pathlib import Path
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # config.py -> app -> server -> <repo-root>
@@ -27,6 +28,16 @@ class Settings(BaseSettings):
     # Körper-Messungen (Gewicht/KFA) nur aus dieser Health-Connect-App (Waage) übernehmen;
     # leer = alle Quellen. Andere Apps (Google Fit, Samsung Health) erzeugen Ausreißer.
     body_source_package: str = "com.qingniu.arboleaf"
+    # Personal import bounds; unset means no personal lower/upper limit.
+    body_weight_min_kg: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    body_weight_max_kg: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_body_weight_bounds(self):
+        if (self.body_weight_min_kg is not None and self.body_weight_max_kg is not None
+                and self.body_weight_min_kg >= self.body_weight_max_kg):
+            raise ValueError("BODY_WEIGHT_MIN_KG must be less than BODY_WEIGHT_MAX_KG")
+        return self
 
     # Schritte nur aus dieser HC-App: maßgeblich die Galaxy Watch (Samsung Health). Google Fit
     # zählt das Handy und untertreibt an Tagen ohne Handy → wird ausgeschlossen.
