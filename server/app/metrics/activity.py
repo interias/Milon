@@ -2,14 +2,58 @@
 Trainings-Konsistenz (Heatmap + Streak)."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from ..config import settings
 from ..db import engine
 from . import running, strength
 
 RUN = 33
+
+
+def overview(now: datetime | None = None) -> dict:
+    """Two calendar-day windows; steps averages only include observed days."""
+    local_now = (now or datetime.now(ZoneInfo(settings.timezone))).astimezone(ZoneInfo(settings.timezone))
+    today = local_now.date()
+    current_start = today - timedelta(days=6)
+    previous_start = current_start - timedelta(days=7)
+    cutoff = pd.Timestamp(local_now.replace(tzinfo=None))
+    runs = running._runs()
+    with engine.connect() as con:
+        workouts = pd.read_sql(
+            "SELECT started_at FROM workouts WHERE source='hevy' AND started_at IS NOT NULL",
+            con, parse_dates=["started_at"],
+        )
+        steps = pd.read_sql("SELECT day, steps FROM steps_daily", con, parse_dates=["day"])
+
+    # Both HC and Hevy imports store naive local wall times.
+    def selected(frame: pd.DataFrame, column: str, start: date, end: pd.Timestamp) -> pd.DataFrame:
+        return frame[(frame[column] >= pd.Timestamp(start)) & (frame[column] < end)]
+
+    boundary = pd.Timestamp(current_start)
+    current_runs = selected(runs, "started_at", current_start, cutoff)
+    previous_runs = selected(runs, "started_at", previous_start, boundary)
+    current_workouts = selected(workouts, "started_at", current_start, cutoff)
+    previous_workouts = selected(workouts, "started_at", previous_start, boundary)
+    current_steps = selected(steps, "day", current_start, pd.Timestamp(today + timedelta(days=1)))
+    previous_steps = selected(steps, "day", previous_start, boundary)
+
+    def average(frame: pd.DataFrame) -> float | None:
+        return round(float(frame["steps"].mean()), 1) if not frame.empty else None
+
+    return {
+        "from_date": current_start.isoformat(), "to_date": today.isoformat(),
+        "previous_from_date": previous_start.isoformat(),
+        "previous_to_date": (current_start - timedelta(days=1)).isoformat(),
+        "running": {"current_km": round(float(current_runs["distance_km"].sum()), 1),
+                    "previous_km": round(float(previous_runs["distance_km"].sum()), 1)},
+        "strength": {"current_sessions": len(current_workouts), "previous_sessions": len(previous_workouts)},
+        "steps": {"current_avg": average(current_steps), "previous_avg": average(previous_steps),
+                  "current_days": len(current_steps), "previous_days": len(previous_steps)},
+    }
 
 
 def compare(days: int = 7) -> dict:
@@ -34,7 +78,7 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     if not steps.empty:
         step_map = {d.date(): int(s) for d, s in zip(steps["day"], steps["steps"])}
 
-    end = date.today()
+    end = datetime.now(ZoneInfo(settings.timezone)).date()
     start = end - timedelta(days=days - 1)
     out: list[dict] = []
     for i in range(days):

@@ -340,18 +340,26 @@ def bodyfat_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
 
 
 def summary() -> dict:
-    s = _weight_daily().dropna()
+    s = _weight_daily()
     bf = _read(
         "SELECT measured_at, body_fat_pct FROM body_measurements WHERE body_fat_pct IS NOT NULL "
         "ORDER BY measured_at DESC LIMIT 1", parse_dates=["measured_at"],
     )
     avg7 = s.rolling(7, min_periods=1).mean() if not s.empty else pd.Series(dtype=float)
-    latest_avg7 = float(avg7.iloc[-1]) if not avg7.empty else None
-    prev_avg7 = float(avg7.iloc[-8]) if len(avg7) >= 8 else None
+    latest_date = s.last_valid_index()
+    previous_date = latest_date - pd.Timedelta(days=7) if latest_date is not None else None
+    latest_avg7 = avg7.get(latest_date)
+    prev_avg7 = avg7.get(previous_date)
+    latest_avg7 = float(latest_avg7) if latest_avg7 is not None and np.isfinite(latest_avg7) else None
+    prev_avg7 = float(prev_avg7) if prev_avg7 is not None and np.isfinite(prev_avg7) else None
+    counts = s.rolling(7, min_periods=1).count()
     return {
-        "weight_kg": round(float(s.iloc[-1]), 1) if not s.empty else None,
+        "weight_kg": round(float(s.loc[latest_date]), 1) if latest_date is not None else None,
+        "weight_date": latest_date.date().isoformat() if latest_date is not None else None,
+        "weight_days7": int(counts.get(latest_date, 0)),
+        "previous_weight_days7": int(counts.get(previous_date, 0)),
         "weight_avg7": round(latest_avg7, 1) if latest_avg7 is not None else None,
-        "weight_delta7": round(latest_avg7 - prev_avg7, 2) if (latest_avg7 and prev_avg7) else None,
+        "weight_delta7": round(latest_avg7 - prev_avg7, 2) if latest_avg7 is not None and prev_avg7 is not None else None,
         "body_fat_pct": round(float(bf["body_fat_pct"].iloc[0]), 1) if not bf.empty else None,
         "tdee": adaptive_tdee().get("tdee"),
     }

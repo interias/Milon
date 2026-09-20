@@ -34,7 +34,7 @@ export function Heatmap({ days }: { days: ConsistencyDay[] }) {
                 className="h-3 w-3 shrink-0 text-[10px] leading-3 text-muted"
                 style={{ overflow: "visible", whiteSpace: "nowrap" }}
               >
-                {lbl}
+                {monthLabels.slice(i + 1, i + 3).some(Boolean) ? "" : lbl}
               </div>
             ))}
           </div>
@@ -44,7 +44,7 @@ export function Heatmap({ days }: { days: ConsistencyDay[] }) {
                 {Array.from({ length: 7 }).map((_, di) => {
                   const c = w[di];
                   const title = c
-                    ? `${c.date}: ${c.trained ? "Training" : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "frei"}`
+                    ? `${c.date}: ${c.trained ? "Training" : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "Keine Aktivität erfasst"}`
                     : "";
                   return (
                     <div

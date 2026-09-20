@@ -112,6 +112,11 @@ def activity_compare(days: int = 7) -> dict:
     return activity.compare(days)
 
 
+@router.get("/activity/overview")
+def activity_overview() -> dict:
+    return activity.overview()
+
+
 # --- Gesundheit (Schritte + Radfahren) ---
 @router.get("/health/overview")
 def health_overview() -> dict:

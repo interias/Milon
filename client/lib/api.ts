@@ -36,6 +36,7 @@ export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename
 export type BodySummary = {
   weight_kg: number | null; weight_avg7: number | null; weight_delta7: number | null;
   body_fat_pct: number | null; tdee: number | null;
+  weight_date: string | null; weight_days7: number; previous_weight_days7: number;
 };
 export type RunSummary = {
   week_km: number | null; week_runs: number | null; pace: number | null;
@@ -119,6 +120,12 @@ export type RunWeekOverview = {
   week_start: string; previous_week_start: string;
   current: { km: number; runs: number; minutes: number };
   previous: { km: number; runs: number; minutes: number };
+};
+export type ActivityOverview = {
+  from_date: string; to_date: string; previous_from_date: string; previous_to_date: string;
+  running: { current_km: number; previous_km: number };
+  strength: { current_sessions: number; previous_sessions: number };
+  steps: { current_avg: number | null; previous_avg: number | null; current_days: number; previous_days: number };
 };
 export type VolPoint = { week: string; km: number; runs: number };
 export type PacePoint = { week: string; pace: number };
@@ -311,6 +318,7 @@ export const api = {
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
+  activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),
   bodySummary: () => get<BodySummary>("/metrics/body/summary"),
   // Gesundheit (Schritte + Radfahren)
   healthOverview: () => get<HealthOverview>("/metrics/health/overview"),

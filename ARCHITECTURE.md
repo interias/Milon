@@ -1,5 +1,18 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Übersicht: Entwicklung und Aktivität (2026-09-20)
+
+Drei Entwicklungskarten zeigen das neutrale 7-Tage-Gewichtsmittel, standardisierten
+Puls bei 6:00/km (Minute 30, VO₂eq ergänzend) und den Gesamtstärke-Index. Datenstände,
+Messabdeckung und fehlende Vergleiche bleiben sichtbar; Karten laden unabhängig.
+`body.summary` erhält Kalenderlücken im 7-Tage-Mittel und liefert Messdatum sowie
+Messtage beider Vergleichsfenster. `/metrics/activity/overview` vergleicht die letzten
+sieben lokalen Kalendertage inklusive heute mit den sieben davor: Laufkilometer,
+Hevy-Workoutanzahl und Schrittmittel über erfasste Tage. Schrittveränderungen werden
+nur bei vollständiger Abdeckung beider Fenster gezeigt. Mengenänderungen sind neutral.
+Konsistenz zeigt 84 Tage, das Jahr lädt auf Anfrage; Aktivitäten und ein datierter
+Coach-Auszug schließen die Seite ab. Ausführliche Analysen bleiben auf Fachseiten.
+
 ## Laufanalyse: kompakte Darstellung (2026-09-20)
 
 Die Laufen-Seite gliedert sich in Training, Fitness und Bestleistungen. Der neue
