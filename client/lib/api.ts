@@ -80,13 +80,14 @@ export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };
 export type BodyFatPoint = { date: string; pct: number | null; avg7: number | null };
 export type MacroSplit = { protein: number; carb: number; fat: number };
 export type NutritionSummary = {
+  window_start: string | null; recorded_days_7: number; protein_days_7: number; kcal_days_7: number;
   days: number; last_day: string | null; kcal_today: number | null; protein_today: number | null;
   protein_avg7: number | null; protein_target: number | null; protein_per_kg: number;
   kcal_avg7: number | null; tdee: number | null;
-  macro_split: MacroSplit | null; macro_g: MacroSplit | null; on_target_days_7: number | null;
+  macro_split: MacroSplit | null; macro_g: { protein: number | null; carb: number | null; fat: number | null } | null; on_target_days_7: number | null;
 };
-export type ProteinPoint = { date: string; protein: number; avg7: number };
-export type KcalPoint = { date: string; kcal: number; avg7: number };
+export type ProteinPoint = { date: string; protein: number | null; avg7: number | null; days7: number };
+export type KcalPoint = { date: string; kcal: number | null; avg7: number | null; days7: number };
 export type LeanMassPoint = { date: string; weight: number | null; ffm: number | null; fat: number | null; paired_days: number };
 export type LeanMassSummary = {
   ffm: number | null; fat: number | null; weight: number | null;

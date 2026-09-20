@@ -1,5 +1,19 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Ernährung: Protein, Energiebilanz und Erfassungsabdeckung (2026-09-20)
+
+Proteinmittel und datierte Energiebilanz stehen oben. Protein-/Kalorienverläufe
+zeigen je eine 7-Kalendertage-Linie mit zuschaltbaren Tageswerten; tägliche Raster
+erhalten null bei fehlenden Werten. Makros, letzter Proteinwert und Ziel-Tage liegen
+im Detaildialog; der Energieverlauf lädt ebenfalls erst beim Öffnen. Die Körperseite
+verlinkt weiterhin auf die Energiebilanz unter Ernährung.
+`nutrition.summary` benennt das am letzten erfassten Datum endende Kalenderfenster
+und getrennte Zähler für Eintragstage, Protein- und Kalorientage. Ziel-Tage beziehen
+sich ausschließlich auf Tage mit Proteinwert. Nullsummen unbekannter Werte werden
+verhindert; tatsächlich erfasste Nullen bleiben erhalten. Makroanteile fehlen bei
+unbekannten Mitteln. Erfassung belegt keine Tagesvollständigkeit; 1,8 g/kg bleibt
+das bestehende gekennzeichnete Referenzziel, kein neu abgeleitetes persönliches Ziel.
+
 ## Übungsdetails: ein Diagramm je Messgröße (2026-09-20)
 
 Standardzeitraum ist 3M; 1M/12M/Gesamt bleiben erreichbar. Ein `RunTrendChart` schaltet
