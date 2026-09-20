@@ -228,11 +228,10 @@ def strength_index(period: str = "3m") -> dict:
 
 
 def strength_energy() -> dict:
-    """Verknüpft den wöchentlichen Gesamtstärke-Index mit TDEE & Defizit (body.tdee_trend),
-    wöchentlich aligned. Liefert die Reihen für die Overlay-Grafik + EHRLICHE Kennzahlen:
-    die NIVEAU-Korrelation ist trendgetrieben (beide laufen über die Zeit → scheinbar hoch),
-    die ENTKOPPELTE Woche-zu-Woche-Korrelation ist der belastbare Wert (~0). Zusätzlich ein
-    Phasen-Read der jüngsten Wochen (Cut-Tradeoff / Aufbau / Recomp)."""
+    """Align weekly strength and estimated energy balance for descriptive comparisons.
+    Both level and change correlations are observational; smoothing, time trends and
+    training changes limit their interpretation. Phase keys remain API-compatible.
+    """
     from . import body  # lazy: vermeidet Import-Zyklus
 
     idx = strength_index("12m")
@@ -247,7 +246,7 @@ def strength_energy() -> dict:
         return {}
     td["date"] = pd.to_datetime(td["date"])
     td = td.set_index("date").sort_index()
-    td["deficit"] = td["tdee_avg"] - td["intake"]            # >0 = Defizit, <0 = Überschuss
+    td["deficit"] = td["tdee_avg"] - td["intake_avg"]        # Identical calendar smoothing.
     wk = td[["tdee_avg", "deficit"]].resample("W-SUN").mean()
     wk.index = wk.index - pd.Timedelta(days=6)               # Wochenende(So) → Wochenstart(Mo), wie Index
 
@@ -262,9 +261,9 @@ def strength_energy() -> dict:
             return None
         return round(float(np.corrcoef(av[m], bv[m])[0, 1]), 2)
 
-    corr_level = _r(df["index"], df["deficit"])              # trendgetrieben (scheinbar)
-    corr_change = _r(df["index"].diff(), df["deficit"])      # entkoppelt (belastbar) ~0
-    corr_cum = _r(df["index"], (-df["deficit"]).cumsum())    # nur Transparenz (Schein-Trend)
+    corr_level = _r(df["index"], df["deficit"])
+    corr_change = _r(df["index"].diff(), df["deficit"])
+    corr_cum = _r(df["index"], (-df["deficit"]).cumsum())
 
     # Phasen-Read: letzte k Wochen vs. die k davor
     k = min(8, len(df) // 2)
@@ -276,13 +275,13 @@ def strength_energy() -> dict:
     deepening = def_prev is not None and (def_now - def_prev) > 80
 
     if idx_delta <= -1.5 and def_now > 100:
-        phase, phase_label = "cut", "Cut kostet Kraft"
+        phase, phase_label = "cut", "Index fällt bei geschätztem Defizit"
     elif idx_delta >= 1.5 and def_now > 100:
-        phase, phase_label = "recomp", "Recomp – Kraft hält trotz Defizit"
+        phase, phase_label = "recomp", "Index steigt bei geschätztem Defizit"
     elif idx_delta >= 1.5 and def_now < 0:
-        phase, phase_label = "aufbau", "Aufbau – Überschuss, Kraft steigt"
+        phase, phase_label = "aufbau", "Index steigt bei geschätztem Überschuss"
     else:
-        phase, phase_label = "stabil", "Stabil"
+        phase, phase_label = "stabil", "Keine eindeutige Kombination"
 
     return {
         "n_weeks": int(len(df)),
@@ -298,10 +297,11 @@ def strength_energy() -> dict:
         "deficit_deepening": bool(deepening),
         "phase": phase,
         "phase_label": phase_label,
-        "caveat": ("Die Niveau-Korrelation ist trendgetrieben (Index und Energiebilanz laufen beide "
-                   "über die Zeit) und überzeichnet den Zusammenhang; entkoppelt (Woche-zu-Woche) ist "
-                   "er ~0. Programmwechsel und Trainingsphasen verzerren zusätzlich. Belastbar ist nur "
-                   "der Phasen-Read der jüngsten Wochen."),
+        "caveat": ("Korrelationen und die jüngste Kombination aus Indexänderung und geschätzter "
+                   "Energiebilanz sind beschreibend, kein Nachweis einer Ursache. Zeittrends, Glättung, "
+                   "Programmwechsel und unvollständige Ernährungseinträge können sie beeinflussen. "
+                   "Indexänderungen vergleichen aufeinanderfolgende verfügbare Wochen. "
+                   "Die historischen phase-Schlüssel belegen weder Recomposition noch Muskelaufbau."),
         "series": [{"week": d.date().isoformat(),
                     "index": round(float(r["index"]), 1),
                     "tdee": round(float(r["tdee_avg"])),

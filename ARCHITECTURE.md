@@ -1,5 +1,19 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Kraft: Entwicklung zuerst (2026-09-20)
+
+Die Hauptseite zeigt Gesamtstärke mit einer geglätteten Wochenlinie, Zeitraumwahl
+und den jeweils zwei größten steigenden/fallenden Beiträgen. Hauptwert und Δ bleiben
+unverändert aus dem Monatsindex; Rohlinie, Monatsanker und Methodik liegen im Dialog.
+Übungen sind standardmäßig auf die letzten 90 Kalendertage begrenzt; „Alle Übungen“
+öffnet die gesamte Historie, die Suche arbeitet innerhalb dieser Auswahl. Letzter
+Trainingstag und geschätztes 1RM ersetzen die dichte Peak-/Satzzahl-Zeile.
+Der kompakte Umfang nennt ausdrücklich die letzte erfasste Trainingswoche mit Datum.
+Tonnagehistorie, RPE und Stärke/Energiebilanz laden erst bei geöffnetem Detaildialog.
+Backend, Coach und MCP beschreiben Zusammenhänge ohne Kausalitäts- oder Recomp-Urteil;
+fehlende Korrelationen bleiben nicht berechenbar. Die Energiebilanz übernimmt die
+in Q19 beschlossene gleiche Kalenderglättung (`tdee_avg - intake_avg`).
+
 ## Körpermodelle: Messabdeckung und gemeinsame Zeitfenster (2026-09-20)
 
 Nach Vergleich der Varianten (Q19–21) mittelt `adaptive_tdee` die zugehörige Zufuhr

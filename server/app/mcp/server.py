@@ -195,9 +195,10 @@ def get_strength_index(period: str = "3m") -> dict:
 @mcp.tool()
 def get_strength_energy() -> dict:
     """Zusammenhang Gesamtstärke ↔ Energiebilanz (TDEE/Defizit), wöchentlich aligned.
-    corr_index_deficit = NIVEAU-Korrelation (trendgetrieben/scheinbar); corr_change_deficit =
-    entkoppelt (belastbar, ~0). 'phase'/'phase_label' + recent_* = Read der jüngsten Wochen
-    (cut/recomp/aufbau/stabil). 'caveat' beachten — keine Kausalität aus der Niveau-Korrelation."""
+    corr_index_deficit describes levels; corr_change_deficit compares index changes from the
+    previous available week with energy balance. Both are descriptive, not causal evidence.
+    Null correlations are unavailable, not zero. recent_* and phase_label describe recent weeks;
+    legacy phase keys such as recomp do not demonstrate recomposition. Read caveat."""
     return strength.strength_energy()
 
 

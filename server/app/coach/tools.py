@@ -85,10 +85,11 @@ TOOLS = [
         "(steigt/stagniert/faellt) + Treiber-/Bremse-Übungen.",
         {"period": {"type": "string", "description": "1m|3m|6m|12m, Default 3m"}}),
     _fn("get_strength_energy", "Zusammenhang Gesamtstärke ↔ Energiebilanz (TDEE/Defizit), wöchentlich "
-        "aligned. WICHTIG für die Deutung: corr_index_deficit ist die NIVEAU-Korrelation und "
-        "trendgetrieben/scheinbar; corr_change_deficit (entkoppelt, Woche-zu-Woche) ist der belastbare "
-        "Wert (~0 = kein Dauergesetz). 'phase'/'phase_label' + recent_* geben den Read der jüngsten "
-        "Wochen (cut=Defizit kostet Kraft / recomp / aufbau / stabil). 'caveat' beachten."),
+        "aligned. corr_index_deficit beschreibt den Zusammenhang der Niveaus; corr_change_deficit "
+        "den der Indexänderung gegenüber der vorherigen verfügbaren Woche mit der Energiebilanz. "
+        "Beide sind beschreibend, kein Kausalitätsnachweis. Keine feste Korrelation voraussetzen; "
+        "null bedeutet nicht berechenbar. recent_* und phase_label beschreiben die jüngsten Wochen. "
+        "Historische phase-Schlüssel wie recomp belegen keine Recomposition. 'caveat' beachten."),
 ]
 
 
