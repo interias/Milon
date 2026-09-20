@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type NutritionSummary, type ProteinPoint, type KcalPoint, type MacroSplit } from "@/lib/api";
 import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
+import { EnergyBalance } from "@/components/EnergyBalance";
 import { MultiTrend } from "@/components/charts";
 import { de, de0, dm, isToday } from "@/lib/format";
 
@@ -50,11 +51,10 @@ export default function Ernaehrung() {
 
   if (err) return (<><PageTitle title="Ernährung" /><ApiError error={err} /></>);
   if (!sum) return (<><PageTitle title="Ernährung" /><Loading /></>);
-  if (!sum.days) return (<><PageTitle title="Ernährung" /><Card><p className="text-sm text-muted">Noch keine Ernährungsdaten aus FDDB.</p></Card></>);
+  if (!sum.days) return (<><PageTitle title="Ernährung" /><Card><p className="text-sm text-muted">Noch keine Ernährungsdaten aus FDDB.</p></Card><EnergyBalance /></>);
 
   const target = sum.protein_target;
   const proteinHit = target != null && (sum.protein_avg7 ?? 0) >= target;
-  const deficit = sum.tdee != null && sum.kcal_avg7 != null ? sum.tdee - sum.kcal_avg7 : null;
 
   return (
     <>
@@ -68,10 +68,8 @@ export default function Ernaehrung() {
           deltaKind={proteinHit ? "good" : "bad"}
         />
         <Kpi
-          label="Kalorien Ø/Tag" sub={sum.tdee ? `TDEE ~${de0(sum.tdee)} kcal` : "7-Tage-Mittel"}
+          label="Kalorien Ø/Tag" sub="7-Tage-Mittel"
           value={de0(sum.kcal_avg7)} unit="kcal"
-          delta={deficit != null ? `${deficit >= 0 ? "−" : "+"}${de0(Math.abs(deficit))} kcal/Tag` : undefined}
-          deltaKind={deficit != null && deficit >= 0 ? "good" : "muted"}
         />
         <Kpi label={isToday(sum.last_day) ? "Protein heute" : "Protein zuletzt"} sub={sum.last_day ? `Stand ${dm(sum.last_day)}` : ""} value={de0(sum.protein_today)} unit="g" />
         <Kpi label="Ziel-Tage" sub="Protein ≥ Ziel · 7 T" value={sum.on_target_days_7 != null ? `${sum.on_target_days_7}/7` : "–"} />
@@ -97,17 +95,17 @@ export default function Ernaehrung() {
           />
         </Card>
         <Card>
-          <CardTitle title="Kalorien vs. TDEE · 60 Tage" sub={sum.tdee ? "unter der TDEE-Linie = Defizit" : "Tageswert · 7-Tage-Ø"} />
+          <CardTitle title="Kalorien · 60 Tage" sub="Tageswert · 7-Tage-Mittel" />
           <MultiTrend
             labels={kcal.map((p) => dm(p.date))} unit="kcal" height={190} format={(n) => de0(n)}
             series={[
               { values: kcal.map((p) => p.kcal), label: "Tag", color: MUT },
-              ...(sum.tdee ? [{ values: kcal.map(() => sum.tdee as number), label: "TDEE", color: GOLD }] : []),
               { values: kcal.map((p) => p.avg7), label: "7-Tage-Ø", color: ACC },
             ]}
           />
         </Card>
       </div>
+      <EnergyBalance />
     </>
   );
 }

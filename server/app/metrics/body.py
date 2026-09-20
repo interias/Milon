@@ -37,7 +37,7 @@ def _intake_daily() -> pd.Series:
 
 
 def weight_trend(days: int = 180) -> list[dict]:
-    """Tagesgewicht (roh), 7-Tage-EWMA und 7-Tage-Mittel. Tageswerte nie roh interpretieren."""
+    """Daily weight, EWMA (span 10) and mean of the last seven calendar days."""
     s = _weight_daily()
     if s.empty:
         return []
@@ -52,37 +52,40 @@ def weight_trend(days: int = 180) -> list[dict]:
             "date": d.date().isoformat(),
             "weight": None if pd.isna(s[d]) else round(float(s[d]), 2),
             "ewma": round(float(ewma[d]), 2),
-            "avg7": round(float(avg7[d]), 2),
+            "avg7": None if pd.isna(avg7[d]) else round(float(avg7[d]), 2),
         })
     return out
 
 
 def body_fat_trend(days: int = 180) -> list[dict]:
+    """Daily BIA estimates and seven-calendar-day mean, with missing days as null."""
     df = _read(
         "SELECT measured_at, body_fat_pct FROM body_measurements WHERE body_fat_pct IS NOT NULL",
         parse_dates=["measured_at"],
     )
     if df.empty:
         return []
-    s = df.groupby(df["measured_at"].dt.floor("D"))["body_fat_pct"].mean().sort_index()
-    avg7 = s.rolling(7, min_periods=1).mean()
+    s = df.groupby(df["measured_at"].dt.floor("D"))["body_fat_pct"].mean().sort_index().asfreq("D")
+    avg7 = s.rolling("7D", min_periods=1).mean()
     cutoff = s.index.max() - pd.Timedelta(days=days)
     return [
-        {"date": d.date().isoformat(), "pct": round(float(s[d]), 1), "avg7": round(float(avg7[d]), 1)}
+        {"date": d.date().isoformat(),
+         "pct": None if pd.isna(s[d]) else round(float(s[d]), 1),
+         "avg7": None if pd.isna(avg7[d]) else round(float(avg7[d]), 1)}
         for d in s.index if d >= cutoff
     ]
 
 
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
-    """Aktuelles TDEE = Mittel der täglichen rollenden TDEE-Schätzungen über die letzten
-    smooth_days Tage. Die EINZEL-Tagesschätzung schwankt stark (Wasser/Glykogen im
-    Gewichtsverlauf) — das 14-Tage-Mittel ist der stabile Wert. Defizit = TDEE − Ø-Intake
-    der letzten 7 Tage (aktuelles Essverhalten)."""
+    """Latest calendar-smoothed TDEE estimate and inferred energy deficit.
+    Intake averages the last smooth_days available estimates, each representing a
+    window_days intake window. Gaps can make this differ from the TDEE calendar window.
+    """
     trend = tdee_trend(window_days=window_days, days=400, smooth_days=smooth_days)
     if not trend:
         return {"tdee": None, "reason": "Gewicht oder Intake fehlt"}
     tdee = trend[-1]["tdee_avg"]
-    # Ø-Intake aus demselben Glättungsfenster -> TDEE = Ø-Intake + Defizit gilt sauber.
+    # Average intake across the last available daily estimates.
     recent = trend[-smooth_days:] if len(trend) >= smooth_days else trend
     avg_intake = round(sum(p["intake"] for p in recent) / len(recent))
     # Gewichtsänderung (7-Tage-Mittel) über das Glättungsfenster — nur Kontext.
@@ -94,6 +97,7 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
             wc = round(float(wavg.iloc[-1] - ref.iloc[-1]), 2)
     return {
         "tdee": tdee,
+        "from_date": trend[-1]["date"],
         "avg_intake": avg_intake,
         "deficit_per_day": tdee - avg_intake,
         "weight_change_kg": wc,
@@ -178,8 +182,8 @@ def _bodyfat_daily() -> pd.Series:
 
 
 def lean_mass_trend(days: int = 180) -> list[dict]:
-    """Recomp-Sicht: Magermasse (FFM) & Fettmasse aus geglättetem Gewicht × (1 − KFA%).
-    Beantwortet 'behalte ich im Defizit meine Muskeln?' (FFM stabil/↑ = ja)."""
+    """Fat-free mass and fat mass derived from smoothed weight and BIA estimates.
+    Fat-free mass includes water and other tissues; it does not measure muscle mass."""
     w = _weight_daily()
     bf = _bodyfat_daily()
     if w.empty or bf.empty:
@@ -262,14 +266,11 @@ def weight_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
 
 
 def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
-    """Körperkomposition-Prognose, verankert am VERLÄSSLICHEN Gewichtstrend. Die geschätzte
-    Gewichtsänderung wird über einen Magerverlust-Anteil p (Anteil der Abnahme, der FFM ist)
-    in Fett & FFM aufgeteilt; KFA/FFM/Fett folgen arithmetisch — `weight = fat + ffm` und
-    `BF = fat/weight` gelten per Konstruktion. KEIN eigener Trend-Fit aufs verrauschte
-    Bioimpedanz-KFA. Drei Szenarien:
-      p=0    Magermasse erhalten (optimistisch; alles Verlust = Fett)
-      p=0.15 erwartet (Literatur: High-Protein-Cut) — Headline
-      p=p_obs Waagentrend (pessimistisch; = aktueller BIA-Trend, überschätzt Muskelverlust).
+    """Composition scenarios anchored to extrapolated weight and BIA-derived mass.
+    The assumed fraction p allocates weight change to fat-free mass; the remainder
+    goes to fat. The 0.15 scenario is an assumption, not a personalized expectation.
+    The BIA-derived fraction is clipped to [0, 0.46], not an uncertainty bound.
+    These scenarios do not measure or predict muscle change independently.
     """
     wf = weight_forecast(horizon, fit_days)
     lm = lean_mass_trend(days=max(fit_days * 3, 120))
@@ -282,8 +283,7 @@ def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
         return {}
     BF0 = round(FAT0 / W0 * 100, 1)
 
-    # p_obs = beobachteter Magerverlust-Anteil aus der geglätteten FFM-Reihe — NUR für den
-    # pessimistischen Rand (explizit als BIA-limitiert gelabelt), nie als zentrale Schätzung.
+    # Observed fraction from smoothed BIA-derived fat-free mass, used only as a scenario.
     s = pd.Series([p["ffm"] for p in lm], index=pd.to_datetime([p["date"] for p in lm])).dropna()
     s = s[s.index > s.index.max() - pd.Timedelta(days=fit_days)]
     if len(s) >= 4 and sW:
@@ -307,21 +307,22 @@ def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
 
     return {
         "horizon_days": int(horizon),
+        "from_date": a["date"],
         "weight": {"current": wf["current"], "projected": wf["projected"], "per_month": wf["per_month"]},
         "anchor": {"weight": round(W0, 1), "bf_pct": BF0, "fat": round(FAT0, 1), "ffm": round(FFM0, 1)},
         "scenarios": [
-            scn(0.0, "preserved", "Magermasse erhalten"),
-            scn(0.15, "expected", "Erwartet"),
-            scn(p_hi, "trend", "Waagentrend", "Waage roh – überschätzt Muskelverlust"),
+            scn(0.0, "preserved", "Fettfreie Masse konstant"),
+            scn(0.15, "expected", "Annahme: 15 % fettfreie Masse"),
+            scn(p_hi, "trend", "BIA-Trendszenario", "Aus geglätteten BIA-Werten; Anteil auf 0–46 % begrenzt"),
         ],
         "p_obs": round(p_obs, 2),
-        "note": "Gewicht verlässlich; Fett-/Muskel-Anteil der Abnahme per Bioimpedanz nicht sicher messbar.",
+        "note": "Modellszenarien, keine gesicherte Prognose. Fettfreie Masse ist nicht Muskelmasse; BIA wird unter anderem durch den Wasserhaushalt beeinflusst.",
     }
 
 
 def bodyfat_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
-    """Körperfett-Prognose (für Coach/Snapshot/MCP) = 'Erwartet'-Szenario (p=0.15) aus
-    composition_forecast — am Gewichtstrend verankert statt eigenständiger BIA-Extrapolation."""
+    """Body-fat scenario for Coach/Snapshot/MCP, assuming p=0.15.
+    This is a weight-anchored assumption, not a personalized expected outcome."""
     cf = composition_forecast(horizon, fit_days)
     if not cf:
         return {}
@@ -335,6 +336,8 @@ def bodyfat_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
         "per_week": round((proj - cur) * 7.0 / horizon, 1),
         "per_month": round((proj - cur) * 30.0 / horizon, 1),
         "horizon_days": int(horizon),
+        "from_date": cf["from_date"],
+        "note": cf["note"],
         "scenarios": cf["scenarios"],
     }
 

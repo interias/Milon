@@ -50,7 +50,7 @@ export type StrengthSummary = {
 };
 export type Overview = { body: BodySummary; running: RunSummary; strength: StrengthSummary };
 
-export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number };
+export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null };
 export type WeeklyWeight = { week: string; weight: number };
 export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number };
 export type StepsPoint = { date: string; steps: number };
@@ -77,7 +77,7 @@ export type CyclingHealth = {
   total_km: number; rides: number; km_30d: number; avg_speed: number | null; last_day: string | null;
 };
 export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };
-export type BodyFatPoint = { date: string; pct: number; avg7: number };
+export type BodyFatPoint = { date: string; pct: number | null; avg7: number | null };
 export type MacroSplit = { protein: number; carb: number; fat: number };
 export type NutritionSummary = {
   days: number; last_day: string | null; kcal_today: number | null; protein_today: number | null;
@@ -105,6 +105,7 @@ export type CompScenario = {
   ffm_delta: number; fat_delta: number; note: string | null;
 };
 export type CompositionForecast = {
+  from_date?: string;
   horizon_days: number;
   weight: { current: number; projected: number; per_month: number };
   anchor: { weight: number; bf_pct: number; fat: number; ffm: number };
@@ -113,6 +114,7 @@ export type CompositionForecast = {
   note: string;
 };
 export type Tdee = {
+  from_date?: string;
   tdee: number | null; avg_intake?: number; weight_change_kg?: number;
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
 };

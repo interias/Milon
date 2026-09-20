@@ -35,11 +35,12 @@ function axis(values: number[]) {
   return { ...best, ticks: Array.from({ length: best.count }, (_, i) => best.low + i * best.step) };
 }
 
-export function RunTrendChart({ points, unit, label, observations = [] }: {
+export function RunTrendChart({ points, unit, label, observations = [], showPoints = true }: {
   points: TrendPoint[];
   unit: string;
   label: string;
   observations?: Observation[];
+  showPoints?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(280);
@@ -108,7 +109,7 @@ export function RunTrendChart({ points, unit, label, observations = [] }: {
         const previous = sorted[index - 1];
         return <g key={`point-${index}`}>
           {connected(previous, point) && <line x1={x(previous.date)} y1={y(previous.value!)} x2={x(point.date)} y2={y(point.value)} stroke="var(--color-accent)" strokeWidth="2" />}
-          <circle cx={x(point.date)} cy={y(point.value)} r="3" fill={point.status === "sensitive" ? "var(--color-surface)" : "var(--color-accent)"} stroke="var(--color-accent)" strokeWidth="1.5" />
+          {(showPoints || (!connected(previous, point) && !connected(point, sorted[index + 1]))) && <circle cx={x(point.date)} cy={y(point.value)} r="3" fill={point.status === "sensitive" ? "var(--color-surface)" : "var(--color-accent)"} stroke="var(--color-accent)" strokeWidth="1.5" />}
         </g>;
       })}
       {active && <circle cx={x(active.date)} cy={y(active.value!)} r="5" fill="var(--color-surface)" stroke="var(--color-accent)" strokeWidth="2" />}

@@ -1,5 +1,20 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Körper: klare Hauptansichten (2026-09-20)
+
+Gewicht und BIA-Körperfett zeigen jeweils eine 7-Kalendertage-Linie mit optionalen
+Rohwerten, Messdatum und neutraler Einordnung. Lange Messlücken erhalten null-Werte
+statt ungültigem JSON oder einem aus alten Messungen fortgesetzten 7-Tage-Mittel.
+Wochenwerte, abgeleitete Massen und Fortschreibungen laden erst im Detaildialog.
+Fettfreie Masse wird nicht als Muskelmasse bezeichnet; Kompositionsszenarien sind
+gleichrangige Rechenannahmen, keine Wahrscheinlichkeits- oder Unsicherheitsintervalle.
+Das feste 15%-Szenario behält seinen API-Schlüssel `expected`, trägt aber einen
+ausdrücklichen Annahme-Text. Modellrechnungen bleiben unverändert; offene methodische
+Fragen und Evidenz stehen in `docs/research/body-composition-evidence.md`.
+`EnergyBalance` zeigt auf Körper nur eine Zusammenfassung, unter Ernährung dagegen
+die vollständige Bilanz und den TDEE-Verlauf. Die rückwirkende konstante TDEE-Linie
+im Kalorienchart entfällt. TDEE und Kompositionsszenarien liefern ihren Ausgangstag.
+
 ## Übersicht: Entwicklung und Aktivität (2026-09-20)
 
 Drei Entwicklungskarten zeigen das neutrale 7-Tage-Gewichtsmittel, standardisierten
