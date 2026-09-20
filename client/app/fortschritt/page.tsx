@@ -5,6 +5,7 @@ import { api, mediaUrl, type ProgressEntry } from "@/lib/api";
 import { Card, PageTitle, Loading, ApiError } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { EntryEditor } from "@/components/EntryEditor";
+import { ProgressComparison } from "@/components/ProgressComparison";
 
 const VIEWS = [
   ["front", "Vorne"],
@@ -103,6 +104,7 @@ export default function Fortschritt() {
       )}
 
       {actionErr && <p role="alert" className="mb-4 rounded border border-bad/30 bg-bad/5 p-3 text-sm text-bad">{actionErr}</p>}
+      {!editor && entries.length > 0 && <ProgressComparison entries={entries} />}
       <div className="space-y-4">
         {sorted.length === 0 ? (
           !editor && (

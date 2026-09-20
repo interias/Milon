@@ -1,5 +1,15 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Fortschritt: direkter Fotovergleich (2026-09-20)
+
+Über der Timeline steht ein Vergleich mit frühestem/neuestem Frontfoto als Standard.
+Vorne/Seite/Hinten filtern strikt auf dieselbe Perspektive; beide Daten sind frei
+wählbar. Posen werden nur manuell ausgewählt, da Slotnummern keine gleiche Haltung
+garantieren. Zwei gleich große Bilder, optionaler Schieberegler und Dialogansicht
+verwenden dieselbe Ausrichtung. Pro Bild sind Zoom und Verschiebung (Ziehen oder
+Tastatur-Regler) möglich. Zurücksetzen sowie ein neues Bildpaar verwerfen diese
+rein lokale Ausrichtung; Originaldateien und Datenbank bleiben unverändert.
+
 ## Fortschritt: kompakte Fototimeline (2026-09-20)
 
 Die Timeline zeigt neueste Einträge zuerst, kurze Notizen und nur vorhandene Fotos.
