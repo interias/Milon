@@ -56,7 +56,9 @@ def snapshot_text() -> str:
         f"KÖRPER: Gewicht {b.get('weight_kg')} kg (7-Tage-Mittel {b.get('weight_avg7')}, "
         f"Δ7T {b.get('weight_delta7')} kg), KFA-Trend {b.get('body_fat_pct')} %. "
         f"Adaptives TDEE ~{t.get('tdee')} kcal (Ø-Intake {t.get('avg_intake')}, "
-        f"Defizit ~{t.get('deficit_per_day')} kcal/Tag über {t.get('window_days')} Tage).",
+        f"Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}, "
+        f"{t.get('estimate_days')} Schätztage in {t.get('smooth_days')} Kalendertagen"
+        + (", vorläufig" if t.get("provisional") else "") + ").",
         "",
         f"LAUFEN: letzte Woche {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
@@ -77,9 +79,9 @@ def snapshot_text() -> str:
            if rp and rp.get("last") is not None else "")(snap.get("ruhepuls") or {}),
         "",
         "PROGNOSE (30 T, linearer Trend): "
-        + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp else "Gewicht –")
+        + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp.get("projected") is not None else f"Gewicht: {gp.get('reason', 'nicht verfügbar')}")
         + "; "
-        + (f"KFA {fp['current']}→{fp['projected']} % ({fp['per_month']:+} %/Monat)" if fp else "KFA –")
+        + (f"KFA-Szenario (15%-Annahme) {fp['current']}→{fp['projected']} % ({fp['per_month']:+} %/Monat)" if fp.get("projected") is not None else f"KFA: {fp.get('reason', 'nicht verfügbar')}")
         + ".",
     ]
     return "\n".join(lines)

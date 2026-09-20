@@ -77,6 +77,9 @@ def compare(weight: pd.Series, intake: pd.Series) -> dict:
     baseline["available_intake"] = baseline.intake.rolling(14, min_periods=1).mean().round()
     baseline["aligned_deficit"] = baseline.tdee_avg - baseline.calendar_intake
     baseline["legacy_deficit"] = baseline.tdee_avg - baseline.available_intake
+    # Preserve the pre-alignment headline for reproducibility after production fixes.
+    baseline_current["avg_intake"] = int(baseline.available_intake.iloc[-1])
+    baseline_current["deficit_per_day"] = int(baseline.legacy_deficit.iloc[-1])
     baseline["smooth_estimate_days"] = baseline.tdee.rolling("14D").count()
     baseline["intake_recorded_days"] = intake.reindex(weight.index).rolling(14).count()
     recent = baseline.loc[baseline.index >= start]

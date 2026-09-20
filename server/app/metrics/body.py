@@ -77,16 +77,13 @@ def body_fat_trend(days: int = 180) -> list[dict]:
 
 
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
-    """Latest calendar-smoothed TDEE estimate and inferred energy deficit.
-    Intake averages the last smooth_days available estimates, each representing a
-    window_days intake window. Gaps can make this differ from the TDEE calendar window.
-    """
+    """TDEE and intake averaged over identical calendar-dated estimates."""
     trend = tdee_trend(window_days=window_days, days=400, smooth_days=smooth_days)
     if not trend:
         return {"tdee": None, "reason": "Gewicht oder Intake fehlt"}
     tdee = trend[-1]["tdee_avg"]
-    # Average intake across the last available daily estimates.
-    recent = trend[-smooth_days:] if len(trend) >= smooth_days else trend
+    cutoff = pd.Timestamp(trend[-1]["date"]) - pd.Timedelta(days=smooth_days)
+    recent = [p for p in trend if pd.Timestamp(p["date"]) > cutoff]
     avg_intake = round(sum(p["intake"] for p in recent) / len(recent))
     # Gewichtsänderung (7-Tage-Mittel) über das Glättungsfenster — nur Kontext.
     wavg = _weight_daily().rolling(7, min_periods=3).mean().dropna()
@@ -104,6 +101,9 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
         "window_days": int(window_days),
         "smooth_days": int(smooth_days),
         "intake_days": int(len(recent)),
+        "estimate_days": len(recent),
+        # Coverage marker, not a physiological validity threshold.
+        "provisional": len(recent) < max(1, (smooth_days + 1) // 2),
     }
 
 
@@ -139,8 +139,12 @@ def tdee_trend(window_days: int = 14, days: int = 180, smooth_days: int = 14,
     # Tagesschätzung glätten: rollendes smooth_days-Mittel (Kalender) -> stabile Linie/Aktuell-Wert
     ser = pd.Series([o["tdee"] for o in out], index=pd.to_datetime([o["date"] for o in out]))
     avg = ser.rolling(f"{smooth_days}D").mean()
-    for o, a in zip(out, avg.to_numpy()):
+    intake_avg = pd.Series([o["intake"] for o in out], index=ser.index).rolling(f"{smooth_days}D").mean()
+    counts = ser.rolling(f"{smooth_days}D").count()
+    for o, a, i, count in zip(out, avg.to_numpy(), intake_avg.to_numpy(), counts.to_numpy()):
         o["tdee_avg"] = round(float(a))
+        o["intake_avg"] = round(float(i))
+        o["estimate_days"] = int(count)
     cutoff = pd.Timestamp(out[-1]["date"]) - pd.Timedelta(days=days)
     return [r for r in out if pd.Timestamp(r["date"]) >= cutoff]
 
@@ -181,40 +185,49 @@ def _bodyfat_daily() -> pd.Series:
     return s.asfreq("D")
 
 
+def _paired_mass() -> pd.DataFrame:
+    """Composition on observed paired days, with identical trailing windows."""
+    pairs = pd.concat({"weight": _weight_daily(), "bf": _bodyfat_daily()}, axis=1).dropna()
+    if pairs.empty:
+        return pd.DataFrame(columns=["weight", "bf", "ffm", "fat", "paired_days"])
+    means = pairs.rolling("7D", min_periods=3).mean()
+    means["ffm"] = means.weight * (1 - means.bf / 100)
+    means["fat"] = means.weight - means.ffm
+    means["paired_days"] = pairs.weight.rolling("7D").count()
+    return means
+
+
 def lean_mass_trend(days: int = 180) -> list[dict]:
     """Fat-free mass and fat mass derived from smoothed weight and BIA estimates.
     Fat-free mass includes water and other tissues; it does not measure muscle mass."""
-    w = _weight_daily()
-    bf = _bodyfat_daily()
-    if w.empty or bf.empty:
+    mass = _paired_mass()
+    if mass.empty:
         return []
-    w = w.interpolate().ewm(span=10).mean()
-    bf = bf.interpolate().rolling(7, min_periods=1).mean()
-    idx = w.index.intersection(bf.index)
-    if len(idx) < 2:
-        return []
-    w, bf = w.loc[idx], bf.loc[idx]
-    ffm = w * (1 - bf / 100.0)
-    fat = w - ffm
-    cutoff = idx.max() - pd.Timedelta(days=days)
+    mass = mass.asfreq("D")
+    cutoff = mass.index.max() - pd.Timedelta(days=days)
     return [
-        {"date": d.date().isoformat(), "weight": round(float(w[d]), 2),
-         "ffm": round(float(ffm[d]), 2), "fat": round(float(fat[d]), 2)}
-        for d in idx if d >= cutoff
+        {"date": d.date().isoformat(),
+         **{key: None if pd.isna(row[key]) else round(float(row[key]), 2)
+            for key in ("weight", "ffm", "fat")},
+         "paired_days": int(row.paired_days) if pd.notna(row.paired_days) else 0}
+        for d, row in mass.iterrows() if d >= cutoff
     ]
 
 
 def lean_mass_summary(days: int = 90) -> dict:
     """Aktuelle FFM/Fettmasse + Veränderung über das Fenster (erste → letzte)."""
-    t = lean_mass_trend(days=days)
-    if len(t) < 2:
-        return {"ffm": None, "fat": None, "weight": None, "ffm_delta": None, "fat_delta": None, "days": 0}
+    rows = lean_mass_trend(days=days)
+    t = [p for p in rows if p["ffm"] is not None]
+    if not t:
+        return {"ffm": None, "fat": None, "weight": None, "ffm_delta": None, "fat_delta": None, "days": 0, "measurement_days": 0}
     a, b = t[0], t[-1]
     return {
         "ffm": b["ffm"], "fat": b["fat"], "weight": b["weight"],
         "ffm_delta": round(b["ffm"] - a["ffm"], 2),
         "fat_delta": round(b["fat"] - a["fat"], 2),
-        "days": len(t),
+        "days": (pd.Timestamp(b["date"]) - pd.Timestamp(a["date"])).days + 1,
+        "from_date": a["date"], "to_date": b["date"],
+        "measurement_days": sum(p["paired_days"] > 0 for p in rows if a["date"] <= p["date"] <= b["date"]),
     }
 
 
@@ -258,11 +271,26 @@ def _forecast(s: pd.Series, horizon: int, fit_days: int, ndigits: int) -> dict:
 
 
 def weight_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
-    """30-Tage-Gewichtsprognose auf Basis des EWMA-Trends (Wasser-Rauschen geglättet)."""
-    s = _weight_daily()
-    if s.empty:
-        return {}
-    return _forecast(s.interpolate().ewm(span=10).mean(), horizon, fit_days, 2)
+    """Observed-day EWMA projection, restarted after >7 missing calendar days."""
+    return _guarded_forecast(_weight_daily(), horizon, fit_days)
+
+
+def _guarded_forecast(s: pd.Series, horizon: int, fit_days: int) -> dict:
+    observed = s.dropna()
+    metadata = {"available": False, "observed_days": 0, "span_days": 0,
+                "min_observed_days": 14, "min_span_days": 21, "fit_days": min(fit_days, 30)}
+    if observed.empty:
+        return {**metadata, "reason": "Keine Gewichtsmessungen verfügbar."}
+    groups = observed.index.to_series().diff().dt.days.gt(8).cumsum()
+    segment = observed.loc[groups == groups.iloc[-1]]
+    end = segment.index[-1]
+    window = segment[segment.index > end - pd.Timedelta(days=metadata["fit_days"])]
+    span = (window.index[-1] - window.index[0]).days if len(window) else 0
+    metadata.update(from_date=end.date().isoformat(), observed_days=len(window), span_days=span)
+    if len(window) < 14 or span < 21:
+        return {**metadata, "reason": "Fortschreibung pausiert: mindestens 14 Messtage über 21 verstrichene Tage im letzten 30-Tage-Fenster erforderlich; Neustart nach mehr als 7 fehlenden Tagen."}
+    return {**metadata, **_forecast(segment.ewm(span=10).mean(), horizon, metadata["fit_days"], 2),
+            "available": True}
 
 
 def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
@@ -272,20 +300,35 @@ def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
     The BIA-derived fraction is clipped to [0, 0.46], not an uncertainty bound.
     These scenarios do not measure or predict muscle change independently.
     """
+    # Both scenarios and standalone weight projection share weight and anchor date.
+    mass = _paired_mass()
+    if mass.empty:
+        return {"available": False, "reason": "Keine gemeinsamen Gewicht- und Körperfettmessungen verfügbar."}
+    weight = _weight_daily()
+    if mass.index[-1] != weight.last_valid_index() or pd.isna(mass.ffm.iloc[-1]):
+        return {"available": False, "reason": "Szenarien pausiert: keine ausreichend belegte Körperzusammensetzung am letzten Gewichtsdatum."}
+    paired_weight = weight.reindex(mass.index)
+    coverage = _guarded_forecast(paired_weight, horizon, fit_days)
     wf = weight_forecast(horizon, fit_days)
-    lm = lean_mass_trend(days=max(fit_days * 3, 120))
-    if not wf or len(lm) < 4 or wf.get("slope_per_day") is None:
-        return {}
+    if not coverage.get("available") or not wf.get("available"):
+        unavailable = coverage if not coverage.get("available") else wf
+        return {**unavailable, "reason": "Szenarien pausiert: gemeinsame Messbasis reicht noch nicht für die Gewichtsfortschreibung."}
+    end = pd.Timestamp(wf["from_date"])
+    groups = paired_weight.index.to_series().diff().dt.days.gt(8).cumsum()
+    segment_dates = paired_weight.loc[groups == groups.iloc[-1]].index
+    lm = mass.loc[mass.index.intersection(segment_dates)].dropna()
     sW = wf["slope_per_day"]
-    a = lm[-1]
-    W0, FFM0, FAT0 = float(a["weight"]), float(a["ffm"]), float(a["fat"])
+    a = lm.iloc[-1]
+    # Anchor mass partitions to the same EWMA weight used by this forecast.
+    W0 = float(wf["current"])
+    FAT0 = W0 * float(a["bf"]) / 100
+    FFM0 = W0 - FAT0
     if W0 <= 0:
         return {}
     BF0 = round(FAT0 / W0 * 100, 1)
 
     # Observed fraction from smoothed BIA-derived fat-free mass, used only as a scenario.
-    s = pd.Series([p["ffm"] for p in lm], index=pd.to_datetime([p["date"] for p in lm])).dropna()
-    s = s[s.index > s.index.max() - pd.Timedelta(days=fit_days)]
+    s = lm.ffm[lm.index > end - pd.Timedelta(days=wf["fit_days"])]
     if len(s) >= 4 and sW:
         sFFM = float(np.polyfit((s.index - s.index.min()).days.to_numpy(float), s.to_numpy(float), 1)[0])
         p_obs = sFFM / sW
@@ -307,7 +350,8 @@ def composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
 
     return {
         "horizon_days": int(horizon),
-        "from_date": a["date"],
+        "available": True,
+        "from_date": wf["from_date"],
         "weight": {"current": wf["current"], "projected": wf["projected"], "per_month": wf["per_month"]},
         "anchor": {"weight": round(W0, 1), "bf_pct": BF0, "fat": round(FAT0, 1), "ffm": round(FFM0, 1)},
         "scenarios": [
@@ -324,14 +368,15 @@ def bodyfat_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
     """Body-fat scenario for Coach/Snapshot/MCP, assuming p=0.15.
     This is a weight-anchored assumption, not a personalized expected outcome."""
     cf = composition_forecast(horizon, fit_days)
-    if not cf:
-        return {}
+    if not cf.get("available"):
+        return cf
     cur = cf["anchor"]["bf_pct"]
     exp = next((s for s in cf["scenarios"] if s["key"] == "expected"), None)
     if cur is None or exp is None or exp["bf_pct"] is None:
         return {}
     proj = exp["bf_pct"]
     return {
+        "available": True,
         "current": cur, "projected": proj,
         "per_week": round((proj - cur) * 7.0 / horizon, 1),
         "per_month": round((proj - cur) * 30.0 / horizon, 1),

@@ -1,5 +1,24 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Körpermodelle: Messabdeckung und gemeinsame Zeitfenster (2026-09-20)
+
+Nach Vergleich der Varianten (Q19–21) mittelt `adaptive_tdee` die zugehörige Zufuhr
+über dieselben Kalendertage wie TDEE; `tdee_trend.intake_avg` verwendet dieselbe
+Glättung. `estimate_days` zählt Schätztage im Fenster, `provisional` markiert weniger
+als die Hälfte der möglichen Tage (standardmäßig <7/14), keine Validitätsgarantie.
+Fett-/fettfreie Masse nutzt ausschließlich gemeinsame Gewicht-/BIA-Messtage,
+identische 7-Kalendertage-Fenster und mindestens drei Paare; fehlende Tage bleiben
+null. Zusammenfassungen nennen reale Anfangs-/Enddaten und Messanzahl.
+Gewichtsfortschreibung: EWMA nur beobachteter Tage, Neustart nach >7 fehlenden Tagen,
+mindestens 14 Messtage und 21 verstrichene Tage im letzten maximal 30-Tage-Fenster.
+Ohne Abdeckung liefert die API `available:false` mit Grund, keine Projektion.
+Zusammensetzungsszenarien benötigen zusätzlich ausreichend gepaarte Messungen am
+gleichen Ausgangstag. Ihr Ausgangsgewicht und Gewichtsziel entsprechen exakt der
+Gewichtsfortschreibung; der BIA-Anteil teilt dieses Ausgangsgewicht auf.
+Coach und UI respektieren die Pausen. Die Regeln sind Produktentscheidungen aus
+dem Vergleich, kein belegter Genauigkeitsgewinn. Vergleichsprotokoll:
+`docs/research/body-model-comparison.md`; persönliche Ergebnisse bleiben in `data/`.
+
 ## Körper: klare Hauptansichten (2026-09-20)
 
 Gewicht und BIA-Körperfett zeigen jeweils eine 7-Kalendertage-Linie mit optionalen

@@ -1,6 +1,9 @@
 # Body model comparison protocol
 
-Status: offline comparison only; no production model changes. Date: 2026-09-20.
+Initial comparison: 2026-09-20, before production changes (commit d07e15e).
+Q19–21 subsequently approved calendar alignment, paired composition windows and
+coverage-gated forecasts. Implemented rules are recorded in ARCHITECTURE.md.
+Scripts retain the pre-fix baseline formulas to reproduce the comparison.
 
 Run from `server/`:
 
@@ -55,7 +58,7 @@ Sensitivity analysis varies recorded intake days per 14-day estimation window
 that the entire day's intake was logged. Counts of overlapping estimates indicate
 coverage, not independent sample size or physiological certainty.
 
-Pending decisions: consistent calendar smoothing and visible coverage; gap-safe
+Approved decisions: consistent calendar smoothing and visible coverage; gap-safe
 derived mass; optional forecasts gated on coverage and anchored to a common date.
 No change to the 7700 kcal/kg assumption or composition partition coefficients is
 validated by this comparison. Source evidence and limitations remain in

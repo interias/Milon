@@ -43,20 +43,19 @@ def test_weekly_weight_omits_empty_weeks_and_serializes(monkeypatch):
 
 
 def test_composition_scenario_exposes_anchor_and_assumption(monkeypatch):
-    monkeypatch.setattr(body, "weight_forecast", lambda *args: {
-        "slope_per_day": -0.02, "current": 80.0, "projected": 79.4, "per_month": -0.6,
-    })
-    monkeypatch.setattr(body, "lean_mass_trend", lambda **kwargs: [
-        {"date": f"2026-01-{day:02d}", "weight": 80.0, "ffm": 60.0, "fat": 20.0}
-        for day in range(1, 5)
-    ])
+    dates = pd.date_range("2026-01-01", periods=30)
+    monkeypatch.setattr(body, "_weight_daily", lambda: pd.Series([80 - i * 0.02 for i in range(30)], index=dates))
+    monkeypatch.setattr(body, "_bodyfat_daily", lambda: pd.Series(25.0, index=dates))
 
     result = body.composition_forecast()
-    assert result["from_date"] == "2026-01-04"
+    assert result["from_date"] == "2026-01-30"
     assert [item["key"] for item in result["scenarios"]] == ["preserved", "expected", "trend"]
     assert result["scenarios"][1]["p"] == 0.15
     assert "Annahme" in result["scenarios"][1]["label"]
-    assert body.bodyfat_forecast()["from_date"] == "2026-01-04"
+    assert body.bodyfat_forecast()["from_date"] == "2026-01-30"
+    assert body.bodyfat_forecast()["available"]
+    assert result["weight"] == {k: body.weight_forecast()[k] for k in ("current", "projected", "per_month")}
+    assert all(abs(s["weight"] - result["weight"]["projected"]) <= 0.06 for s in result["scenarios"])
 
 
 def test_adaptive_tdee_exposes_latest_estimate_date(monkeypatch):

@@ -6,7 +6,6 @@ Candidate thresholds are engineering choices for comparison, not validated cutof
 from pathlib import Path
 import json
 import sys
-from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -64,10 +63,14 @@ def comparison():
     daily = frame.groupby(frame.measured_at.dt.floor("D"))[["weight_kg", "body_fat_pct"]].mean().sort_index()
     weight = daily.weight_kg.dropna().asfreq("D")
     bf = daily.body_fat_pct.dropna().asfreq("D")
-    with patch.object(body, "_weight_daily", return_value=weight), patch.object(body, "_bodyfat_daily", return_value=bf):
-        current = body.weight_forecast()
-        old_mass = pd.DataFrame(body.lean_mass_trend(180)).set_index("date")
-        old_composition = body.composition_forecast()
+    # Explicit pre-fix formulas: keep the comparison reproducible after rollout.
+    current = body._forecast(weight.interpolate().ewm(span=10).mean(), 30, 30, 2)
+    old_weight = weight.interpolate().ewm(span=10).mean()
+    old_bf = bf.interpolate().rolling(7, min_periods=1).mean()
+    old_mass = pd.concat({"weight": old_weight, "bf": old_bf}, axis=1).dropna()
+    old_mass["ffm"] = old_mass.weight * (1 - old_mass.bf / 100)
+    old_mass["fat"] = old_mass.weight - old_mass.ffm
+    old_mass = old_mass.loc[old_mass.index >= old_mass.index[-1] - pd.Timedelta(days=180)].round(2)
     new_mass = composition_observed(weight, bf)
     last = weight.index[-1]
     cutoff = last - pd.Timedelta(days=180)
@@ -114,8 +117,8 @@ def comparison():
                    "sensitivity": [{"max_gap_days": gap, "minimum_days": count, "minimum_span": span,
                                     **candidate(weight, gap, count, span)} for gap in (3, 7, 14)
                                    for count in (10, 14) for span in (14, 21)]},
-        "composition": {"baseline_anchor": old_composition.get("anchor"),
-                        "baseline_date": old_composition.get("from_date"),
+        "composition": {"baseline_anchor": old_mass.iloc[-1].to_dict(),
+                        "baseline_date": str(old_mass.index[-1].date()),
                         "candidate_date": str(new_mass.index[-1].date()),
                         "candidate_anchor": new_mass.iloc[-1].to_dict(),
                         "baseline_points_180d": len(old_mass), "candidate_points_180d": len(recent_mass),

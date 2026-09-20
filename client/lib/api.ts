@@ -52,7 +52,7 @@ export type Overview = { body: BodySummary; running: RunSummary; strength: Stren
 
 export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null };
 export type WeeklyWeight = { week: string; weight: number };
-export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number };
+export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number; intake_avg: number; estimate_days: number };
 export type StepsPoint = { date: string; steps: number };
 export type StepsSummary = { last: number | null; last_day: string | null; avg7: number | null; series: StepsPoint[] };
 export type Activity = { kind: "run" | "workout"; date: string; title: string; detail: string };
@@ -87,14 +87,17 @@ export type NutritionSummary = {
 };
 export type ProteinPoint = { date: string; protein: number; avg7: number };
 export type KcalPoint = { date: string; kcal: number; avg7: number };
-export type LeanMassPoint = { date: string; weight: number; ffm: number; fat: number };
+export type LeanMassPoint = { date: string; weight: number | null; ffm: number | null; fat: number | null; paired_days: number };
 export type LeanMassSummary = {
   ffm: number | null; fat: number | null; weight: number | null;
   ffm_delta: number | null; fat_delta: number | null; days: number;
+  from_date?: string; to_date?: string; measurement_days: number;
 };
 export type LeanMass = { summary: LeanMassSummary; trend: LeanMassPoint[] };
 export type ForecastPoint = { date: string; value: number };
 export type Forecast = {
+  available: boolean; reason?: string; observed_days?: number; span_days?: number;
+  min_observed_days?: number; min_span_days?: number;
   current?: number; projected?: number; slope_per_day?: number; per_week?: number;
   per_month?: number; horizon_days?: number; fit_days?: number; from_date?: string;
   history?: ForecastPoint[]; points?: ForecastPoint[];
@@ -105,16 +108,18 @@ export type CompScenario = {
   ffm_delta: number; fat_delta: number; note: string | null;
 };
 export type CompositionForecast = {
+  available: boolean; reason?: string;
   from_date?: string;
-  horizon_days: number;
-  weight: { current: number; projected: number; per_month: number };
-  anchor: { weight: number; bf_pct: number; fat: number; ffm: number };
-  scenarios: CompScenario[];
-  p_obs: number;
-  note: string;
+  horizon_days?: number;
+  weight?: { current: number; projected: number; per_month: number };
+  anchor?: { weight: number; bf_pct: number; fat: number; ffm: number };
+  scenarios?: CompScenario[];
+  p_obs?: number;
+  note?: string;
 };
 export type Tdee = {
   from_date?: string;
+  estimate_days?: number; smooth_days?: number; provisional?: boolean;
   tdee: number | null; avg_intake?: number; weight_change_kg?: number;
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
 };
