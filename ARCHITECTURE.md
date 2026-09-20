@@ -1,5 +1,14 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Fortschritt: kompakte Fototimeline (2026-09-20)
+
+Die Timeline zeigt neueste Einträge zuerst, kurze Notizen und nur vorhandene Fotos.
+Alle fünf Fotoplätze bleiben im Editor verfügbar. Bearbeiten und Löschen liegen
+im Eintragsmenü; Löschen verlangt eine Bestätigung und entfernt den Eintrag erst
+nach erfolgreicher Serverantwort. Fehler bleiben sichtbar. Fotos öffnen im Dialog
+mit Datum, Perspektive, vollständiger Notiz und Navigation innerhalb des Eintrags
+(Buttons oder Pfeiltasten). Escape schließt die Ansicht.
+
 ## Coach: Frage und Antwort im Mittelpunkt (2026-09-20)
 
 Die Frage steht oben, Tages- und Wochenreports sind kleinere Zusatzaktionen.
