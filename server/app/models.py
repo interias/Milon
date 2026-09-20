@@ -93,6 +93,48 @@ class RunBestEffort(SQLModel, table=True):
     source: str = "health_connect"
 
 
+class RunMinute(SQLModel, table=True):
+    """Source-attributed minute windows for the experimental running-HR model."""
+    __tablename__ = "run_minutes"
+    __table_args__ = (UniqueConstraint("external_id", "minute", name="uq_run_minute"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    external_id: str = Field(index=True)
+    minute: float
+    speed_m_min: Optional[float] = None
+    hr_bpm: Optional[float] = None
+    coverage: float
+    steady: bool
+    source: str = "health_connect"
+    model_version: str = "shr-v1"
+
+
+class RunAnnotation(SQLModel, table=True):
+    """Keep user annotations independent of source reconciliation and numeric DB IDs."""
+    __tablename__ = "run_annotations"
+
+    external_id: str = Field(primary_key=True)
+    category: str = "auto"
+    exclude: bool = False
+
+
+class RunAnalysisCache(SQLModel, table=True):
+    __tablename__ = "run_analysis_cache"
+
+    key: str = Field(primary_key=True)
+    fingerprint: str
+    payload: str
+
+
+class RunFitnessReference(SQLModel, table=True):
+    """Append-only reference revisions; each revision applies to the entire trend."""
+    __tablename__ = "run_fitness_references"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime
+    payload: str
+
+
 class Vo2Max(SQLModel, table=True):
     __tablename__ = "vo2max"
 

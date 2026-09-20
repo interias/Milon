@@ -8,6 +8,9 @@ import {
 import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
 import { AreaTrend, Bars, MultiTrend } from "@/components/charts";
 import { AchievementsSummary, AchievementsGrid } from "@/components/Achievements";
+import { StandardizedRunHr } from "@/components/StandardizedRunHr";
+import { RunAnalysisSettings } from "@/components/RunAnalysisSettings";
+import { RunningFitness } from "@/components/RunningFitness";
 import { de, de0, pace, dm, dur } from "@/lib/format";
 
 // Puls-Zonen-Farben: kühl (locker Z1) → warm (hart Z4/Z5), Zuordnung folgt der ZONE-Nummer
@@ -158,6 +161,10 @@ export default function Laufen() {
         </>
       )}
 
+      <RunningFitness />
+      <StandardizedRunHr />
+      <RunAnalysisSettings />
+
       {hasHr && (
         <>
           <div className="mt-6 mb-3">
@@ -291,7 +298,7 @@ export default function Laufen() {
         </Card>
 
         <Card>
-          <CardTitle title="VO₂max-Trend" />
+          <CardTitle title="Samsung VO₂max-Trend" sub="Schätzung der Uhr · unabhängig vom eigenen VO₂-Äquivalent" />
           <AreaTrend values={vo2.map((p) => p.vo2)} labels={vo2.map((p) => dm(p.date))} height={170} smooth />
         </Card>
       </div>

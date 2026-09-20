@@ -10,9 +10,28 @@ from mcp.server.fastmcp import FastMCP
 
 from ..coach import snapshot
 from ..db import init_db
-from ..metrics import achievements, activity, body, health, running, strength
+from ..metrics import achievements, activity, body, health, run_analysis, run_fitness_service, running, strength
 
 mcp = FastMCP("Milon")
+
+
+@mcp.tool()
+def get_personal_run_vo2() -> dict:
+    """Eigener VO2-Aequivalent-Trend, keine VO2max-Messung. Kalibrierung und
+    Datenalter nennen; Ruhepuls kann Annahme sein, Belastungsreferenz ist keine
+    gemessene HFmax. Ueberlappende 8-Wochen-Fenster sind nicht unabhaengig.
+    """
+    return run_fitness_service.fitness()
+
+
+@mcp.tool()
+def get_standardized_run_hr() -> dict:
+    """Experimentelle Lauf-HF bei Minute 30, belegte Pace-Stufen in 30 Sekunden/km.
+    Rollierende 8-Wochen-Werte, Lauf-Bootstrap-Intervalle, Lücken und Gründe. Nur hr/ci sind freigegeben;
+    exploratory_hr ist diagnostisch. Datenalter/Vergleichsmonate nennen. Kein kausaler
+    Fitnessnachweis, Temperatur/Terrain unkontrolliert, keine VO₂max-Messung.
+    """
+    return run_fitness_service.standardized_hr()
 
 
 @mcp.tool()

@@ -192,6 +192,35 @@ Aufruf danach: **`http://localhost`** (Port 80). Im Heim-WLAN erreicht das Handy
 > als Build-Arg `API_PROXY_TARGET=http://server:8000` durch. Wer den Server unter anderem Namen/Port
 > fährt, baut den Client neu (`docker compose up -d --build client`).
 
+### Update: laufende Container auf den neuesten Code bringen
+
+Nach Code-Änderungen (z. B. `git pull`) genügt **ein** Befehl im Repo-Root:
+
+```bash
+docker compose up -d --build      # Images neu bauen + nur geänderte Container ersetzen
+```
+
+Das baut beide Images aus dem aktuellen Code und tauscht danach **nur die Container aus, deren
+Image sich geändert hat** — ein `docker compose down` vorher ist unnötig (kostet nur Downtime).
+Danach kurz prüfen:
+
+```bash
+docker compose ps                        # beide "Up", server "(healthy)"?
+docker compose logs -f --tail 50         # frische Logs ansehen (Strg+C beendet nur die Anzeige)
+```
+
+Gut zu wissen:
+
+- **Daten & Secrets überleben jedes Update** — `data/` (DB, Fotos, incoming) und `server/.env`
+  liegen als Volumes auf dem Host, nicht im Image.
+- **Frontend-Änderungen brauchen immer den Rebuild** (`--build`): Next.js backt zur Build-Zeit
+  alles ein. Ein bloßer Neustart des Containers zeigt weiterhin den alten Stand.
+- Nach dem Update im Browser ggf. **hart neu laden** (Strg+F5), falls noch der alte Build im
+  Cache hängt.
+- Nur einen Dienst aktualisieren: `docker compose up -d --build server` bzw. `... client`.
+- Bei verdächtigem Build-Cache: `docker compose build --no-cache && docker compose up -d`.
+- Alte, ersetzte Image-Schichten gelegentlich aufräumen: `docker image prune -f`.
+
 ## Beispiel-Workflows
 
 - **Frag deine Daten:** Reiter *Coach* → „Wie ist mein Kraft-Trend diese Woche?" — der Coach ruft

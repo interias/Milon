@@ -1,9 +1,12 @@
 """Metrik-Endpunkte für das Dashboard. Dünne Wrapper über die reine metrics/-Schicht."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Literal
 
-from ..metrics import achievements, activity, body, health, nutrition, running, strength
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, model_validator
+
+from ..metrics import achievements, activity, body, health, nutrition, run_analysis, run_fitness_service, running, strength
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -141,6 +144,62 @@ def health_resting_hr(days: int = 365) -> dict:
 
 
 # --- Laufen ---
+@router.get("/running/standardized-hr")
+def running_standardized_hr() -> dict:
+    return run_fitness_service.standardized_hr()
+
+
+class SensorChange(BaseModel):
+    date: str
+    label: str = Field(min_length=1, max_length=100)
+
+
+class FitnessReferenceUpdate(BaseModel):
+    rest_hr: float | None = Field(default=None, ge=25, le=120, allow_inf_nan=False)
+    rest_source: str | None = Field(default=None, min_length=1, max_length=300)
+    max_hr: float | None = Field(default=None, ge=100, le=250, allow_inf_nan=False)
+    sensor_change: SensorChange | None = None
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        if not self.model_fields_set or any(getattr(self, name) is None for name in self.model_fields_set):
+            raise ValueError("Mindestens eine ausgefüllte Änderung ist erforderlich.")
+        if (self.rest_hr is None) != (self.rest_source is None):
+            raise ValueError("Ruhepuls und Messbeschreibung gehören zusammen.")
+        return self
+
+
+@router.get("/running/fitness")
+def running_fitness() -> dict:
+    return run_fitness_service.fitness()
+
+
+@router.put("/running/fitness-reference")
+def running_fitness_reference(update: FitnessReferenceUpdate) -> dict:
+    try:
+        return run_fitness_service.update_reference(update.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/running/analysis-sessions")
+def running_analysis_sessions() -> list[dict]:
+    return run_analysis.analysis_sessions()
+
+
+class RunAnnotationUpdate(BaseModel):
+    category: Literal["auto", "normal", "beast", "trail", "run_walk", "measurement_error"]
+    exclude: bool
+
+
+@router.put("/running/analysis-sessions/{external_id}")
+def running_annotate_session(external_id: str, update: RunAnnotationUpdate) -> dict:
+    result = run_analysis.annotate_session(external_id, update.category, update.exclude)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Lauf nicht gefunden")
+    return result
+
+
 @router.get("/running/summary")
 def running_summary() -> dict:
     return running.summary()

@@ -1,0 +1,10 @@
+[mcp_servers.milon]
+command = 'C:\Users\stefa\git\Milon\server\.venv\Scripts\python.exe'
+args = [
+    "-m",
+    "app.mcp.server",
+]
+
+[mcp_servers.milon.env]
+PYTHONPATH = 'C:\Users\stefa\git\Milon\server'
+PYTHONIOENCODING = "utf-8"

@@ -2,7 +2,7 @@
 Dieselbe metrics/-Schicht wie REST/Snapshot - das LLM ruft gezielt, was es fuer eine Frage braucht."""
 from __future__ import annotations
 
-from ..metrics import achievements, body, health, running, strength
+from ..metrics import achievements, body, health, run_analysis, run_fitness_service, running, strength
 
 
 def _thin(items: list, n: int = 16) -> list:
@@ -25,6 +25,15 @@ def _fn(name: str, desc: str, props: dict | None = None, required: list[str] | N
 
 
 TOOLS = [
+    _fn("get_personal_run_vo2", "Eigener VO2-Aequivalent-Trend bei 6:00/km, rollierende 8 Wochen. "
+        "Feste beobachtete Belastungsreferenz (keine gemessene HFmax), Ruhepuls ggf. ausdrueckliche Annahme. "
+        "Kalibrierung, Datenalter, Luecken und sensitive-Status nennen. Keine gemessene VO2max; "
+        "ueberlappende Fenster sind keine unabhaengige Evidenz. Sensorwechsel trennen Zeitabschnitte."),
+    _fn("get_standardized_run_hr", "Experimentelle standardisierte Lauf-HF bei Minute 30, "
+        "automatisch belegte Pace-Stufen in 30 Sekunden/km. Rollierende 8-Wochen-Werte mit Lauf-Bootstrap-Intervall, "
+        "Datenluecken und Begruendungen. Nur hr/ci-Felder freigegeben, exploratory_hr ist keine "
+        "belastbare Aussage. Vergleichsmonate und Datenalter immer nennen. Temperatur und Terrain "
+        "unkontrolliert; weder VO2max-Messung noch Nachweis physiologischen Fitnessfortschritts."),
     _fn("get_overview", "Kompakte Zusammenfassung aller drei Bereiche (Koerper, Laufen, Kraft) mit den aktuellen Kennzahlen."),
     _fn("get_weight_trend", "Gewichtsverlauf (Tageswerte + 7-Tage-EWMA) der letzten N Tage.",
         {"days": {"type": "integer", "description": "Zeitraum in Tagen (Default 90)"}}),
@@ -84,6 +93,10 @@ TOOLS = [
 
 
 def dispatch(name: str, args: dict):
+    if name == "get_standardized_run_hr":
+        return run_fitness_service.standardized_hr()
+    if name == "get_personal_run_vo2":
+        return run_fitness_service.fitness()
     if name == "get_overview":
         return {"body": body.summary(), "running": running.summary(), "strength": strength.summary()}
     if name == "get_weight_trend":

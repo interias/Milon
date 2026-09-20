@@ -27,7 +27,7 @@ RUN pip install \
       "apscheduler>=3.10" \
       "pytz>=2024.1" \
       "pillow>=10.0" \
-      "mcp>=1.2" \
+      "mcp>=1.2,<2" \
       "gdown>=5.1"
 
 # App-Code (ändert sich häufig → nach dem Deps-Layer)

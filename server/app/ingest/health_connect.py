@@ -26,13 +26,14 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlmodel import Session
 
 from ..config import settings
 from ..db import count_rows, engine, upsert
 from ..models import (BodyMeasurement, ExerciseSession, RestingHrDaily, RunBestEffort,
-                      StepsDaily, Vo2Max)
+                      RunMinute, StepsDaily, Vo2Max)
+from .run_windows import read_run_windows
 
 SOURCE = "health_connect"
 BIKE, RUN, STRENGTH, WALK = 4, 33, 45, 53
@@ -362,10 +363,11 @@ def read_health_connect(db_path: str | Path) -> dict:
         else:
             log.warning("resting_heart_rate_record_table hat unerwartete Spalten %s", sorted(rcols))
 
+    run_windows = read_run_windows(con, sessions, settings.steps_source_package)
     con.close()
     return {"body": body, "sessions": sessions, "best_efforts": best_efforts,
             "vo2": vo2, "steps": steps, "resting": resting,
-            "skipped_body": len(rejected_times)}
+            "skipped_body": len(rejected_times), "run_windows": run_windows}
 
 
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
@@ -412,6 +414,17 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
         upsert(s, RestingHrDaily, data["resting"], ["day"], update_cols=["bpm"])
+        minute_data = data["run_windows"]
+        if minute_data["available"]:
+            for i in range(0, len(minute_data["session_ids"]), 400):
+                ids = minute_data["session_ids"][i:i + 400]
+                s.execute(delete(RunMinute).where(RunMinute.external_id.in_(ids)))
+            upsert(s, RunMinute, minute_data["rows"], ["external_id", "minute"])
+        if full:
+            # Partial raw series must not erase prior windows of retained sessions.
+            retained = select(ExerciseSession.external_id).where(ExerciseSession.external_id.is_not(None))
+            s.execute(delete(RunMinute).where(RunMinute.source == SOURCE,
+                                              RunMinute.external_id.not_in(retained)))
         s.commit()
         after = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
 
@@ -426,6 +439,8 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         "new_best_efforts": after["RunBestEffort"] - before["RunBestEffort"],
         "total_sessions": after["ExerciseSession"],
         "sessions_with_hr": sessions_with_hr,
+        "run_minutes": len(data["run_windows"]["rows"]),
+        "run_minutes_available": data["run_windows"]["available"],
     }
 
 

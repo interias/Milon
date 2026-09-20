@@ -242,6 +242,50 @@ export type CoachStats = {
 export type SyncRow = { source: string; last_sync: string | null; status: string | null; detail: string | null };
 export type IngestStatus = { enabled: boolean; running: boolean; jobs: { id: string; next_run: string | null }[]; state: SyncRow[] };
 
+export type StandardizedHrPoint = {
+  month: string; hr: number | null; ci_low: number | null; ci_high: number | null;
+  runs: number; local_runs: number; status: "ok" | "provisional" | "insufficient" | "unstable" | "sensitive";
+  segment_id?: number;
+  reasons: string[]; exploratory_hr: number | null;
+};
+export type StandardizedHr = {
+  reference_minute: number; pace_step_seconds: number; model_version: string; updated_at?: string;
+  pace_series: {
+    pace_seconds: number; points: StandardizedHrPoint[];
+    comparison: { from_month: string; to_month: string; delta: number; ci_low: number; ci_high: number; verdict: "lower" | "higher" | "unclear" } | null;
+  }[];
+  empty_reason: string | null; caveat: string;
+};
+export type AnalysisRun = {
+  external_id: string; date: string; distance_km: number | null; duration_min: number | null;
+  category: "auto" | "normal" | "beast" | "trail" | "run_walk" | "measurement_error";
+  exclude: boolean;
+};
+
+export type RunningFitnessPoint = {
+  date: string; hr: number | null; ci_low: number | null; ci_high: number | null;
+  runs: number; local_runs: number; status: string; reasons: string[];
+  vo2_eq: number | null; vo2_low: number | null; vo2_high: number | null;
+  segment_id?: number; vo2_sensitivity_low?: number | null; vo2_sensitivity_high?: number | null;
+};
+export type RunningFitnessData = {
+  reference_pace_seconds: number; window_days: number; reference_minute: number; method: string;
+  points: RunningFitnessPoint[];
+  observations: { date: string; external_id: string; hr: number; minutes: number; vo2_eq: number | null; segment_id?: number }[];
+  durability?: { date: string; external_id: string; early_hr: number; late_hr: number; delta_bpm: number; segment_id: number }[];
+  caveat: string; vo2_status: string; updated_at: string;
+  calibration: {
+    revision: number; max_hr: number | null; rest_hr: number | null; rest_source: string;
+    provisional: boolean; created_at: string; high_hr_source: string;
+    sensor_changes: { date: string; label: string }[];
+    candidate: { candidate_bpm: number | null; status: string; reason: string } | null;
+  };
+};
+export type RunningFitnessReferenceUpdate =
+  | { rest_hr: number; rest_source: string }
+  | { max_hr: number }
+  | { sensor_change: { date: string; label: string } };
+
 export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
@@ -271,6 +315,13 @@ export const api = {
   healthCyclingRecent: (limit = 8) => get<CyclingRide[]>(`/metrics/health/cycling-recent?limit=${limit}`),
   // Laufen
   runSummary: () => get<RunSummary>("/metrics/running/summary"),
+  runStandardizedHr: () => get<StandardizedHr>("/metrics/running/standardized-hr"),
+  runFitness: () => get<RunningFitnessData>("/metrics/running/fitness"),
+  runFitnessReference: (body: RunningFitnessReferenceUpdate) =>
+    put<RunningFitnessData>("/metrics/running/fitness-reference", body),
+  runAnalysisSessions: () => get<AnalysisRun[]>("/metrics/running/analysis-sessions"),
+  runAnalysisUpdate: (id: string, body: Pick<AnalysisRun, "category" | "exclude">) =>
+    put<AnalysisRun>(`/metrics/running/analysis-sessions/${encodeURIComponent(id)}`, body),
   runVolume: (weeks = 26) => get<VolPoint[]>(`/metrics/running/volume?weeks=${weeks}`),
   runPace: (weeks = 26) => get<PacePoint[]>(`/metrics/running/pace?weeks=${weeks}`),
   runPaceDetail: () => get<PaceDetail>("/metrics/running/pace-detail"),

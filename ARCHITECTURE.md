@@ -1,5 +1,49 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Laufanalyse: kompakte Darstellung (2026-09-20)
+
+Beide Laufanalyse-Karten verwenden `RunTrendChart`: 300 px Höhe, adaptive Y-Skala
+mit etwa sieben beschrifteten Markierungen, dezentes Bootstrap-Intervallband und
+Wertanzeige per Hover, Antippen oder Tastatur. Lücken und Sensorwechsel bleiben
+getrennt. Methodik und Tabellen öffnen über „Details“ einen Dialog;
+`RunAnalysisSettings` bündelt Pulsreferenzen, Sensorwechsel und Lauf-Ausschlüsse
+hinter „Laufanalyse einstellen“. Die Berechnung bleibt unverändert.
+
+## Lauf-Fitness: rollierender eigener Trend (2026-09-19)
+
+`metrics/run_fitness.py` ergänzt die frühere Monatsanalyse durch feste, nachlaufende
+56-Tage-Fenster. Referenz für das persönliche VO₂-Äquivalent: 6:00 min/km bei Minute
+20, aus geeigneten Minuten 10–30. Laufgewichtete lineare Regression mit mindestens
+fünf Läufen, davon drei nahe der Referenz, positiver Tempo-Steigung und gemeinsamer
+Tempo-/Zeitabdeckung. Minute-30-Reihen entdecken belegte Paces in 30-Sekunden-Schritten.
+Die Monatsimplementierung bleibt als Vergleichsverfahren erhalten; REST/UI verwenden
+die rollierende Variante. Überlappende Punkte sind keine unabhängigen Beobachtungen.
+
+Run-Level-Bootstrap erhält Ziehungsmultiplizität; die Mindestzahl lokaler Läufe gilt
+für die Originalstichprobe, nicht jede Ziehung. Numerisch fehlgeschlagene Ziehungen
+werden nicht als vollständiges Intervall ausgegeben. Einfluss einzelner Läufe über
+3 bpm wird als empfindlich markiert. Angezeigte Einzelpunkte sind gemessene Mediane
+nahe der Referenz, keine exakt standardisierten Beobachtungen. Frühe/späte Abschnitte
+bei ähnlichem Tempo werden separat als Pulsänderung ausgewiesen. Der Vergleich an
+zurückgehaltenen Läufen belegt keine bessere Vorhersagegenauigkeit als einfache
+Abschnittsmittel; die Vorteile sind feste Referenzen und zeitliche Abdeckung.
+
+`run_references.py` sucht quellengleiche, dicht gemessene hohe Pulsabschnitte über
+60 Sekunden, bestätigt an zwei Tagen. Dies ergibt eine beobachtete Belastungsreferenz,
+keine gemessene oder validiert geschätzte HFmax. `run_fitness_service.py` speichert
+Referenzrevisionen append-only in `run_fitness_references`. Die anfängliche Ruhepuls-
+Referenz 60 bpm ist ausdrücklich eine vorläufige Modellannahme; die UI erlaubt eine
+belegte wache Ruhemessung. Höhere bestätigte Belastungsreferenzen werden vorgeschlagen,
+erst bei Übernahme geändert. Jede Referenzrevision berechnet die gesamte Historie
+einheitlich neu. VO₂eq verwendet die Laufkosten-/Reserve-Näherung, keine Samsung-Werte.
+Parameter-Szenarien (beide Pulsreferenzen ±10 bpm) sind kein Konfidenzintervall.
+
+Sensorwechsel werden mit Datum/Bezeichnung gespeichert und trennen Modellfenster
+und Diagrammlinien. GET `/metrics/running/fitness`, PUT `/metrics/running/fitness-reference`,
+Coach/MCP `get_personal_run_vo2`. Cache berücksichtigt Eingangsdaten, Tags, Referenzrevision,
+Rohdatenkandidat, Modellversion und Datum. Gesundheitsdaten und Vergleichsberichte bleiben
+unter `data/run-analysis/`; allgemeine Evidenz unter `docs/research/`.
+
 > Persönliches, lokal laufendes Trainings-/Ernährungs-Dashboard mit LLM-Coach.
 > Single-User. Local-first, später Cloudflare-fähig. „One source of truth", bewusst schlank.
 
@@ -185,6 +229,23 @@ Tagessummen (Intake/Tonnage) werden **berechnet**, nicht gespeichert (Views/Funk
   *Benötigt:* tägl. Intake + tägl. Gewicht.
 
 ### 5.2 Laufen (`running.py`)
+- **Experimentelle standardisierte Lauf-HF** (`metrics/run_standardization.py`, Persistenz/Cache in
+  `metrics/run_analysis.py`): zusätzliche Karte „Puls bei gleicher Pace“, Referenz immer **Laufminute 30**.
+  Referenzpaces werden aus den verfügbaren Daten in **30 Sekunden/km** entdeckt; jede Pace erscheint
+  erst, wenn mindestens ein Monatswert die Qualitätsprüfung besteht. Andere Monate bleiben Lücken.
+  Basis sind echte, quellengebundene Speed-/HF-Minutenfenster (`ingest/run_windows.py`, `run_minutes`),
+  keine interpolierten Gesamtdistanzen. Der normale HC-Import füllt bestehende Sessions nachträglich.
+  Monatsmodell HF ~ Speed + verstrichene Laufzeit; gleiche Gesamtgewichte je Lauf, Huber-Fit,
+  2.000 Lauf-Bootstrap-Ziehungen, lokale gemeinsame Abdeckung, Auslassungs- und Variantenprüfung.
+  Vorläufige Produktgrenzen: ≥10 geeignete Läufe, ≥5 lokal unterstützende Läufe, maximal 3 bpm
+  Einfluss eines einzelnen Laufs/Modellvariante. Keine universellen physiologischen Grenzwerte.
+  Laufender Monat ist vorläufig; direkte Differenzintervalle vergleichen nur vollständige geeignete
+  Monate. Wetter/Terrain bleiben unkontrolliert; kein automatischer physiologischer Fitnessnachweis.
+  Manuelle Kategorien/Ausschlüsse liegen separat in `run_annotations` an der externen Session-ID
+  und überstehen Vollimporte. Sie ändern weder Historie noch Trainingsvolumen.
+  REST: `/metrics/running/standardized-hr`, GET/PUT `/metrics/running/analysis-sessions[/{external_id}]`;
+  Coach/MCP: `get_standardized_run_hr`. Inhaltsbasierter SQLite-Cache (`run_analysis_cache`),
+  neu berechnet nach Daten-/Markierungs-/Modell-/Kalendermonatsänderung. SR-VO₂eq bleibt ausstehend.
 - **Wochenvolumen** (km) + Anzahl Läufe (`exercise_type=33`).
 - **Pace-Trend** (min/km) — nur plausible Distanzen (HC-Distanzfelder können verrauscht sein → Sanity-Filter, z. B. max. Distanzrecord pro Session statt Summe).
 - **VO2max-Trend** (HC, `vo2max`). Uhr-Schätzung → Trend zählt.
