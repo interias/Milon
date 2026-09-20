@@ -1,5 +1,14 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Coach: Frage und Antwort im Mittelpunkt (2026-09-20)
+
+Die Frage steht oben, Tages- und Wochenreports sind kleinere Zusatzaktionen.
+Beim Öffnen erscheint die letzte gespeicherte Antwort mit Datum. Die bisherigen
+zehn Verlaufseinträge sind im Dialog auswählbar; Kosten, Tokens, Modell und Tools
+stehen unter „Details & Nutzung“. Ladeanimation und ein zusätzlich sichtbarer
+Bearbeitungsstatus bleiben erhalten. Die API und das Einzelanfragen-Modell bleiben
+unverändert; das Öffnen erzeugt keinen neuen kostenpflichtigen Report.
+
 ## Gesundheit: Schritte und Alltagsbewegung (2026-09-20)
 
 Die Seite priorisiert das Schrittmittel mit Kalenderfenster, Erfassungstagen und

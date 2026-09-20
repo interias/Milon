@@ -5,9 +5,10 @@ import { api, type Report, type CoachStats } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
 import { CoachThinking } from "@/components/CoachThinking";
-import { dm } from "@/lib/format";
+import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 
 const fmtUsd = (n: number, known: boolean) => (known ? "$" + n.toFixed(n < 1 ? 4 : 2) : "n/v");
+const reportLabel = (kind: string) => kind === "daily" ? "Tagesreport" : kind === "weekly" ? "Wochenreport" : "Antwort";
 const shortModel = (m: string) => m.split("/").pop() ?? m;
 
 export default function Coach() {
@@ -19,8 +20,10 @@ export default function Coach() {
   const [busy, setBusy] = useState<null | "daily" | "weekly" | "chat">(null);
   const [message, setMessage] = useState("");
 
+  const [panel, setPanel] = useState<"history" | "usage" | null>(null);
+
   useEffect(() => {
-    api.coachReports(10).then(setReports).catch((e) => setLoadErr(String(e)));
+    api.coachReports(10).then((items) => { setReports(items); setCurrent((selected) => selected ?? items[0] ?? null); }).catch((e) => setLoadErr(String(e)));
     api.coachStats().then(setStats).catch(() => {});
   }, []);
 
@@ -34,6 +37,7 @@ export default function Coach() {
   }
 
   async function run(kind: "daily" | "weekly") {
+    if (busy) return;
     setActionErr(null);
     setBusy(kind);
     try {
@@ -67,127 +71,63 @@ export default function Coach() {
   if (loadErr) return (<><PageTitle title="Coach" /><ApiError error={loadErr} /></>);
   if (!reports) return (<><PageTitle title="Coach" /><Loading /></>);
 
-  return (
-    <>
-      <CoachThinking busy={busy} />
-      <PageTitle title="Coach" sub="Frag deine Daten – ehrlich-motivierend" />
-
-      {stats && (
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {([
-            ["Kosten gesamt", fmtUsd(stats.cost_total_usd, stats.cost_known), `${stats.tokens_total.toLocaleString("de-DE")} Tokens`],
-            ["Kosten · 7 Tage", fmtUsd(stats.cost_7d_usd, stats.cost_known), `${stats.reports_7d} Reports`],
-            ["Reports gesamt", String(stats.reports_total), "gespeichert"],
-            ["Modell", shortModel(stats.model), "OpenRouter"],
-          ] as [string, string, string][]).map(([l, v, s], i) => (
-            <div key={i} className="rounded-card border border-line bg-surface p-3">
-              <div className="text-[11px] text-muted">{l}</div>
-              <div className="mt-0.5 break-words font-display text-lg font-bold tracking-tight">{v}</div>
-              <div className="text-[10px] text-muted">{s}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => run("daily")}
-          disabled={busy !== null}
-          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
-        >
-          {busy === "daily" ? "erstellt …" : "Täglicher Report"}
-        </button>
-        <button
-          type="button"
-          onClick={() => run("weekly")}
-          disabled={busy !== null}
-          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
-        >
-          {busy === "weekly" ? "erstellt …" : "Wöchentlicher Report"}
-        </button>
+  return <>
+    <CoachThinking busy={busy} />
+    <PageTitle title="Coach" sub="Frag deine Daten" />
+    <Card>
+      <CardTitle title="Frag den Coach" sub="Ruft deine Kennzahlen ab · Enter sendet" />
+      <form onSubmit={(event) => { event.preventDefault(); void send(); }} className="flex flex-wrap gap-2">
+        <input aria-label="Frage an den Coach" type="text" value={message} onChange={(event) => setMessage(event.target.value)}
+          disabled={busy !== null} placeholder="Wie ist mein Trend diese Woche?"
+          className="min-w-0 flex-1 basis-48 rounded-lg border border-line bg-surface-alt px-3 py-2.5 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-60 sm:text-sm" />
+        <button type="submit" disabled={busy !== null || !message.trim()}
+          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60">{busy === "chat" ? "Erstellt …" : "Senden"}</button>
+      </form>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => run("daily")} disabled={busy !== null} className="rounded border border-line px-3 py-2 text-xs disabled:opacity-60">Tagesreport erstellen</button>
+        <button type="button" onClick={() => run("weekly")} disabled={busy !== null} className="rounded border border-line px-3 py-2 text-xs disabled:opacity-60">Wochenreport erstellen</button>
       </div>
-
-      {actionErr && (
-        <p className="mt-3 rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 text-xs text-bad">
-          {actionErr}
-        </p>
-      )}
-
-      <Card className="mt-4">
-        <CardTitle title="Aktueller Report" />
-        {current ? (
-          <>
-            <p className="mb-3 break-words text-[11px] text-muted">
-              {current.kind} · {shortModel(current.model)} · {dm(current.created_at)}
-              {current.tools_used?.length ? ` · 🔧 ${current.tools_used.join(", ")}` : ""}
-            </p>
-            <Markdown>{current.content}</Markdown>
-          </>
-        ) : (
-          <p className="text-sm text-muted">
-            Erzeuge einen Report oder stelle unten eine Frage.
-          </p>
-        )}
-      </Card>
-
-      <Card className="mt-4">
-        <CardTitle title="Frag den Coach" sub="ruft live deine Kennzahlen ab · Enter sendet" />
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                send();
-              }
-            }}
-            disabled={busy !== null}
-            placeholder="z. B. Wie ist mein Trend diese Woche?"
-            className="flex-1 rounded-lg border border-line bg-surface-alt px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-60"
-          />
-          <button
-            type="button"
-            onClick={send}
-            disabled={busy !== null || !message.trim()}
-            className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
-          >
-            {busy === "chat" ? "erstellt …" : "Senden"}
-          </button>
-        </div>
-      </Card>
-
-      <Card className="mt-4">
-        <CardTitle title="Frühere Reports" />
-        {reports.length === 0 ? (
-          <p className="text-sm text-muted">Noch keine Reports.</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {reports.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setCurrent(r)}
-                  className="w-full py-3 text-left hover:opacity-80"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold">{r.kind}</span>
-                    <span className="shrink-0 text-[11px] text-muted">
-                      {new Date(r.created_at).toLocaleString("de-DE")}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted">
-                    {r.content.slice(0, 120)}
-                    {r.content.length > 120 ? " …" : ""}
-                  </p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </>
-  );
+      {busy && <p role="status" className="mt-3 text-xs text-muted">{busy === "chat" ? "Antwort" : reportLabel(busy)} wird erstellt …</p>}
+      {actionErr && <p role="alert" className="mt-3 rounded border border-bad/30 bg-bad/5 px-3 py-2 text-sm text-bad">{actionErr}</p>}
+    </Card>
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button type="button" onClick={() => setPanel("history")} className="rounded border border-line px-3 py-2 text-sm">Verlauf</button>
+      <button type="button" onClick={() => setPanel("usage")} className="rounded border border-line px-3 py-2 text-sm">Details & Nutzung</button>
+    </div>
+    <Card className="mt-4">
+      <CardTitle title={current ? reportLabel(current.kind) : "Antwort"} />
+      {current ? <>
+        <p className="mb-3 text-xs text-muted">Gespeichert am {new Date(current.created_at).toLocaleString("de-DE")}</p>
+        <Markdown>{current.content}</Markdown>
+      </> : <p className="text-sm text-muted">Stelle eine Frage oder erstelle einen Report.</p>}
+    </Card>
+    {panel === "history" && <RunAnalysisDialog title="Verlauf · letzte zehn Einträge" onClose={() => setPanel(null)}>
+      {reports.length ? <ul className="divide-y divide-line">{reports.map((report) => <li key={report.id}>
+        <button type="button" aria-current={current?.id === report.id ? "true" : undefined}
+          onClick={() => { setCurrent(report); setPanel(null); }} className="w-full rounded py-3 text-left hover:bg-surface-alt">
+          <div className="flex flex-wrap justify-between gap-2 text-sm"><span className="font-semibold">{reportLabel(report.kind)}{current?.id === report.id ? " · ausgewählt" : ""}</span><span className="text-xs text-muted">{new Date(report.created_at).toLocaleString("de-DE")}</span></div>
+          <p className="mt-1 break-words text-xs text-muted">{report.content.slice(0, 120)}{report.content.length > 120 ? " …" : ""}</p>
+        </button>
+      </li>)}</ul> : <p className="text-sm text-muted">Noch keine gespeicherten Antworten.</p>}
+    </RunAnalysisDialog>}
+    {panel === "usage" && <RunAnalysisDialog title="Details & Nutzung" onClose={() => setPanel(null)}>
+      {stats ? <dl className="grid grid-cols-2 gap-4 text-sm">
+        {([
+          ["Kosten gesamt", fmtUsd(stats.cost_total_usd, stats.cost_known)],
+          ["Kosten · 7 Tage", fmtUsd(stats.cost_7d_usd, stats.cost_known)],
+          ["Tokens gesamt", stats.tokens_total.toLocaleString("de-DE")],
+          ["Tokens · 7 Tage", stats.tokens_7d.toLocaleString("de-DE")],
+          ["Gespeicherte Einträge", String(stats.reports_total)],
+          ["Einträge · 7 Tage", String(stats.reports_7d)],
+          ["Aktuell eingestelltes Modell", shortModel(stats.model)],
+        ] as [string, string][]).map(([label, value]) => <div key={label}><dt className="text-xs text-muted">{label}</dt><dd className="mt-1 break-words font-semibold">{value}</dd></div>)}
+      </dl> : <p className="text-sm text-muted">Nutzungsdaten derzeit nicht verfügbar.</p>}
+      {current && <section className="mt-5 border-t border-line pt-4 text-sm">
+        <h3 className="font-semibold">Angezeigte Antwort</h3>
+        <p className="mt-2 break-words">Modell: {current.model}</p>
+        <p className="mt-1">Kosten: {current.cost_usd == null ? "nicht verfügbar" : fmtUsd(current.cost_usd, true)}</p>
+        <p className="mt-2 break-words text-xs text-muted">Verwendete Tools: {current.tools_used?.length ? current.tools_used.join(", ") : "keine protokolliert"}</p>
+      </section>}
+    </RunAnalysisDialog>}
+  </>;
 }
