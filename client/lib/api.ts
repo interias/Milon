@@ -65,15 +65,17 @@ export type WeekCompare = {
   running: { current_km: number; previous_km: number; current_runs: number; previous_runs: number; days: number };
   strength: { current_kg: number; previous_kg: number; days: number };
 };
-export type StepsTrendPoint = { date: string; steps: number; avg7: number };
-export type StepsWeek = { week: string; steps: number };
+export type StepsTrendPoint = { date: string; steps: number | null; avg7: number | null; days7: number };
+export type StepsWeek = { week: string; steps: number | null; days: number };
 export type CyclingWeek = { week: string; km: number; rides: number };
 export type CyclingRide = { date: string; km: number; dur_min: number; speed: number };
 export type StepsHealth = {
+  days7: number; days30: number; window_start: string | null; source_label: string;
   last: number | null; last_day: string | null; avg7: number | null;
   avg30: number | null; best: number | null; total_days: number;
 };
 export type CyclingHealth = {
+  last_ride: CyclingRide | null; window_start: string; to_date: string;
   total_km: number; rides: number; km_30d: number; avg_speed: number | null; last_day: string | null;
 };
 export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };

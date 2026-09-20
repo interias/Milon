@@ -1,5 +1,17 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Gesundheit: Schritte und Alltagsbewegung (2026-09-20)
+
+Die Seite priorisiert das Schrittmittel mit Kalenderfenster, Erfassungstagen und
+letztem Wert. Ein großes Diagramm zeigt die geglättete Linie, Tageswerte sind optional.
+Der Radüberblick zeigt die letzten 30 lokalen Kalendertage bis heute und die letzte
+Fahrt. Bestwert, Schritt-Wochensummen, Radwochen und vollständige Fahrtenliste laden
+erst im Detaildialog (`cycling-recent?limit=0` liefert die ganze Historie).
+Schrittlücken sind null, keine Nullschritte. Wochen behalten fehlende Summen und die
+Anzahl erfasster Tage; echte erfasste Nullen bleiben erhalten. Die angezeigte Quelle
+beschreibt die konfigurierte Importauswahl, nicht eine nachträglich belegte Herkunft
+jeder historischen Zeile. Aufgezeichnete Bewegung ist kein allgemeines Gesundheitsurteil.
+
 ## Ernährung: Protein, Energiebilanz und Erfassungsabdeckung (2026-09-20)
 
 Proteinmittel und datierte Energiebilanz stehen oben. Protein-/Kalorienverläufe

@@ -5,8 +5,12 @@ exercise_type 4 = Radfahren (android.health.connect ExerciseSessionType BIKING; 
 speisen wie alle Metriken REST + Coach + MCP."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 
+from ..config import settings
 from ..db import engine
 
 BIKE = 4
@@ -28,12 +32,14 @@ def steps_trend(days: int = 30) -> list[dict]:
     df = _steps()
     if df.empty:
         return []
-    s = df.set_index("day")["steps"].sort_index()
+    s = df.set_index("day")["steps"].sort_index().asfreq("D")
     avg = s.rolling("7D").mean()  # gleitendes 7-Kalendertage-Fenster (überspringt fehlende Tage)
-    cutoff = s.index.max() - pd.Timedelta(days=days)
+    counts = s.rolling("7D").count()
+    cutoff = s.index.max() - pd.Timedelta(days=max(days - 1, 0))
     return [
-        {"date": d.date().isoformat(), "steps": int(v), "avg7": int(round(a))}
-        for d, v, a in zip(s.index, s.to_numpy(), avg.to_numpy()) if d >= cutoff
+        {"date": d.date().isoformat(), "steps": int(v) if pd.notna(v) else None,
+         "avg7": int(round(a)) if pd.notna(a) else None, "days7": int(n)}
+        for d, v, a, n in zip(s.index, s.to_numpy(), avg.to_numpy(), counts.to_numpy()) if d >= cutoff
     ]
 
 
@@ -42,15 +48,22 @@ def steps_weekly(weeks: int = 12) -> list[dict]:
     df = _steps()
     if df.empty:
         return []
-    s = df.set_index("day")["steps"].resample("W-SUN").sum()
-    s = s[s > 0].tail(weeks)
-    return [{"week": d.date().isoformat(), "steps": int(v)} for d, v in s.items()]
+    g = df.set_index("day")["steps"].resample("W-SUN")
+    totals, counts = g.sum(min_count=1).tail(weeks), g.count().tail(weeks)
+    return [{"week": d.date().isoformat(), "steps": int(v) if pd.notna(v) else None,
+             "days": int(counts.loc[d])} for d, v in totals.items()]
 
 
 def steps_summary() -> dict:
     df = _steps()
+    package = settings.steps_source_package
+    name = "Samsung Health" if package == "com.sec.android.app.shealth" else package
+    source_label = (f"Health Connect · Import-Auswahl: {name} (Fallback: Tagesmaximum je App)" if package
+                    else "Health Connect · Import-Auswahl: Tagesmaximum je App")
     if df.empty:
-        return {"last": None, "last_day": None, "avg7": None, "avg30": None, "best": None, "total_days": 0}
+        return {"last": None, "last_day": None, "avg7": None, "avg30": None, "best": None,
+                "total_days": 0, "days7": 0, "days30": 0, "window_start": None,
+                "source_label": source_label}
     s = df.set_index("day")["steps"].sort_index()
     last_day = s.index.max()
     w7 = s[s.index > last_day - pd.Timedelta(days=7)]    # letzte 7 Kalendertage (nicht 7 Zeilen)
@@ -58,6 +71,10 @@ def steps_summary() -> dict:
     return {
         "last": int(s.iloc[-1]),
         "last_day": last_day.date().isoformat(),
+        "window_start": (last_day - pd.Timedelta(days=6)).date().isoformat(),
+        "days7": int(w7.count()),
+        "days30": int(w30.count()),
+        "source_label": source_label,
         "avg7": int(round(w7.mean())),
         "avg30": int(round(w30.mean())),
         "best": int(s.max()),
@@ -103,27 +120,40 @@ def cycling_recent(limit: int = 8) -> list[dict]:
     df = _rides()
     if df.empty:
         return []
-    df = df.sort_values("started_at", ascending=False).head(limit)
+    df = df.sort_values("started_at", ascending=False)
+    if limit > 0:
+        df = df.head(limit)
     return [
         {"date": s.isoformat(), "km": round(float(k), 1), "dur_min": int(round(d)), "speed": round(float(v), 1)}
         for s, k, d, v in zip(df["started_at"], df["distance_km"], df["dur_min"], df["speed"])
     ]
 
 
-def cycling_summary() -> dict:
+def cycling_summary(now: datetime | None = None) -> dict:
     """Rad-Eckdaten. km_30d ist bewusst *heute*-relativ (rollendes Fenster), nicht ab letzter
     Fahrt — so zeigt es ehrlich an, wenn gerade eine Rad-Pause ist."""
     df = _rides()
+    local_now = (now or datetime.now(ZoneInfo(settings.timezone))).astimezone(ZoneInfo(settings.timezone))
+    today = local_now.date()
+    start = today - timedelta(days=29)
+    # Imported session timestamps are naive local wall times.
+    if not df.empty:
+        df = df[df["started_at"] <= pd.Timestamp(local_now.replace(tzinfo=None))]
+    window = {"window_start": start.isoformat(), "to_date": today.isoformat()}
     if df.empty:
-        return {"total_km": 0.0, "rides": 0, "km_30d": 0.0, "avg_speed": None, "last_day": None}
-    now = pd.Timestamp.now()
+        return {"total_km": 0.0, "rides": 0, "km_30d": 0.0, "avg_speed": None,
+                "last_day": None, "last_ride": None, **window}
     total_min = float(df["dur_min"].sum())
+    latest = df.sort_values("started_at").iloc[-1]
     return {
         "total_km": round(float(df["distance_km"].sum()), 1),
         "rides": int(len(df)),
-        "km_30d": round(float(df[df["started_at"] >= now - pd.Timedelta(days=30)]["distance_km"].sum()), 1),
+        "km_30d": round(float(df[df["started_at"] >= pd.Timestamp(start)]["distance_km"].sum()), 1),
         "avg_speed": round(float(df["distance_km"].sum() / (total_min / 60)), 1) if total_min else None,
         "last_day": df["started_at"].max().date().isoformat(),
+        "last_ride": {"date": latest["started_at"].isoformat(), "km": round(float(latest["distance_km"]), 1),
+                      "dur_min": int(round(latest["dur_min"])), "speed": round(float(latest["speed"]), 1)},
+        **window,
     }
 
 

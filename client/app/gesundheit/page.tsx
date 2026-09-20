@@ -1,120 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  api,
-  type HealthOverview, type StepsTrendPoint, type StepsWeek,
-  type CyclingWeek, type CyclingRide,
-} from "@/lib/api";
-import { Card, CardTitle, Kpi, PageTitle, StatRow, Loading, ApiError } from "@/components/ui";
-import { Bars, MultiTrend } from "@/components/charts";
-import { de, de0, dm, isToday } from "@/lib/format";
-
-const ACCENT = "var(--color-accent)";
-const RAW = "#b9c6c3";
+import { api, type HealthOverview, type StepsTrendPoint } from "@/lib/api";
+import { Card, PageTitle } from "@/components/ui";
+import { RunTrendChart } from "@/components/RunTrendChart";
+import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
+import { HealthDetails } from "@/components/HealthDetails";
+import { de, de0, dm } from "@/lib/format";
 
 export default function Gesundheit() {
-  const [ov, setOv] = useState<HealthOverview | null>(null);
-  const [steps, setSteps] = useState<StepsTrendPoint[]>([]);
-  const [stepsW, setStepsW] = useState<StepsWeek[]>([]);
-  const [cyc, setCyc] = useState<CyclingWeek[]>([]);
-  const [rides, setRides] = useState<CyclingRide[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-
+  const [overview, setOverview] = useState<HealthOverview | null>(null);
+  const [steps, setSteps] = useState<StepsTrendPoint[] | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [raw, setRaw] = useState(false);
+  const [details, setDetails] = useState(false);
   useEffect(() => {
-    api.healthOverview().then(setOv).catch((e) => setErr(String(e)));
-    api.healthSteps(30).then(setSteps).catch(() => {});
-    api.healthStepsWeekly(12).then(setStepsW).catch(() => {});
-    api.healthCycling(12).then(setCyc).catch(() => {});
-    api.healthCyclingRecent(8).then(setRides).catch(() => {});
+    let active = true;
+    const failed = (key: string) => { if (active) setErrors((values) => [...values, key]); };
+    api.healthOverview().then((value) => { if (active) setOverview(value); }).catch(() => failed("overview"));
+    api.healthSteps(30).then((value) => { if (active) setSteps(value); }).catch(() => failed("steps"));
+    return () => { active = false; };
   }, []);
-
-  if (err) return (<><PageTitle title="Gesundheit" /><ApiError error={err} /></>);
-  if (!ov) return (<><PageTitle title="Gesundheit" /><Loading /></>);
-
-  const s = ov.steps;
-  const c = ov.cycling;
-
-  return (
-    <>
-      <PageTitle title="Gesundheit" sub="Schritte & Radfahren · allgemeine Gesundheitswerte aus Health Connect" />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Kpi
-          label={isToday(s.last_day) ? "Schritte heute" : "Schritte zuletzt"}
-          sub={s.last_day ? `Stand ${dm(s.last_day)}` : "Health Connect"}
-          watermark="/img/koerper-ink-arc.png"
-          value={de0(s.last)}
-        >
-          <StatRow items={[["Ø 7 Tage", de0(s.avg7)], ["Ø 30 Tage", de0(s.avg30)]]} />
-        </Kpi>
-
-        <Kpi
-          label="Bestwert" sub={`${s.total_days} Tage erfasst`}
-          value={de0(s.best)} unit="Schritte"
-        />
-
-        <Kpi
-          label="Radfahren" sub={`${c.rides} Fahrten${c.last_day ? ` · zuletzt ${dm(c.last_day)}` : ""}`}
-          value={de(c.total_km, 0)} unit="km gesamt"
-        >
-          <StatRow items={[["letzte 30 T", `${de(c.km_30d, 0)} km`], ["Ø Tempo", `${de(c.avg_speed, 1)} km/h`]]} />
-        </Kpi>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card className="md:col-span-2">
-          <CardTitle title="Schritte · 30 Tage" sub="Tageswert + 7-Tage-Schnitt" />
-          <MultiTrend
-            labels={steps.map((p) => dm(p.date))}
-            series={[
-              { label: "Tag", color: RAW, values: steps.map((p) => p.steps) },
-              { label: "Ø 7 Tage", color: ACCENT, values: steps.map((p) => p.avg7) },
-            ]}
-            format={(n) => de0(n)}
-            height={180}
-          />
-        </Card>
-
-        <Card>
-          <CardTitle title="Wochenschritte · 12 Wochen" sub="Summe je Woche (in Tausend)" />
-          <Bars
-            data={stepsW.map((w) => ({ label: dm(w.week), value: Math.round(w.steps / 1000) }))}
-            unit="k" height={170}
-          />
-        </Card>
-
-        <Card>
-          <CardTitle title="Rad · Wochenvolumen" sub="12 Wochen" />
-          <Bars
-            data={cyc.map((w) => ({ label: dm(w.week), value: Math.round(w.km) }))}
-            unit="km" height={170}
-          />
-        </Card>
-
-        <Card className="md:col-span-2">
-          <CardTitle title="Letzte Fahrten" />
-          {rides.length === 0 ? (
-            <p className="text-sm text-muted">Keine Fahrten erfasst.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {rides.map((r, i) => (
-                <li key={i} className="flex items-center gap-2.5 py-2">
-                  <span className="text-base">🚴</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{de(r.km, 1)} km</span>
-                  <span className="shrink-0 text-xs text-muted">{r.dur_min} min · {de(r.speed, 1)} km/h</span>
-                  <span className="w-12 shrink-0 text-right text-[11px] text-muted">{dm(r.date)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      <p className="mt-4 text-[11px] text-muted">
-        Quelle: Health Connect · Radfahren = getrackte Rad-Sessions (Samsung Health). Schritte je Tag
-        aus der vollständigsten App (keine Doppelzählung Watch + Handy).
-      </p>
-    </>
-  );
+  const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden." : "Wird geladen …";
+  const summary = overview?.steps;
+  const cycling = overview?.cycling;
+  return <>
+    <PageTitle title="Gesundheit" sub="Schritte & Alltagsbewegung" />
+    <Card>
+      <h2 className="text-sm font-semibold">Schritte · 7-Tage-Mittel</h2>
+      {summary ? <>
+        <p className="mt-3 font-display text-3xl font-extrabold">{de0(summary.avg7)} <span className="text-sm font-normal text-muted">Schritte/Tag</span></p>
+        {summary.last_day ? <>
+          <p className="mt-2 text-xs text-muted">{dm(summary.window_start ?? summary.last_day)}–{dm(summary.last_day)} · {summary.days7} erfasste Tage im 7-Tage-Fenster</p>
+          <p className="mt-1 text-xs text-muted">Letzter erfasster Wert: {de0(summary.last)} Schritte · {new Date(`${summary.last_day}T12:00:00`).toLocaleDateString("de-DE")}</p>
+        </> : <p className="mt-2 text-xs text-muted">Noch keine Schritte erfasst.</p>}
+      </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
+      {steps ? <RunTrendChart label="Schritte · 7-Tage-Mittel" unit="Schritte" showPoints={false} points={steps.map((point) => ({ date: point.date, value: point.avg7, detail: `${point.days7} erfasste Tage im 7-Tage-Fenster` }))} observations={raw ? steps.map((point) => ({ date: point.date, value: point.steps, detail: "Erfasster Tageswert" })) : []} /> : <p className="mt-4 text-xs text-muted" role="status">{state("steps")}</p>}
+      <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted"><span>Bis zu 30 Tage · fehlende Tage bleiben unbekannt</span><label className="flex items-center gap-2"><input type="checkbox" checked={raw} onChange={(event) => setRaw(event.target.checked)} />Tageswerte</label></div>
+      {summary && <p className="mt-3 text-xs text-muted">{summary.source_label}</p>}
+    </Card>
+    <Card className="mt-4">
+      <h2 className="text-sm font-semibold">Radfahren · letzte 30 Tage</h2>
+      {cycling ? <>
+        <p className="mt-3 font-display text-2xl font-extrabold">{de(cycling.km_30d, 1)} <span className="text-sm font-normal text-muted">km erfasst</span></p>
+        <p className="mt-1 text-xs text-muted">{dm(cycling.window_start)}–{dm(cycling.to_date)} · getrackte Fahrten aus Health Connect</p>
+        {cycling.last_ride ? <p className="mt-3 text-sm">Letzte Fahrt: {de(cycling.last_ride.km, 1)} km · {cycling.last_ride.dur_min} min · {new Date(cycling.last_ride.date).toLocaleDateString("de-DE")}</p> : <p className="mt-3 text-xs text-muted">Noch keine geeignete Fahrt erfasst.</p>}
+      </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
+    </Card>
+    <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Historie & Details</button>
+    {details && <RunAnalysisDialog title="Bewegung · Historie & Details" onClose={() => setDetails(false)}><HealthDetails overview={overview} /></RunAnalysisDialog>}
+  </>;
 }

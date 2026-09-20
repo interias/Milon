@@ -59,12 +59,13 @@ export function RunTrendChart({ points, unit, label, observations = [], showPoin
   const scale = axis(values);
   const dates = [...sorted, ...observations].map((p) => timestamp(p.date));
   const first = Math.min(...dates), last = Math.max(...dates);
-  const left = 48, right = width - 15, top = 18, bottom = 264;
+  const decimals = [0, 1, 2, 3].find((digits) => Math.abs(scale.step * 10 ** digits - Math.round(scale.step * 10 ** digits)) < 1e-8) ?? 3;
+  const labelWidth = Math.max(...scale.ticks.map((value) => de(value, decimals).length)) * 9;
+  const left = Math.max(48, labelWidth + 12), right = width - 15, top = 18, bottom = 264;
   const x = (date: string) => first === last ? (left + right) / 2 : left + (timestamp(date) - first) / (last - first) * (right - left);
   const y = (value: number) => bottom - (value - scale.low) / (scale.high - scale.low) * (bottom - top);
   const active: TrendPoint | undefined = selected == null ? undefined : selectable[Math.min(selected, selectable.length - 1)];
   const tickCount = first === last ? 1 : width < 420 ? 3 : 5;
-  const decimals = [0, 1, 2, 3].find((digits) => Math.abs(scale.step * 10 ** digits - Math.round(scale.step * 10 ** digits)) < 1e-8) ?? 3;
   function selectPoint(event: PointerEvent<SVGSVGElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
     const px = (event.clientX - bounds.left) / bounds.width * width;
