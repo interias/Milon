@@ -159,10 +159,10 @@ export function Bars({
         </div>
         <div className="flex min-w-0 flex-1 items-end gap-1.5">
           {data.map((d, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center justify-end" style={{ height }} title={`${d.label}: ${d.value}${u}`}>
+            <div key={i} className="flex min-w-0 flex-1 flex-col items-center justify-end" style={{ height }} title={`${d.label}: ${d.value}${u}`}>
               <div className="w-full rounded-t bg-current" style={{ height: Math.max(2, (d.value / max) * plotH), opacity: 0.85 }} />
-              <span className="mt-1 w-full truncate text-center text-[9px] leading-none text-muted" style={{ height: xLabelH }}>
-                {i % stride === 0 || i === data.length - 1 ? d.label : ""}
+              <span className="mt-1 w-full whitespace-nowrap text-center text-[9px] leading-none text-muted" style={{ height: xLabelH }}>
+                {(i % stride === 0 && i < data.length - stride) || i === data.length - 1 ? d.label : ""}
               </span>
             </div>
           ))}

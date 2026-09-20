@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Achievements as AchData, Achievement, Rarity } from "@/lib/api";
+import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { Card } from "@/components/ui";
 import { de0, dm } from "@/lib/format";
 
@@ -37,18 +38,10 @@ const CAT_ICON = Object.fromEntries(CATS.map((c) => [c.key, c.icon]));
 
 // --- Detail-Modal: Erklärung + Symbolik (Flavor) ---
 function Detail({ a, onClose }: { a: Achievement; onClose: () => void }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
   const col = rc(a.rarity);
   const pct = Math.round(a.progress * 100);
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 ach-fade"
-      onClick={onClose} role="dialog" aria-modal="true" aria-label={a.name}
-    >
+    <RunAnalysisDialog title={a.name} onClose={onClose}>
       <div
         className="w-full max-w-md overflow-hidden rounded-xl border bg-surface shadow-2xl"
         style={{ borderColor: col }} onClick={(e) => e.stopPropagation()}
@@ -99,7 +92,7 @@ function Detail({ a, onClose }: { a: Achievement; onClose: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </RunAnalysisDialog>
   );
 }
 

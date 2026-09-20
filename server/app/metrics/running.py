@@ -4,9 +4,13 @@ Fitness-Trends (Pace@Referenzpuls, Locker-Korridor-HF, TRIMP-Trainingslast).
 exercise_type 33 = Laufen. Höhenmeter sind NICHT verfügbar (HC liefert keine)."""
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import numpy as np
 import pandas as pd
 
+from ..config import settings
 from ..db import engine
 from . import stats
 
@@ -37,6 +41,35 @@ def _runs() -> pd.DataFrame:
     speed_m_min = df["distance_km"] * 1000 / df["dur_min"]
     df["ef"] = (speed_m_min / df["avg_hr"]).where(df["avg_hr"] > 0)
     return df
+
+
+def week_overview(today: date | None = None) -> dict:
+    """Current calendar week to date and the full preceding calendar week."""
+    now = datetime.now(ZoneInfo(settings.timezone))
+    local_today = today if today is not None else now.date()
+    week_start = local_today - timedelta(days=local_today.weekday())
+    previous_start = week_start - timedelta(days=7)
+    # HC stores naive local wall times. Do not interpret them as UTC again.
+    cutoff = (pd.Timestamp(local_today + timedelta(days=1)) if today is not None
+              else pd.Timestamp(now.replace(tzinfo=None)))
+    df = _runs()
+
+    def totals(start: date, end: pd.Timestamp) -> dict:
+        if df.empty:
+            return {"km": 0.0, "runs": 0, "minutes": 0.0}
+        selected = df[(df["started_at"] >= pd.Timestamp(start)) & (df["started_at"] < end)]
+        return {
+            "km": round(float(selected["distance_km"].sum()), 1),
+            "runs": int(len(selected)),
+            "minutes": round(float(selected["dur_min"].sum()), 1),
+        }
+
+    return {
+        "week_start": week_start.isoformat(),
+        "previous_week_start": previous_start.isoformat(),
+        "current": totals(week_start, cutoff),
+        "previous": totals(previous_start, pd.Timestamp(week_start)),
+    }
 
 
 def weekly_volume(weeks: int = 26) -> list[dict]:

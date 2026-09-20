@@ -205,6 +205,11 @@ def running_summary() -> dict:
     return running.summary()
 
 
+@router.get("/running/week-overview")
+def run_week_overview() -> dict:
+    return running.week_overview()
+
+
 @router.get("/running/volume")
 def running_volume(weeks: int = 26) -> list[dict]:
     return running.weekly_volume(weeks)

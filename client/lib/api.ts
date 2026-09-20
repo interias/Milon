@@ -115,6 +115,11 @@ export type Tdee = {
   tdee: number | null; avg_intake?: number; weight_change_kg?: number;
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
 };
+export type RunWeekOverview = {
+  week_start: string; previous_week_start: string;
+  current: { km: number; runs: number; minutes: number };
+  previous: { km: number; runs: number; minutes: number };
+};
 export type VolPoint = { week: string; km: number; runs: number };
 export type PacePoint = { week: string; pace: number };
 export type Vo2Point = { date: string; vo2: number };
@@ -315,6 +320,7 @@ export const api = {
   healthCyclingRecent: (limit = 8) => get<CyclingRide[]>(`/metrics/health/cycling-recent?limit=${limit}`),
   // Laufen
   runSummary: () => get<RunSummary>("/metrics/running/summary"),
+  runWeekOverview: () => get<RunWeekOverview>("/metrics/running/week-overview"),
   runStandardizedHr: () => get<StandardizedHr>("/metrics/running/standardized-hr"),
   runFitness: () => get<RunningFitnessData>("/metrics/running/fitness"),
   runFitnessReference: (body: RunningFitnessReferenceUpdate) =>

@@ -2,6 +2,14 @@
 
 ## Laufanalyse: kompakte Darstellung (2026-09-20)
 
+Die Laufen-Seite gliedert sich in Training, Fitness und Bestleistungen. Der neue
+Endpoint `/metrics/running/week-overview` liefert Kilometer, Laufanzahl und Minuten
+der aktuellen Kalenderwoche bis jetzt sowie der gesamten Vorwoche; leere Wochen
+bleiben null Läufe. Wochenkilometer zeigen zwölf Kalenderwochen inklusive Lücken.
+Die beiden Fitnesskarten stehen auf großen Bildschirmen nebeneinander. Weitere
+Analysen laden erst beim Öffnen ihres Dialogs; Rekorddetails und die vollständige
+Erfolgssammlung sind ebenfalls separat zugänglich.
+
 Beide Laufanalyse-Karten verwenden `RunTrendChart`: 300 px Höhe, adaptive Y-Skala
 mit etwa sieben beschrifteten Markierungen, dezentes Bootstrap-Intervallband und
 Wertanzeige per Hover, Antippen oder Tastatur. Lücken und Sensorwechsel bleiben

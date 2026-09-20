@@ -13,7 +13,16 @@ export function RunAnalysisDialog({ title, onClose, children }: { title: string;
     document.body.style.overflow = "hidden";
     return () => { element.close(); document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
-  return <dialog ref={dialog} aria-labelledby={titleId} onCancel={onClose}
+  return <dialog ref={dialog} aria-labelledby={titleId} onKeyDown={(event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  }} onCancel={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.target === event.currentTarget) onClose();
+  }}
     className="fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-card border border-line bg-surface p-4 text-ink shadow-xl backdrop:bg-black/35 sm:p-6">
     <div className="mb-4 flex items-center justify-between gap-4">
       <h2 id={titleId} className="text-base font-semibold">{title}</h2>

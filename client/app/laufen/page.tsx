@@ -1,115 +1,81 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  api, type RunSummary, type VolPoint, type Vo2Point, type EfTrend, type PaceDetail,
-  type EasyHr, type PaceByZone, type FitTrend, type BestEfforts, type Achievements,
-} from "@/lib/api";
-import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
-import { AreaTrend, Bars, MultiTrend } from "@/components/charts";
+import { api, type RunWeekOverview, type VolPoint, type BestEfforts, type Achievements } from "@/lib/api";
+import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
+import { Bars } from "@/components/charts";
 import { AchievementsSummary, AchievementsGrid } from "@/components/Achievements";
 import { StandardizedRunHr } from "@/components/StandardizedRunHr";
 import { RunAnalysisSettings } from "@/components/RunAnalysisSettings";
 import { RunningFitness } from "@/components/RunningFitness";
-import { de, de0, pace, dm, dur } from "@/lib/format";
+import { RunningMoreAnalyses } from "@/components/RunningMoreAnalyses";
+import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
+import { de, de0, dm, dur } from "@/lib/format";
 
-// Puls-Zonen-Farben: kühl (locker Z1) → warm (hart Z4/Z5), Zuordnung folgt der ZONE-Nummer
-// (Filtern/Ausblenden färbt nichts um). Als Set validiert (dataviz-Checks: CVD-ΔE ≥ 15,
-// Kontrast ≥ 3:1 auf Weiß, Lightness-Band).
-const ZONE_COLORS = ["#2a78d6", "#00917d", "#ab7f00", "#b53415", "#8f2e64"]; // Z1..Z5
-const zoneColor = (idx: number) => ZONE_COLORS[Math.min(ZONE_COLORS.length, Math.max(1, idx)) - 1];
-
-// Signifikanz-Badge: nur ein statistisch belastbarer Trend (95%-CI) wird als
-// besser/schlechter eingefärbt — sonst ehrlich "kein belastbarer Trend".
-function TrendBadge({ t }: { t?: FitTrend }) {
-  if (!t) return null;
-  const good = t.verdict === "besser";
-  const bad = t.verdict === "schlechter";
-  const cls = good
-    ? "border-good/40 bg-good/10 text-good"
-    : bad
-    ? "border-bad/40 bg-bad/10 text-bad"
-    : "border-line bg-surface-alt text-muted";
-  const txt = good ? "✓ verbessert sich" : bad ? "verschlechtert sich"
-    : t.verdict === "unklar" ? "kein belastbarer Trend" : "zu wenig Daten";
-  return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
-      {txt}
-    </span>
-  );
-}
+type Panel = "analyses" | "achievements" | "records" | null;
+const linkClass = "py-2 text-xs text-muted underline underline-offset-4";
+const delta = (current: number, previous: number, digits = 0) => `${current > previous ? "+" : ""}${de(current - previous, digits)}`;
 
 export default function Laufen() {
-  const [sum, setSum] = useState<RunSummary | null>(null);
-  const [vol, setVol] = useState<VolPoint[]>([]);
-  const [pdet, setPdet] = useState<PaceDetail | null>(null);
-  const [vo2, setVo2] = useState<Vo2Point[]>([]);
-  const [eft, setEft] = useState<EfTrend | null>(null);
-  const [easy, setEasy] = useState<EasyHr | null>(null);
-  const [pbz, setPbz] = useState<PaceByZone | null>(null);
+  const [week, setWeek] = useState<RunWeekOverview | null>(null);
+  const [vol, setVol] = useState<VolPoint[] | null>(null);
   const [best, setBest] = useState<BestEfforts | null>(null);
   const [ach, setAch] = useState<Achievements | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
+  const [extrasError, setExtrasError] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
   useEffect(() => {
-    api.runSummary().then(setSum).catch((e) => setErr(String(e)));
-    api.runVolume(12).then(setVol).catch(() => {});
-    api.runPaceDetail().then(setPdet).catch(() => {});
-    api.runVo2(365).then(setVo2).catch(() => {});
-    api.runEf().then(setEft).catch(() => {});
-    api.runEasyHr().then(setEasy).catch(() => {});
-    api.runPaceByZone().then(setPbz).catch(() => {});
-    api.runBestEfforts().then(setBest).catch(() => {});
-    api.runAchievements().then(setAch).catch(() => {});
+    api.runWeekOverview().then(setWeek).catch((e) => setErr(String(e)));
+    api.runVolume(12).then(setVol).catch(() => setExtrasError(true));
+    api.runBestEfforts().then(setBest).catch(() => setExtrasError(true));
+    api.runAchievements().then(setAch).catch(() => setExtrasError(true));
   }, []);
-
-  if (err) return (<><PageTitle title="Laufen" /><ApiError error={err} /></>);
-  if (!sum) return (<><PageTitle title="Laufen" /><Loading /></>);
-
-  const hasHr = (eft?.series?.length ?? 0) > 0;
-  // HF-Werte stammen aus der letzten Woche MIT HF-Läufen — ist die älter als die
-  // letzte Lauf-Woche (Watch nicht getragen), die Woche im KPI ausweisen.
-  const lastVolWeek = vol.length > 0 ? vol[vol.length - 1].week : null;
-  const hrStale = !!(sum.hr_week && lastVolWeek && sum.hr_week !== lastVolWeek);
-
-  return (
-    <>
-      <PageTitle title="Laufen" sub="Volumen, Tempo, VO₂max & Herzfrequenz" />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi
-          label="Wochenvolumen" sub={`${de0(sum.week_runs)} Läufe`} watermark="/img/run-teal-solid.png"
-          value={de(sum.week_km, 1)} unit="km/Wo"
-        />
-        <Kpi
-          label="Pace" sub="pro Kilometer"
-          value={pace(sum.pace)} unit="/km"
-        />
-        <Kpi
-          label="VO₂max" sub="aerobe Fitness"
-          value={de0(sum.vo2max)}
-        />
-        <Kpi
-          label="Ø-Puls"
-          sub={
-            sum.avg_hr == null ? "noch keine HF-Daten"
-            : hrStale ? `max ${de0(sum.max_hr)} · Wo. ${dm(sum.hr_week!)}`
-            : `max ${de0(sum.max_hr)} bpm`
-          }
-          value={de0(sum.avg_hr)} unit={sum.avg_hr != null ? "bpm" : undefined}
-        />
-      </div>
-
-      {ach && (
-        <div className="mt-4">
-          <AchievementsSummary data={ach} />
+  if (err) return <><PageTitle title="Laufen" /><ApiError error={err} /></>;
+  if (!week) return <><PageTitle title="Laufen" /><Loading /></>;
+  const { current, previous } = week;
+  return <>
+    <PageTitle title="Laufen" sub="Training, Fitness & Bestleistungen" />
+    <section aria-labelledby="running-training">
+      <h2 id="running-training" className="mb-3 font-display text-lg font-extrabold">Training</h2>
+      <Card>
+        <p className="text-xs text-muted">Diese Woche · seit {dm(week.week_start)}</p>
+        <div className="mt-3 grid grid-cols-3 gap-3 tabular-nums">
+          {[
+            { label: "Kilometer", value: de(current.km, 1), change: `${delta(current.km, previous.km, 1)} km` },
+            { label: "Läufe", value: de0(current.runs), change: `${delta(current.runs, previous.runs)} Läufe` },
+            { label: "Laufzeit", value: `${de0(current.minutes)} min`, change: `${delta(current.minutes, previous.minutes)} min` },
+          ].map((item) => <div key={item.label}><p className="text-xs text-muted">{item.label}</p><p className="mt-1 font-display text-xl font-extrabold sm:text-3xl">{item.value}</p><p className="mt-1 text-xs text-muted">{item.change}</p></div>)}
         </div>
-      )}
+        <p className="mt-3 text-[11px] text-muted">Veränderung gegenüber der gesamten Vorwoche · aktuelle Woche noch laufend</p>
+        <div className="mt-5 border-t border-line pt-4">
+          <CardTitle title="Wochenkilometer" sub="Letzte 12 Kalenderwochen" />
+          {vol ? <Bars data={Array.from({ length: 12 }, (_, i) => {
+            const date = new Date(`${week.week_start}T12:00:00Z`);
+            date.setUTCDate(date.getUTCDate() - (11 - i) * 7);
+            const key = date.toISOString().slice(0, 10);
+            return { label: dm(key), value: vol.find((v) => v.week === key)?.km ?? 0 };
+          })} unit="km" height={150} /> : <p className="text-xs text-muted">{extrasError ? "Wochenkilometer nicht verfügbar." : "Wochenkilometer werden geladen …"}</p>}
+        </div>
+      </Card>
+    </section>
 
-      {best && best.distances.some((d) => d.entries.length > 0) && (
-        <>
-          <Card className="mt-6">
-            <CardTitle title="Bestzeiten" sub="Schnellster Abschnitt innerhalb eines Laufs · je Distanz die beste Zeit" />
+    <section className="mt-6" aria-labelledby="running-fitness">
+      <h2 id="running-fitness" className="font-display text-lg font-extrabold">Fitness</h2>
+      <div className="grid items-start gap-4 xl:grid-cols-2 [&>div]:min-w-0 [&>div]:mt-3">
+        <RunningFitness />
+        <StandardizedRunHr />
+      </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <button className={linkClass} onClick={() => setPanel("analyses")}>Weitere Analysen</button>
+        <RunAnalysisSettings />
+      </div>
+    </section>
+
+    <section className="mt-6" aria-labelledby="running-records">
+      <h2 id="running-records" className="mb-3 font-display text-lg font-extrabold">Bestleistungen</h2>
+      <Card>
+        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Bestzeiten</h3><button className={linkClass} onClick={() => setPanel("records")}>Rekorddetails</button></div>
+        {best?.distances.some((d) => d.entries.length > 0) ? <>
             <table className="w-full text-sm tabular-nums">
               <thead>
                 <tr className="border-b border-line text-xs text-muted">
@@ -131,194 +97,23 @@ export default function Laufen() {
                 })}
               </tbody>
             </table>
-          </Card>
-
-          {best.records && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {best.records.longest_run && (
-                <Card>
-                  <p className="text-[11px] text-muted">Längster Lauf</p>
-                  <p className="font-display text-2xl font-extrabold">{de(best.records.longest_run.km, 1)} km</p>
-                  <p className="text-[11px] text-muted">am {dm(best.records.longest_run.date)}</p>
-                </Card>
-              )}
-              {best.records.biggest_week && (
-                <Card>
-                  <p className="text-[11px] text-muted">Größte Woche</p>
-                  <p className="font-display text-2xl font-extrabold">{de(best.records.biggest_week.km, 1)} km</p>
-                  <p className="text-[11px] text-muted">Wo. {dm(best.records.biggest_week.week)} · {best.records.biggest_week.runs} Läufe</p>
-                </Card>
-              )}
-              {best.records.best_ef && (
-                <Card>
-                  <p className="text-[11px] text-muted">Beste aerobe Effizienz</p>
-                  <p className="font-display text-2xl font-extrabold">{de(best.records.best_ef.ef, 2)}</p>
-                  <p className="text-[11px] text-muted">m/Herzschlag · {dm(best.records.best_ef.date)}</p>
-                </Card>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      <RunningFitness />
-      <StandardizedRunHr />
-      <RunAnalysisSettings />
-
-      {hasHr && (
-        <>
-          <div className="mt-6 mb-3">
-            <h2 className="font-display text-lg font-extrabold tracking-tight">Fitness-Trends</h2>
-            <p className="text-xs text-muted">
-              Entwicklung seit Laufbeginn — Urteil nur bei statistischer Signifikanz (95 %-CI, Lauf-Level-Regression)
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Card>
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold">Puls im Locker-Korridor</h3>
-                  <p className="text-[11px] text-muted">
-                    nur Läufe mit Pace {pace(easy?.pace_lo)}–{pace(easy?.pace_hi)} /km — niedriger = fitter
-                  </p>
-                </div>
-                <TrendBadge t={easy?.trend} />
-              </div>
-              <AreaTrend
-                values={(easy?.series ?? []).map((p) => p.avg_hr)}
-                labels={(easy?.series ?? []).map((p) => dm(p.week))}
-                format={(n) => de(n, 0)}
-                unit="bpm"
-                height={170}
-                smooth
-              />
-              {easy?.trend?.delta != null && easy.trend.verdict !== "wenig_daten" && (
-                <p className="mt-2 text-[11px] text-muted">
-                  Δ {de(easy.trend.delta, 1)} bpm über {easy.trend.days} Tage · {easy.runs} Läufe im Korridor
-                </p>
-              )}
-            </Card>
-
-            <Card>
-              <CardTitle
-                title="Pace je Puls-Zone"
-                sub={
-                  pbz?.hr_max
-                    ? `Ø-Pace je physiologischer Zone (% von HFmax ${pbz.hr_max}${pbz.hr_max_source === "einstellung" ? "" : ", aus Daten"}). Vorsicht Zonen-Wanderung: fittere Läufe rutschen in tiefere Zonen — die Linien unterschätzen den Fortschritt`
-                    : "Ø-Pace je physiologischer Puls-Zone (% von HFmax)"
-                }
-              />
-              {pbz?.zones?.length ? (
-                <>
-                  <MultiTrend
-                    height={190}
-                    format={pace}
-                    labels={(pbz.weeks ?? []).map(dm)}
-                    series={pbz.zones.flatMap((z) => [
-                      // faint Rohwerte im Hintergrund
-                      { values: z.series, color: zoneColor(z.idx), label: "", opacity: 0.28, width: 1, hideLabel: true },
-                      // fette, geglättete Trendlinie (EWMA + monotone Kurve)
-                      {
-                        values: z.smooth ?? z.series, color: zoneColor(z.idx), smooth: true, width: 2.4,
-                        label: `${z.zone} ${z.name} · ${z.hi ? `${z.lo}–${z.hi}` : `≥${z.lo}`} (${z.runs})`,
-                      },
-                    ])}
-                  />
-                  <p className="mt-2 text-[11px] text-muted">
-                    Δ s/km pro Monat (Punkt-Schätzer, ohne Signifikanz):{" "}
-                    {pbz.zones
-                      .map((z) => `${z.zone}: ${z.sec_per_km_per_month != null ? de(z.sec_per_km_per_month, 0) : "—"}`)
-                      .join(" · ")}
-                  </p>
-                </>
-              ) : (
-                <div style={{ height: 170 }} className="grid place-items-center text-xs text-muted">
-                  zu wenig Läufe mit HF für Zonen-Kurven
-                </div>
-              )}
-            </Card>
-          </div>
-        </>
-      )}
-
-      <div className="mt-6 mb-3">
-        <h2 className="font-display text-lg font-extrabold tracking-tight">Verlauf</h2>
-        <p className="text-xs text-muted">Tempo, aerobe Fitness & Volumen über die Zeit</p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {hasHr && (
-          <Card>
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold">Aerobe Effizienz</h3>
-                <p className="text-[11px] text-muted">
-                  Meter pro Herzschlag je Lauf + EWMA-Glättung — höher = fitter (gleiche Pace bei weniger Puls)
-                </p>
-              </div>
-              <TrendBadge t={eft?.trend} />
-            </div>
-            <MultiTrend
-              height={170}
-              format={(n) => de(n, 2)}
-              labels={(eft?.series ?? []).map((p) => dm(p.date))}
-              series={[
-                { values: (eft?.series ?? []).map((p) => p.ef), label: "je Lauf", color: "var(--color-accent-2)" },
-                { values: (eft?.series ?? []).map((p) => p.smooth), label: "geglättet (EWMA)", color: "var(--color-accent)", smooth: true },
-              ]}
-            />
-            {eft?.trend?.delta != null && eft.trend.verdict !== "wenig_daten" && (
-              <p className="mt-2 text-[11px] text-muted">
-                Δ {de(eft.trend.delta, 2)} m/Herzschlag über {eft.trend.days} Tage · {eft.runs} Läufe
-              </p>
-            )}
-          </Card>
-        )}
-
-        <Card>
-          <CardTitle title="Pace-Trend" sub="je Lauf + EWMA-Glättung · niedriger = schneller" />
-          <MultiTrend
-            height={170}
-            format={pace}
-            labels={(pdet?.series ?? []).map((p) => dm(p.date))}
-            series={[
-              { values: (pdet?.series ?? []).map((p) => p.pace), label: "je Lauf", color: "var(--color-accent-2)" },
-              { values: (pdet?.series ?? []).map((p) => p.smooth), label: "geglättet (EWMA)", color: "var(--color-accent)", smooth: true },
-            ]}
-          />
-          {pdet?.runs != null && (
-            <p className="mt-2 text-[11px] text-muted">
-              {pdet.runs} Läufe · rohe Pace mischt Intervall-/Locker-Läufe — belastbares Urteil: Karte „Puls im Locker-Korridor"
-            </p>
-          )}
-        </Card>
-
-        <Card className="md:col-span-2">
-          <CardTitle title="Wochenvolumen · 12 Wochen" />
-          <Bars data={vol.map((v) => ({ label: dm(v.week), value: Math.round(v.km) }))} unit="km" height={170} />
-        </Card>
-
-        <Card>
-          <CardTitle title="Samsung VO₂max-Trend" sub="Schätzung der Uhr · unabhängig vom eigenen VO₂-Äquivalent" />
-          <AreaTrend values={vo2.map((p) => p.vo2)} labels={vo2.map((p) => dm(p.date))} height={170} smooth />
-        </Card>
-      </div>
-
-      {ach && (
-        <div className="mt-6">
-          <AchievementsGrid data={ach} />
-        </div>
-      )}
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-alt px-2.5 py-1 text-[11px] text-muted">
-          ⛰ Höhenmeter: nicht verfügbar
-        </span>
-        {!hasHr && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-alt px-2.5 py-1 text-[11px] text-muted">
-            ♥ Herzfrequenz: erscheint nach dem nächsten Health-Connect-Import
-          </span>
-        )}
-      </div>
-    </>
-  );
+        </> : <p className="text-xs text-muted">Noch keine Bestzeiten verfügbar.</p>}
+        <p className="mt-2 text-[11px] text-muted">Schnellster Abschnitt innerhalb eines Laufs</p>
+        {ach && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+          <p className="text-sm"><strong>{ach.summary.earned} Erfolge</strong><span className="text-muted"> · {ach.summary.title} · {de0(ach.summary.points)} Punkte</span></p>
+          <button className={linkClass} onClick={() => setPanel("achievements")}>Alle Erfolge</button>
+        </div>}
+      </Card>
+    </section>
+    {extrasError && <p role="status" className="mt-3 text-xs text-muted">Einige Zusatzdaten konnten nicht geladen werden. Bitte die Seite neu laden.</p>}
+    {panel === "analyses" && <RunAnalysisDialog title="Weitere Laufanalysen" onClose={() => setPanel(null)}><RunningMoreAnalyses /></RunAnalysisDialog>}
+    {panel === "achievements" && ach && <RunAnalysisDialog title="Alle Erfolge" onClose={() => setPanel(null)}><AchievementsSummary data={ach} /><div className="mt-5"><AchievementsGrid data={ach} /></div></RunAnalysisDialog>}
+    {panel === "records" && <RunAnalysisDialog title="Rekorddetails" onClose={() => setPanel(null)}>
+      <dl className="space-y-4 text-sm">
+        <div><dt className="text-muted">Längster Lauf</dt><dd>{best?.records?.longest_run ? `${de(best.records.longest_run.km, 1)} km · ${dm(best.records.longest_run.date)}` : "Noch kein Wert"}</dd></div>
+        <div><dt className="text-muted">Größte Woche</dt><dd>{best?.records?.biggest_week ? `${de(best.records.biggest_week.km, 1)} km · ${best.records.biggest_week.runs} Läufe · Woche vom ${dm(best.records.biggest_week.week)}` : "Noch kein Wert"}</dd></div>
+        <div><dt className="text-muted">Beste aerobe Effizienz</dt><dd>{best?.records?.best_ef ? `${de(best.records.best_ef.ef, 2)} m/Herzschlag · ${dm(best.records.best_ef.date)}` : "Noch kein Wert"}</dd></div>
+      </dl>
+    </RunAnalysisDialog>}
+  </>;
 }
