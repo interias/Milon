@@ -10,13 +10,6 @@ import { AreaTrend, Bars, MultiTrend } from "@/components/charts";
 import { AchievementsSummary, AchievementsGrid } from "@/components/Achievements";
 import { de, de0, pace, dm, dur } from "@/lib/format";
 
-// Gold/Silber/Bronze für die Bestzeiten-Trophäen (klinische Palette).
-const MEDALS = [
-  { icon: "🥇", color: "#c8a02c" },
-  { icon: "🥈", color: "#8b95a1" },
-  { icon: "🥉", color: "#b1703a" },
-];
-
 // Puls-Zonen-Farben: kühl (locker Z1) → warm (hart Z4/Z5), Zuordnung folgt der ZONE-Nummer
 // (Filtern/Ausblenden färbt nichts um). Als Set validiert (dataviz-Checks: CVD-ΔE ≥ 15,
 // Kontrast ≥ 3:1 auf Weiß, Lightness-Band).
@@ -112,46 +105,30 @@ export default function Laufen() {
 
       {best && best.distances.some((d) => d.entries.length > 0) && (
         <>
-          <div className="mt-6 mb-3">
-            <h2 className="font-display text-lg font-extrabold tracking-tight">Bestzeiten</h2>
-            <p className="text-xs text-muted">
-              Schnellstes zusammenhängendes Fenster <em>innerhalb</em> eines Laufs (Best-Effort-Splits, wie Strava/Garmin)
-            </p>
-          </div>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] items-start gap-2.5">
-            {best.distances.map((d) => (
-              <Card key={d.distance_m} className="p-3!">
-                <h3 className="mb-1.5 font-display text-sm font-extrabold tracking-tight">{d.label}</h3>
-                {d.entries.length ? (
-                  <ol className="space-y-1">
-                    {d.entries.map((e, i) => {
-                      // Sekunden EINMAL runden, damit Zeit und Pace/km konsistent sind
-                      // (sonst 1-s-Divergenz an .5-Grenzen durch getrenntes Runden).
-                      const secs = Math.round(e.seconds);
-                      return (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className="text-sm leading-none" title={["Gold", "Silber", "Bronze"][i]}>{MEDALS[i]?.icon}</span>
-                          <span
-                            className="font-display text-base font-extrabold tabular-nums"
-                            style={{ color: MEDALS[i]?.color }}
-                          >
-                            {dur(secs)}
-                          </span>
-                          <span className="ml-auto whitespace-nowrap text-right text-[11px] tabular-nums text-muted">
-                            {pace(secs / (d.km * 60))}/km · {dm(e.date)}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                ) : (
-                  <div className="py-1 text-xs text-muted">
-                    <span>noch nicht so weit gelaufen</span>
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
+          <Card className="mt-6">
+            <CardTitle title="Bestzeiten" sub="Schnellster Abschnitt innerhalb eines Laufs · je Distanz die beste Zeit" />
+            <table className="w-full text-sm tabular-nums">
+              <thead>
+                <tr className="border-b border-line text-xs text-muted">
+                  <th scope="col" className="pb-2 text-left font-medium">Reichweite</th>
+                  <th scope="col" className="pb-2 text-right font-medium">Zeit</th>
+                  <th scope="col" className="pb-2 text-right font-medium">Datum</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {best.distances.filter((d) => d.entries.length > 0).map((d) => {
+                  const entry = d.entries[0];
+                  return (
+                    <tr key={d.distance_m}>
+                      <th scope="row" className="py-2 text-left font-semibold">{d.label}</th>
+                      <td className="py-2 text-right font-semibold text-accent">{dur(Math.round(entry.seconds))}</td>
+                      <td className="py-2 text-right text-muted">{dm(entry.date)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
 
           {best.records && (
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
