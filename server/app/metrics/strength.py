@@ -345,8 +345,7 @@ def personal_records(days: int = 120, limit: int = 25) -> list[dict]:
 
 
 def exercise_status(exercise: str, lookback: int = 6) -> dict:
-    """Algorithmischer Status einer Übung über die letzten `lookback` Sessions:
-    progress / stall / regress / deload (e1RM-Steigung + RPE-Steigung)."""
+    """Describe recent recorded training days; legacy keys are not diagnoses."""
     df = _sets()
     sub = df[df["exercise"] == exercise]
     if sub.empty:
@@ -364,15 +363,15 @@ def exercise_status(exercise: str, lookback: int = 6) -> dict:
                  if len(rpe) >= 3 else None)
 
     if is_pr or e_slope > 0.3:
-        status, label = "progress", "Im Aufwärtstrend"
+        status, label = "progress", "e1RM steigt" if e_slope > 0.3 else "Bestwert zuletzt erreicht"
     elif e_slope < -0.3:
-        status, label = "regress", "Rückläufig"
+        status, label = "regress", "e1RM fällt"
     else:
-        status, label = "stall", "Stagniert"
-    detail = f"e1RM {'+' if e_slope >= 0 else ''}{round(e_slope, 2)} kg/Session über {len(recent)} Sessions"
+        status, label = "stall", "e1RM annähernd unverändert"
+    detail = f"e1RM {'+' if e_slope >= 0 else ''}{round(e_slope, 2)} kg je erfasstem Trainingstag über {len(recent)} Trainingstage"
     if status in ("stall", "regress") and rpe_slope is not None and rpe_slope > 0.1:
-        status, label = "deload", "Ermüdung – Deload erwägen"
-        detail += f", RPE steigt (+{round(rpe_slope, 2)}/Session)"
+        status, label = "deload", "e1RM steigt nicht, erfasste RPE steigt"
+        detail += f", RPE +{round(rpe_slope, 2)} je Trainingstag mit RPE"
     return {"status": status, "label": label, "detail": detail,
             "e1rm_slope": round(e_slope, 2), "rpe_slope": round(rpe_slope, 2) if rpe_slope is not None else None,
             "is_pr": bool(is_pr), "sessions": int(n)}

@@ -1,5 +1,16 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Übungsdetails: ein Diagramm je Messgröße (2026-09-20)
+
+Standardzeitraum ist 3M; 1M/12M/Gesamt bleiben erreichbar. Ein `RunTrendChart` schaltet
+zwischen e1RM, schwerstem Trainingsgewicht, bewegter Last und RPE um. Headline und
+Vergleich beziehen sich auf den letzten bzw. ersten/letzten Trainingstag im Fenster;
+fehlende RPE-Werte werden nicht ersetzt, ein einzelner Tag liefert keinen Vergleich.
+Bestleistungen, Umfang und weitere Kennzahlen stehen im Detaildialog. Statuslabels
+in der API beschreiben e1RM-/RPE-Verläufe ohne Ermüdungsdiagnose oder Deload-Empfehlung;
+historische Statusschlüssel bleiben kompatibel. Der Status verwendet weiterhin die
+jüngsten erfassten Trainingstage unabhängig vom gewählten Fenster und ist so beschriftet.
+
 ## Kraft: Entwicklung zuerst (2026-09-20)
 
 Die Hauptseite zeigt Gesamtstärke mit einer geglätteten Wochenlinie, Zeitraumwahl
