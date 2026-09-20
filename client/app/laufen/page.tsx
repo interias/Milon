@@ -118,37 +118,34 @@ export default function Laufen() {
               Schnellstes zusammenhängendes Fenster <em>innerhalb</em> eines Laufs (Best-Effort-Splits, wie Strava/Garmin)
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] items-start gap-2.5">
             {best.distances.map((d) => (
-              <Card key={d.distance_m}>
-                <div className="mb-2 flex items-baseline justify-between">
-                  <h3 className="font-display text-base font-extrabold tracking-tight">{d.label}</h3>
-                  <span className="text-[10px] uppercase tracking-wide text-muted">Best-Effort</span>
-                </div>
+              <Card key={d.distance_m} className="p-3!">
+                <h3 className="mb-1.5 font-display text-sm font-extrabold tracking-tight">{d.label}</h3>
                 {d.entries.length ? (
-                  <ol className="space-y-2">
+                  <ol className="space-y-1">
                     {d.entries.map((e, i) => {
                       // Sekunden EINMAL runden, damit Zeit und Pace/km konsistent sind
                       // (sonst 1-s-Divergenz an .5-Grenzen durch getrenntes Runden).
                       const secs = Math.round(e.seconds);
                       return (
-                        <li key={i} className="flex items-center gap-2.5">
-                          <span className="text-lg leading-none" title={["Gold", "Silber", "Bronze"][i]}>{MEDALS[i]?.icon}</span>
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="text-sm leading-none" title={["Gold", "Silber", "Bronze"][i]}>{MEDALS[i]?.icon}</span>
                           <span
-                            className="font-display text-xl font-extrabold tabular-nums"
+                            className="font-display text-base font-extrabold tabular-nums"
                             style={{ color: MEDALS[i]?.color }}
                           >
                             {dur(secs)}
                           </span>
-                          <span className="ml-auto text-right text-[11px] text-muted">
-                            {pace(secs / (d.km * 60))}/km<br />{dm(e.date)}
+                          <span className="ml-auto whitespace-nowrap text-right text-[11px] tabular-nums text-muted">
+                            {pace(secs / (d.km * 60))}/km · {dm(e.date)}
                           </span>
                         </li>
                       );
                     })}
                   </ol>
                 ) : (
-                  <div className="grid h-[104px] place-items-center text-center text-xs text-muted">
+                  <div className="py-1 text-xs text-muted">
                     <span>noch nicht so weit gelaufen</span>
                   </div>
                 )}
