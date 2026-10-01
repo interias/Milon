@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type ActivityOverview, type Activity, type Report, type Consistency } from "@/lib/api";
 import { Card, CardTitle, PageTitle } from "@/components/ui";
@@ -20,8 +20,7 @@ function useResource<T>(load: () => Promise<T>): Resource<T> {
   return state;
 }
 const loadStrength = () => api.strengthIndex("3m");
-const loadConsistency = () => api.activityConsistency(84);
-const loadYear = () => api.activityConsistency(365);
+const loadConsistency = () => api.activityConsistency(0);
 const loadActivities = () => api.activityRecent(5);
 const loadReport = () => api.coachReports(1);
 const signed = (value: number | null | undefined, digits = 1) => value == null || !Number.isFinite(value) ? "Kein Vergleich verfügbar" : `${value > 0 ? "+" : value === 0 ? "±" : ""}${de(value, digits)}`;
@@ -33,9 +32,24 @@ function StateNote({ resource, empty = "Noch keine Daten verfügbar." }: { resou
 function DevelopmentCard({ title, subtitle, href, children }: { title: string; subtitle: string; href: string; children: ReactNode }) {
   return <Card className="flex h-full min-w-0 flex-col"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted">{subtitle}</p><div className="flex-1">{children}</div><Link href={href} className="mt-4 w-fit py-1 text-xs font-semibold text-accent">{title} ansehen →</Link></Card>;
 }
-function AnnualConsistency() {
-  const resource = useResource<Consistency>(loadYear);
-  return resource.data ? <><Heatmap days={resource.data.days} /><p className="mt-3 text-xs text-muted">{resource.data.trained_days} Trainingstage · {resource.data.active_days} aktive Tage · letzte 365 Tage</p></> : <StateNote resource={resource} />;
+function ConsistencyHistory({ data, fit = false }: { data: Consistency; fit?: boolean }) {
+  const container = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    if (!fit || !container.current) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(container.current);
+    return () => observer.disconnect();
+  }, [fit]);
+  const last = data.days.at(-1);
+  const lastWeekday = last ? (new Date(last.date + "T00:00:00").getDay() + 6) % 7 : 0;
+  // Each week occupies 12px plus a 3px gap; keep the latest partial week.
+  const capacity = width == null ? 0 : (Math.max(1, Math.floor((width + 3) / 15)) - 1) * 7 + lastWeekday + 1;
+  const days = fit ? (capacity ? data.days.slice(-capacity) : []) : data.days;
+  return <div ref={container} className="min-w-0">
+    <Heatmap days={days} />
+    {days.length > 0 && <p className="mt-3 text-xs text-muted">{dm(days[0].date)}–{dm(days.at(-1)!.date)} · {days.filter((d) => d.trained).length} Trainingstage · {days.filter((d) => d.level >= 1).length} aktive Tage · aktiv ab Training oder {de0(data.step_goal / 2)} Schritten</p>}
+  </div>;
 }
 function ActivityValue({ label, value, unit, change, note, href }: { label: string; value: string; unit: string; change: string; note?: string; href: string }) {
   return <div className="min-w-0"><Link href={href} className="text-xs text-muted hover:underline">{label}</Link><p className="mt-1 font-display text-xl font-bold sm:text-2xl">{value} <span className="text-xs font-normal text-muted">{unit}</span></p><p className="mt-1 text-xs text-muted">{change}</p>{note && <p className="mt-1 text-[11px] text-muted">{note}</p>}</div>;
@@ -111,10 +125,10 @@ export default function Overview() {
 
     <Card className="mt-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <CardTitle title="Konsistenz" sub="Letzte 12 Wochen · Training und Schritte" />
+        <CardTitle title="Konsistenz" sub="Training und Schritte · Zeitraum passend zur verfügbaren Breite" />
         {c && <p className="text-sm"><strong>{c.streak >= c.total - (c.days.at(-1)?.level === 0 ? 1 : 0) ? "≥ " : ""}{c.streak}</strong> <span className="text-xs text-muted">Tage aktive Serie</span></p>}
       </div>
-      {c ? <><Heatmap days={c.days} /><p className="mt-3 text-xs text-muted">{c.trained_days} Trainingstage · {c.active_days} aktive Tage · aktiv ab Training oder {de0(c.step_goal / 2)} Schritten</p><button className="mt-3 py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Ganzes Jahr ansehen →</button></> : <StateNote resource={consistency} />}
+      {c ? <><ConsistencyHistory data={c} fit /><button className="mt-3 py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button></> : <StateNote resource={consistency} />}
     </Card>
 
     <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -128,6 +142,6 @@ export default function Overview() {
         <Link href="/coach" className="mt-4 w-fit rounded border border-line px-3 py-2 text-sm font-semibold text-accent">Coach öffnen →</Link>
       </Card>
     </div>
-    {yearOpen && <RunAnalysisDialog title="Konsistenz · ganzes Jahr" onClose={() => setYearOpen(false)}><AnnualConsistency /></RunAnalysisDialog>}
+    {yearOpen && c && <RunAnalysisDialog title="Konsistenz · gesamter Zeitraum" onClose={() => setYearOpen(false)}><ConsistencyHistory data={c} /></RunAnalysisDialog>}
   </>;
 }

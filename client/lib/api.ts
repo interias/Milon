@@ -248,6 +248,13 @@ export type StrengthEnergy = {
 export type ProgressPhotos = { front: string | null; side: string | null; back: string | null; pose1: string | null; pose2: string | null };
 export type ProgressEntry = { id: number; taken_on: string; note: string | null; photos: ProgressPhotos; created_at: string | null };
 export type SettingsKey = { set: boolean; hint: string };
+export type CoachGoal = {
+  id: string; name: string; start_date: string | null; end_date: string | null; target: string;
+  priority: "high" | "normal" | "low"; status: "active" | "achieved" | "archived";
+  effective_status: "active" | "past" | "achieved" | "archived";
+};
+export type CoachProfile = { context: string; goals: CoachGoal[] };
+export type CoachProfileUpdate = { context: string; goals: Omit<CoachGoal, "effective_status">[] };
 export type AppSettings = {
   openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; fddb_user_masked: string;
   keys: { openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
@@ -401,6 +408,8 @@ export const api = {
     return r.json();
   },
   // Einstellungen
+  coachProfileGet: () => get<CoachProfile>("/settings/coach"),
+  coachProfileUpdate: (body: CoachProfileUpdate) => put<CoachProfile>("/settings/coach", body),
   settingsGet: () => get<AppSettings>("/settings"),
   settingsUpdate: (body: SettingsUpdate) => put<AppSettings>("/settings", body),
 };

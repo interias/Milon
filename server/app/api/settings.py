@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from ..coach import profile
 from ..config import settings, update_env_file
 from ..sync import scheduler
 
@@ -44,6 +45,16 @@ def _current() -> dict:
 @router.get("")
 def get_settings() -> dict:
     return _current()
+
+
+@router.get("/coach")
+def get_coach_profile() -> dict:
+    return profile.view(profile.load())
+
+
+@router.put("/coach")
+def update_coach_profile(body: profile.Profile) -> dict:
+    return profile.save(body)
 
 
 class SettingsIn(BaseModel):

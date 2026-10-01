@@ -68,7 +68,7 @@ def chat(body: ChatIn) -> dict:
 @router.post("/ask")
 def ask(body: ChatIn) -> dict:
     """Tool-Calling-Coach: das LLM ruft die Metrik-Tools selbst auf, bevor es antwortet (Phase 2b)."""
-    system = (prompts.SYSTEM + "\n\nDu hast Werkzeuge, um die echten Kennzahlen abzufragen. "
+    system = (prompts.system_prompt() + "\n\nDu hast Werkzeuge, um die echten Kennzahlen abzufragen. "
               "Nutze sie gezielt, bevor du antwortest; erfinde keine Werte.")
     messages: list[dict] = [{"role": "system", "content": system}]
     for h in (body.history or []):

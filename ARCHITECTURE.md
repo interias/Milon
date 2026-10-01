@@ -1,5 +1,37 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Coach: Empfehlungen mit Datenbeleg (2026-09-20)
+
+Unter Einstellungen sind einzelne Ziele (Name, optional Termin/Zeitraum,
+gewünschtes Ergebnis, Priorität und Status) plus freie Rahmenbedingungen
+bearbeitbar. `GET/PUT /settings/coach` liest/ersetzt das gesamte Profil; leere
+Ziele/Kontexte bleiben bewusst leer. Die lokale SQLite-Tabelle `coach_profiles`
+speichert das validierte Profil getrennt von Zugangsdaten. `COACH_CONTEXT` in
+`server/.env` dient nur bis zum ersten Speichern als Legacy-Fallback.
+
+Vergangene Termine werden nach dem letzten Tag in der konfigurierten Zeitzone
+automatisch als „Termin vergangen“ markiert, nicht als erreicht. Undatierte Ziele
+bleiben aktiv. Erreichte und archivierte Ziele bleiben bearbeitbar, sind aber aus
+dem Coach-Kontext ausgeschlossen; vergangene Ziele erscheinen ausdrücklich nur
+als vergangene Termine mit unbekanntem Erfolg. Priorität und Datum steuern die
+Planung; bei Zielkonflikten soll der Coach nachfragen. Chat und Reports lesen das
+Profil bei jeder neuen Anfrage, bestehende Reports behalten ihren alten Prompt.
+
+Fest eingebaute Gewichtsziele und undatierte Wettkämpfe entfallen.
+Empfehlungen sollen eine priorisierte Maßnahme, einen
+Datenbeleg mit Zeitraum und ein überprüfbares Sieben-Tage-Ziel nennen; fehlende
+Zielzeiten, Trainingsverfügbarkeit oder Gewichtsziele werden erfragt.
+
+`get_nutrition_summary` und der Report-Snapshot liefern Protein, Kalorien, Makros,
+Referenzziel und Erfassungsabdeckung. Snapshot-Messdaten und Wochenreihen tragen
+Datumsangaben; der letzte Schrittwert wird nicht als heutiger Wert ausgegeben.
+Ausgedünnte Tool-Verläufe behalten Anfang und Ende. Energieangaben der Metriken
+sind bereits kcal; KFA-Prognosen werden als Szenario mit Annahmen beschrieben.
+
+Ausfallursache: Das konfigurierte kostenlose OpenRouter-Modell wurde eingestellt
+(Provider 404 → Coach 502). Die lokale Modellkonfiguration wurde auf den vom
+Provider genannten kostenpflichtigen Ersatz umgestellt und live geprüft.
+
 ## Fortschritt: direkter Fotovergleich (2026-09-20)
 
 Über der Timeline steht ein Vergleich mit frühestem/neuestem Frontfoto als Standard.

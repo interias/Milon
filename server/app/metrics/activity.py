@@ -79,6 +79,9 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
         step_map = {d.date(): int(s) for d, s in zip(steps["day"], steps["steps"])}
 
     end = datetime.now(ZoneInfo(settings.timezone)).date()
+    if days == 0:
+        first = min((d for d in trained | step_map.keys() if d <= end), default=end)
+        days = (end - first).days + 1
     start = end - timedelta(days=days - 1)
     out: list[dict] = []
     for i in range(days):

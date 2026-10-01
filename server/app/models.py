@@ -161,6 +161,14 @@ class RestingHrDaily(SQLModel, table=True):
     source: str = "health_connect"
 
 
+class CoachProfile(SQLModel, table=True):
+    """Single-user goals and coaching context, separate from provider secrets."""
+    __tablename__ = "coach_profiles"
+
+    id: int = Field(default=1, primary_key=True)
+    payload: str
+
+
 class CoachReport(SQLModel, table=True):
     __tablename__ = "coach_reports"
 

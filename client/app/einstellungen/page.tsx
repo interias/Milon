@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type AppSettings, type SettingsUpdate } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
+import CoachGoals from "@/components/CoachGoals";
 
 type SecretKey = "openrouter_api_key" | "hevy_api_key" | "fddb_pw" | "fddb_cookie" | "fddb_phpsessid";
 const INPUT =
@@ -53,8 +54,8 @@ export default function Einstellungen() {
     }
   }
 
-  if (err) return (<><PageTitle title="Einstellungen" /><ApiError error={err} /></>);
-  if (!s) return (<><PageTitle title="Einstellungen" /><Loading /></>);
+  if (err) return (<><PageTitle title="Einstellungen" /><CoachGoals /><ApiError error={err} /></>);
+  if (!s) return (<><PageTitle title="Einstellungen" /><CoachGoals /><Loading /></>);
 
   const secret = (key: SecretKey, label: string) => (
     <label className="block">
@@ -77,7 +78,9 @@ export default function Einstellungen() {
 
   return (
     <>
-      <PageTitle title="Einstellungen" sub="Keys, Coach-Modell & Automatik · wird in server/.env gespeichert" />
+      <PageTitle title="Einstellungen" sub="Coach-Ziele, Keys, Modell & Automatik · lokal gespeichert" />
+
+      <CoachGoals />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

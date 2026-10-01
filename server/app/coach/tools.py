@@ -2,15 +2,16 @@
 Dieselbe metrics/-Schicht wie REST/Snapshot - das LLM ruft gezielt, was es fuer eine Frage braucht."""
 from __future__ import annotations
 
-from ..metrics import achievements, body, health, run_analysis, run_fitness_service, running, strength
+from ..metrics import achievements, body, health, nutrition, run_analysis, run_fitness_service, running, strength
 
 
 def _thin(items: list, n: int = 16) -> list:
     """Lange Reihen ausduennen, damit Tool-Ergebnisse token-sparsam bleiben."""
     if len(items) <= n:
         return items
-    step = len(items) / n
-    return [items[min(len(items) - 1, int(i * step))] for i in range(n)]
+    if n < 2:
+        return items[-1:] if n == 1 else []
+    return [items[round(i * (len(items) - 1) / (n - 1))] for i in range(n)]
 
 
 def _fn(name: str, desc: str, props: dict | None = None, required: list[str] | None = None) -> dict:
@@ -37,7 +38,13 @@ TOOLS = [
     _fn("get_overview", "Kompakte Zusammenfassung aller drei Bereiche (Koerper, Laufen, Kraft) mit den aktuellen Kennzahlen."),
     _fn("get_weight_trend", "Gewichtsverlauf (Tageswerte + 7-Tage-EWMA) der letzten N Tage.",
         {"days": {"type": "integer", "description": "Zeitraum in Tagen (Default 90)"}}),
-    _fn("get_tdee", "Adaptives TDEE / echtes Defizit: Oe-Intake, Defizit pro Tag, Gewichtsaenderung ueber das Fenster."),
+    _fn("get_tdee", "Geschaetzter Energieverbrauch und Energiebilanz. Datenstand, Erfassung und Vorlaeufigkeit beachten.",
+        {"window_days": {"type": "integer", "minimum": 1, "description": "Default 14 Tage"}}),
+    _fn("get_nutrition_summary", "Ernaehrung: Protein, Kalorien (bereits kcal), Makros und Protein-Referenzziel. "
+        "Fenster window_start bis last_day und Erfassungstage beachten; *_today bezeichnet den letzten "
+        "erfassten Tag, nicht zwingend heute. Eintragstage belegen keine vollstaendige Tageserfassung. "
+        "tdee und kcal_avg7 haben unterschiedliche Fenster: fuer Energiebilanz get_tdee verwenden. "
+        "protein_target ist ein Referenzwert, kein individuell verordnetes Ziel."),
     _fn("get_bodyfat_trend", "Koerperfett-Trend (Bioimpedanz, nur Trend) der letzten N Tage.",
         {"days": {"type": "integer"}}),
     _fn("get_running_volume", "Wochen-Laufvolumen (km) + Anzahl Laeufe der letzten N Wochen.",
@@ -73,13 +80,13 @@ TOOLS = [
     _fn("get_e1rm_trend", "e1RM-Verlauf einer bestimmten Uebung.",
         {"exercise": {"type": "string", "description": "genauer Uebungsname, z. B. 'Squat (Langhantel)'"},
          "weeks": {"type": "integer"}}, ["exercise"]),
-    _fn("get_health_overview", "Allgemeine Gesundheitswerte: Schritte (heute/Oe7T/Oe30T) + Radfahren (gesamt/30T/diese Woche/Oe-Speed)."),
+    _fn("get_health_overview", "Allgemeine Gesundheitswerte: Schritte (letzter erfasster Tag/Oe7T/Oe30T) + Radfahren. Datenstand und Erfassungstage beachten."),
     _fn("get_steps", "Tagesschritte + 7-Tage-Mittel der letzten N Tage (Health Connect).",
         {"days": {"type": "integer", "description": "Default 30"}}),
     _fn("get_cycling_volume", "Wochen-Radvolumen (km) + Anzahl Fahrten der letzten N Wochen (exercise_type 4).",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
-    _fn("get_forecast", "30-Tage-Prognose (linearer Trend) für Gewicht UND Körperfett: aktueller Wert, "
-        "projizierter Wert in 30 Tagen, Änderung pro Woche/Monat."),
+    _fn("get_forecast", "30-Tage-Gewichtsprognose aus linearem Trend; Körperfett als abgeleitetes "
+        "Szenario mit 15%-Magermasseverlust-Annahme, keine eigenstaendige KFA-Prognose. Datenstand beachten."),
     _fn("get_strength_index", "Gesamtstärke-Index (wöchentlich aufgelöst, driftfrei am Monats-Backbone "
         "verankert, Basis 100 = Trainingsstart): aktueller Wert, Δ über den Zeitraum, Trend "
         "(steigt/stagniert/faellt) + Treiber-/Bremse-Übungen.",
@@ -104,6 +111,8 @@ def dispatch(name: str, args: dict):
         return _thin(body.weight_trend(int(args.get("days", 90))))
     if name == "get_tdee":
         return body.adaptive_tdee(int(args.get("window_days", 14)))
+    if name == "get_nutrition_summary":
+        return nutrition.summary()
     if name == "get_bodyfat_trend":
         return _thin(body.body_fat_trend(int(args.get("days", 180))))
     if name == "get_running_volume":

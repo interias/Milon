@@ -1,9 +1,11 @@
 """Baut einen kompakten Datensnapshot aus der Metrik-Schicht für die Prompt-Injection (Coach-Stufe a)."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from ..metrics import body, health, running, strength
+from ..config import settings
+from ..metrics import body, health, nutrition, running, strength
 
 
 def _pace(p: float | None) -> str:
@@ -16,7 +18,8 @@ def _pace(p: float | None) -> str:
 
 def build_snapshot() -> dict:
     return {
-        "stand": date.today().isoformat(),
+        "stand": datetime.now(ZoneInfo(settings.timezone)).date().isoformat(),
+        "ernaehrung": nutrition.summary(),
         "koerper": body.summary(),
         "tdee": body.adaptive_tdee(),
         "laufen": running.summary(),
@@ -39,10 +42,11 @@ def snapshot_text() -> str:
     b, t, r, k = snap["koerper"], snap["tdee"], snap["laufen"], snap["kraft"]
     st, rad = snap["schritte"], snap["radfahren"]
     gp, fp = snap["gewicht_prognose"], snap["kfa_prognose"]
+    food = snap["ernaehrung"]
 
-    vol = " / ".join(f'{w["km"]:.0f}' for w in snap["lauf_volumen_4w"]) or "–"
+    vol = " / ".join(f'{w["week"]}: {w["km"]:.0f}' for w in snap["lauf_volumen_4w"]) or "–"
     lifts = ", ".join(f'{m["exercise"]}: {m["e1rm"]:.0f} kg' for m in (k.get("main_lifts") or [])[:5]) or "–"
-    ton = " / ".join(f'{w["tonnage_kg"]/1000:.1f}t' for w in snap["kraft_tonnage_6w"]) or "–"
+    ton = " / ".join(f'{w["week"]}: {w["tonnage_kg"]/1000:.1f}t' for w in snap["kraft_tonnage_6w"]) or "–"
 
     # HF-Werte stammen aus der letzten Woche MIT HF-Läufen — ist die älter als die letzte
     # Lauf-Woche (Watch nicht getragen), explizit kennzeichnen statt "letzte Woche" zu suggerieren.
@@ -51,16 +55,17 @@ def snapshot_text() -> str:
     hr_note = f" (Werte aus Woche vom {hr_week}, seitdem keine HF-Läufe)" if hr_week and hr_week != cur_week else ""
 
     lines = [
-        f"Stand: {snap['stand']}",
+        f"Abfragedatum: {snap['stand']}; einzelne Messdaten können älter sein. None = nicht verfügbar.",
         "",
         f"KÖRPER: Gewicht {b.get('weight_kg')} kg (7-Tage-Mittel {b.get('weight_avg7')}, "
-        f"Δ7T {b.get('weight_delta7')} kg), KFA-Trend {b.get('body_fat_pct')} %. "
+        f"Δ7T {b.get('weight_delta7')} kg; letzter Messtag {b.get('weight_date')}, "
+        f"{b.get('weight_days7')}/7 Messtage), KFA-Trend {b.get('body_fat_pct')} %. "
         f"Adaptives TDEE ~{t.get('tdee')} kcal (Ø-Intake {t.get('avg_intake')}, "
         f"Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}, "
         f"{t.get('estimate_days')} Schätztage in {t.get('smooth_days')} Kalendertagen"
         + (", vorläufig" if t.get("provisional") else "") + ").",
         "",
-        f"LAUFEN: letzte Woche {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
+        f"LAUFEN: letzte erfasste Woche ({cur_week}) {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
         f"Ø-HF {r.get('avg_hr') or '–'} bpm (max {r.get('max_hr') or '–'}), "
         f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %{hr_note}. "
@@ -71,12 +76,20 @@ def snapshot_text() -> str:
         (lambda ki: f"GESAMTSTÄRKE-Index: {ki.get('value')} (Basis 100), {ki.get('window_delta_pct')} % über 3 Monate → {ki.get('trend')}."
          if ki else "GESAMTSTÄRKE-Index: –")(snap.get("kraft_index") or {}),
         "",
-        f"GESUNDHEIT: Schritte heute {st.get('last')}, Ø {st.get('avg7')}/Tag (7 T), Ø {st.get('avg30')}/Tag (30 T). "
+        f"GESUNDHEIT: Schritte zuletzt {st.get('last')} am {st.get('last_day')}, "
+        f"Ø {st.get('avg7')}/Tag ({st.get('days7')}/7 erfasste Tage), "
+        f"Ø {st.get('avg30')}/Tag ({st.get('days30')}/30 erfasste Tage). "
         f"Radfahren: {rad.get('total_km')} km gesamt / {rad.get('rides')} Fahrten, "
         f"{rad.get('km_30d')} km in den letzten 30 T (heute-relativ), Ø {rad.get('avg_speed')} km/h, "
         f"zuletzt {rad.get('last_day')}."
         + (lambda rp: f" Ruhepuls {rp.get('last'):.0f} bpm (Ø7 {rp.get('avg7')})."
            if rp and rp.get("last") is not None else "")(snap.get("ruhepuls") or {}),
+        "",
+        f"ERNÄHRUNG: Fenster {food.get('window_start')} bis {food.get('last_day')}: "
+        f"Protein Ø {food.get('protein_avg7')} g ({food.get('protein_days_7')}/7 erfasste Tage), "
+        f"Referenzziel {food.get('protein_target')} g ({food.get('protein_per_kg')} g/kg, kein individuelles Ziel); "
+        f"Energie Ø {food.get('kcal_avg7')} kcal ({food.get('kcal_days_7')}/7 erfasste Tage). "
+        f"Makros Ø in g: {food.get('macro_g')}. Einträge belegen keine vollständige Tageserfassung.",
         "",
         "PROGNOSE (30 T, linearer Trend): "
         + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp.get("projected") is not None else f"Gewicht: {gp.get('reason', 'nicht verfügbar')}")

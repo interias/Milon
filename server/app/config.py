@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(DATA_DIR / 'tracker.db').as_posix()}"
     openrouter_api_key: str = ""
     openrouter_model: str = "deepseek/deepseek-chat"
+    coach_context: str = ""
     timezone: str = "Europe/Berlin"
 
     # Körper-Messungen (Gewicht/KFA) nur aus dieser Health-Connect-App (Waage) übernehmen;
