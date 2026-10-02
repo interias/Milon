@@ -14,10 +14,11 @@ WORKDIR /app/server
 # solange sich pyproject.toml nicht ändert.
 COPY pyproject.toml ./
 # Dependencies aus pyproject installieren (ohne das eigene Paket editable zu bauen).
+# Keep SQLModel aligned with pyproject.toml: the schema stores naive local timestamps.
 RUN pip install \
       "fastapi>=0.138,<0.140" \
       "uvicorn[standard]>=0.49" \
-      "sqlmodel>=0.0.38" \
+      "sqlmodel==0.0.38" \
       "pandas>=3.0" \
       "python-multipart>=0.0.18" \
       "pydantic-settings>=2.5" \

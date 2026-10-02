@@ -41,6 +41,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -53,12 +55,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
   async function refresh() {
     if (busy) return;
     setBusy(true);
+    setRefreshMessage(null);
+    setRefreshFailed(false);
     try {
-      await api.ingestRefresh();
+      const result = await api.ingestRefresh();
+      const failed = Object.entries(result).filter(([, value]) =>
+        value != null && typeof value === "object" && "error" in value
+      ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect" }[source] || source));
+      setRefreshFailed(failed.length > 0);
+      setRefreshMessage(failed.length ? `Import fehlgeschlagen: ${failed.join(", ")}.` : "Import abgeschlossen.");
       const st = await api.ingestStatus();
       setLast(latestSync(st.state));
-    } catch {
-      /* Refresh-Fehler nicht kritisch */
+    } catch (error) {
+      setRefreshFailed(true);
+      setRefreshMessage(`Aktualisierung fehlgeschlagen${error instanceof Error ? `: ${error.message}` : "."}`);
     } finally {
       setBusy(false);
     }
@@ -106,6 +116,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {busy ? "synchronisiert …" : "↻ Daten aktualisieren"}
       </button>
       {last && <p className="mt-2 px-1 text-[11px] text-muted">zuletzt: {last}</p>}
+      {refreshMessage && <p role={refreshFailed ? "alert" : "status"} className={`mt-2 px-1 text-xs ${refreshFailed ? "text-bad" : "text-muted"}`}>{refreshMessage}</p>}
       {withImg && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src="/img/run-ink-slash.png" alt="" className="mt-6 w-full opacity-90" />
