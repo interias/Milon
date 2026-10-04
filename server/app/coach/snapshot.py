@@ -5,7 +5,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..config import settings
-from ..metrics import body, health, nutrition, running, strength
+from .. import checkins
+from ..metrics import body, health, nutrition, running, sleep, strength
 
 
 def _pace(p: float | None) -> str:
@@ -33,6 +34,8 @@ def build_snapshot() -> dict:
         "gewicht_prognose": body.weight_forecast(),
         "kfa_prognose": body.bodyfat_forecast(),
         "kraft_index": strength.strength_index("3m"),
+        "schlaf": sleep.overview(30)["summary"],
+        "checkins": checkins.summary(30),
     }
 
 
@@ -90,6 +93,15 @@ def snapshot_text() -> str:
         f"Referenzziel {food.get('protein_target')} g ({food.get('protein_per_kg')} g/kg, kein individuelles Ziel); "
         f"Energie Ø {food.get('kcal_avg7')} kcal ({food.get('kcal_days_7')}/7 erfasste Tage). "
         f"Makros Ø in g: {food.get('macro_g')}. Einträge belegen keine vollständige Tageserfassung.",
+        "",
+        (lambda sl: f"SCHLAF: letzte Hauptnacht {sl.get('latest_date')}, Schlafzeit {sl.get('latest_asleep_hours')} h "
+         f"(Schlaffenster {sl.get('latest_window_hours')} h, nicht gleich Schlafzeit); aktuelle Uhr "
+         f"Ø7 {sl.get('avg_asleep_hours_7d')} h aus {sl.get('known_asleep_nights_7d')}/7 bekannten Nächten. "
+         "Fehlende Phasen und Nächte bleiben unbekannt.")(snap["schlaf"]),
+        (lambda ci: f"CHECK-IN (freiwillig): {ci['count']}/{ci['days']} Tage erfasst, "
+         f"Energie Ø {ci['energy_avg']}/5 ({ci['energy_days']} Tage), Trainingsanstrengung "
+         f"Ø {ci['training_effort_avg']}/5 ({ci['training_effort_days']} Tage). "
+         "Auswahl kann verzerrt sein; keine Einträge bedeuten keine Aussage über Befinden.")(snap["checkins"]),
         "",
         "PROGNOSE (30 T, linearer Trend): "
         + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp.get("projected") is not None else f"Gewicht: {gp.get('reason', 'nicht verfügbar')}")

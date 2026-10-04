@@ -5,9 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api import coach, ingest, metrics, progress
+from .api import checkins, circumferences, coach, ingest, metrics, progress, run_zones, sleep
 from .api import settings as settings_api
-from .config import PROGRESS_DIR, settings
+from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
 from .sync import scheduler
 
@@ -47,8 +47,15 @@ app.include_router(metrics.router)
 app.include_router(coach.router)
 app.include_router(progress.router)
 app.include_router(settings_api.router)
+app.include_router(checkins.router)
+app.include_router(sleep.router)
+app.include_router(run_zones.router)
+app.include_router(circumferences.router)
 
 # Statische Auslieferung der Fortschritts-Fotos
 app.mount("/media/progress", StaticFiles(directory=str(PROGRESS_DIR)), name="progress-media")
+COACH_IMAGES_DIR = DATA_DIR / "coach-images"
+COACH_IMAGES_DIR.mkdir(exist_ok=True)
+app.mount("/media/coach-images", StaticFiles(directory=str(COACH_IMAGES_DIR)), name="coach-images")
 
 # Noch offen (folgt): das Next.js-Frontend (client/) im Klar-&-Klinisch-Design.

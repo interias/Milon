@@ -5,12 +5,14 @@ dort befragen — außerhalb der App. Liest dieselbe SQLite-DB (data/tracker.db)
 Start (stdio):  python -m app.mcp.server
 """
 from __future__ import annotations
+from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
 from ..coach import snapshot
 from ..db import init_db
-from ..metrics import achievements, activity, body, health, run_analysis, run_fitness_service, running, strength
+from .. import checkins
+from ..metrics import achievements, activity, body, health, run_analysis, run_fitness_service, run_zones, running, sleep, strength
 
 mcp = FastMCP("Milon")
 
@@ -200,6 +202,39 @@ def get_strength_energy() -> dict:
     Null correlations are unavailable, not zero. recent_* and phase_label describe recent weeks;
     legacy phase keys such as recomp do not demonstrate recomposition. Read caveat."""
     return strength.strength_energy()
+
+
+@mcp.tool()
+def get_run_zones() -> dict:
+    """Five %HRmax reference zones with observed, equally run-weighted pace distributions.
+    Current watch wins; historical fallback is labeled per zone. Missing pace is unavailable,
+    P10–P90 is not a confidence interval and an observed peak does not establish HRmax."""
+    return run_zones.zones()
+
+
+@mcp.tool()
+def get_sleep_overview(days: int = 90) -> dict:
+    """Main sleep, naps and coverage by watch; window duration is not sleep duration."""
+    return sleep.overview(max(1, min(days, 1825)))
+
+
+@mcp.tool()
+def get_sleep_performance(kind: Literal["run", "strength"] = "run", source: Literal["current", "legacy", "all"] = "current", days: int = 180) -> dict:
+    """Prior-night sleep versus run EF or comparable exercise strength changes, separated by device.
+    Exploratory correlations are descriptive, not evidence of causation. Read method and coverage."""
+    return sleep.performance(kind, source, max(1, min(days, 1825)))
+
+
+@mcp.tool()
+def get_checkin_summary(days: int = 30) -> dict:
+    """Optional self-reported energy and effort (1–5), counts and coverage; missing is unknown."""
+    return checkins.summary(max(1, min(days, 365)))
+
+
+@mcp.tool()
+def get_weekly_review() -> dict:
+    """Training, weight, sleep and check-ins for seven completed local calendar days."""
+    return activity.weekly_review()
 
 
 def main() -> None:

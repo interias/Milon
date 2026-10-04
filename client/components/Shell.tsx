@@ -59,6 +59,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setRefreshFailed(false);
     try {
       const result = await api.ingestRefresh();
+      window.dispatchEvent(new Event("milon:data-refresh"));
       const failed = Object.entries(result).filter(([, value]) =>
         value != null && typeof value === "object" && "error" in value
       ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect" }[source] || source));

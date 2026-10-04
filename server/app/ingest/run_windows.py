@@ -9,6 +9,7 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 MODEL_VERSION = "shr-v1"
+GARMIN_PACKAGE = "com.garmin.android.apps.connectmobile"
 
 
 def _series(con, table, parent, field, app_ids, start, end, limits):
@@ -47,7 +48,37 @@ def _series(con, table, parent, field, app_ids, start, end, limits):
     return np.asarray(times), np.asarray(values)
 
 
-def _interpolate(times, values, grid):
+def _cadence_gap_limit(times, source_package):
+    """Accommodate Garmin's regular export downsampling, not missing measurements.
+
+    Inspect each session/stream independently. Faster or irregular series retain
+    the existing 15 s rule; at least six samples and a stable <=30 s cadence are
+    required before allowing at most 1.5 intervals, capped at 45 s.
+    """
+    baseline = 15_000.0
+    if source_package != GARMIN_PACKAGE or len(times) < 6:
+        return baseline
+    gaps = np.diff(times)
+    gaps = gaps[np.isfinite(gaps) & (gaps > 0)]
+    if len(gaps) < 5:
+        return baseline
+    median = float(np.median(gaps))
+    if not baseline < median <= 30_000:
+        return baseline
+    # Garmin may interleave extra HR readings into its export cadence. Shorter
+    # intervals add measurements; assess stability of the coarse cadence rather
+    # than rejecting a regular series because it also contains denser samples.
+    coarse = gaps[gaps >= median * 0.8]
+    if len(coarse) < 5:
+        return baseline
+    q1, q3 = np.quantile(coarse, [0.25, 0.75])
+    regular = np.mean(coarse <= median * 1.2)
+    if q3 - q1 > median * 0.2 or regular < 0.8:
+        return baseline
+    return min(45_000.0, 1.5 * float(median))
+
+
+def _interpolate(times, values, grid, max_gap_ms=15_000):
     result = np.full(len(grid), np.nan)
     if len(times) < 2:
         return result
@@ -55,7 +86,7 @@ def _interpolate(times, values, grid):
     inside = (right > 0) & (right < len(times))
     right = right.clip(1, len(times) - 1)
     left = right - 1
-    valid = inside & (times[right] - times[left] <= 15_000)
+    valid = inside & (times[right] - times[left] <= max_gap_ms)
     valid &= np.isfinite(values[left]) & np.isfinite(values[right])
     result[valid] = (values[left[valid]] + (values[right[valid]] - values[left[valid]])
                      * (grid[valid] - times[left[valid]])
@@ -119,10 +150,13 @@ def read_run_windows(con: sqlite3.Connection, sessions: list[dict], source_packa
         ht, hv = hr_t[hi[0]:hi[1]], hr_v[hi[0]:hi[1]]
         if not len(st) or not len(ht):
             continue
+        speed_gap = _cadence_gap_limit(st, source_package)
+        hr_gap = _cadence_gap_limit(ht, source_package)
         session_ids.append(external_id)
         for minute in range(int((end - start) // 60_000)):
             grid = start + minute * 60_000 + (np.arange(60) + 0.5) * 1000
-            speed, hr = _interpolate(st, sv, grid), _interpolate(ht, hv, grid)
+            speed = _interpolate(st, sv, grid, speed_gap)
+            hr = _interpolate(ht, hv, grid, hr_gap)
             valid = np.isfinite(speed) & np.isfinite(hr)
             coverage = float(valid.mean())
             mean_speed = float(speed[valid].mean()) if valid.any() else None

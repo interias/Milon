@@ -62,6 +62,31 @@ def compare(days: int = 7) -> dict:
     return {"days": days, "running": running.volume_window(days), "strength": strength.tonnage_window(days)}
 
 
+def weekly_review(now: datetime | None = None) -> dict:
+    """Last seven completed local calendar days; no LLM request on page opening."""
+    from .. import checkins
+    from . import body, sleep
+
+    local_now = (now or datetime.now(ZoneInfo(settings.timezone))).astimezone(ZoneInfo(settings.timezone))
+    end = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(microseconds=1)
+    activity = overview(end)
+    start = pd.Timestamp(activity["from_date"])
+    boundary = pd.Timestamp(activity["to_date"]) + pd.Timedelta(days=1)
+    weight = body._weight_daily()
+    current = weight[(weight.index >= start) & (weight.index < boundary)].dropna()
+    previous = weight[(weight.index >= start - pd.Timedelta(days=7)) & (weight.index < start)].dropna()
+    delta = round(float(current.mean() - previous.mean()), 2) if len(current) >= 3 and len(previous) >= 3 else None
+    sleep_data = sleep.overview(days=7, today=end.date())
+    nights = [r for r in sleep_data["series"] if r["main_sleep"]
+              and activity["from_date"] <= r["date"] <= activity["to_date"]]
+    measured = [r["asleep_hours"] for r in nights if r["asleep_hours"] is not None]
+    return {"activity": activity, "weight": {"delta_kg": delta, "current_days": len(current), "previous_days": len(previous)},
+            "sleep": {"avg_hours": round(sum(measured) / len(measured), 2) if measured else None,
+                      "measured_nights": len(measured), "recorded_nights": len(nights)},
+            "checkins": checkins.summary(days=7, today=end.date()),
+            "note": "Erfasste Aktivität und Gewichtsänderung sind neutral; fehlende Messungen bleiben unbekannt."}
+
+
 def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     """Tages-Heatmap der Trainingskonsistenz + aktuelle Streak. Level je Tag:
     3 = Kraft/Lauf, 2 = Schrittziel erreicht, 1 = halbes Schrittziel, 0 = nichts."""

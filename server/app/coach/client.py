@@ -45,10 +45,17 @@ def _add(a: dict, b: dict) -> dict:
     }
 
 
+def _request_options(temperature: float) -> dict:
+    if settings.openrouter_model == "openai/gpt-6-luna":
+        # GPT-6 Luna requires reasoning off for Chat Completions function calling.
+        return {"reasoning_effort": "none", "extra_body": {**_EXTRA, "verbosity": "low"}}
+    return {"temperature": temperature, "extra_body": _EXTRA}
+
+
 def complete(messages: list[dict], temperature: float = 0.4) -> tuple[str, dict]:
     client = _client()
     resp = client.chat.completions.create(
-        model=settings.openrouter_model, messages=messages, temperature=temperature, extra_body=_EXTRA,
+        model=settings.openrouter_model, messages=messages, **_request_options(temperature),
     )
     return (resp.choices[0].message.content or "").strip(), _usage(resp)
 
@@ -63,7 +70,7 @@ def complete_with_tools(messages: list[dict], tools: list[dict], dispatch,
     for _ in range(max_rounds):
         resp = client.chat.completions.create(
             model=settings.openrouter_model, messages=messages,
-            tools=tools, tool_choice="auto", temperature=temperature, extra_body=_EXTRA,
+            tools=tools, tool_choice="auto", **_request_options(temperature),
         )
         total = _add(total, _usage(resp))
         msg = resp.choices[0].message
@@ -88,7 +95,7 @@ def complete_with_tools(messages: list[dict], tools: list[dict], dispatch,
             messages.append({"role": "tool", "tool_call_id": tc.id,
                              "content": json.dumps(result, ensure_ascii=False, default=str)})
     resp = client.chat.completions.create(
-        model=settings.openrouter_model, messages=messages, temperature=temperature, extra_body=_EXTRA,
+        model=settings.openrouter_model, messages=messages, **_request_options(temperature),
     )
     total = _add(total, _usage(resp))
     return (resp.choices[0].message.content or "").strip(), used, messages, total

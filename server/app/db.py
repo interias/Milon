@@ -17,6 +17,9 @@ engine = create_engine(
 
 
 def init_db() -> None:
+    from . import checkins  # noqa: F401 -- register optional self-report table for every entry point
+    from . import circumferences  # noqa: F401 -- keep manual measurements independent of imports
+
     SQLModel.metadata.create_all(engine)
     _run_migrations()
 
@@ -33,6 +36,8 @@ def _run_migrations() -> None:
         for col, typ in (("prompt_tokens", "INTEGER"), ("completion_tokens", "INTEGER"), ("cost_usd", "REAL")):
             if col not in cr:
                 con.exec_driver_sql(f"ALTER TABLE coach_reports ADD COLUMN {col} {typ}")
+        if "visuals" not in cr:
+            con.exec_driver_sql("ALTER TABLE coach_reports ADD COLUMN visuals TEXT")
         sync_cols = cols("sync_state")
         if "status" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")

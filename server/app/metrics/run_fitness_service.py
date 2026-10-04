@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from sqlmodel import Session, select
 
-from ..config import INCOMING_DIR, settings
+from ..config import INCOMING_DIR, settings, watch_source_for
 from ..db import engine
 from ..models import RunAnalysisCache, RunFitnessReference
 from . import run_fitness, run_references
@@ -34,7 +34,7 @@ def reference_candidate(today):
                 "reason": "Health-Connect-Rohdaten für die Belastungsreferenz fehlen."}
     stat = path.stat()
     return _candidate(str(path), stat.st_mtime_ns, stat.st_size,
-                      settings.steps_source_package, today.isoformat())
+                      watch_source_for(today, settings), today.isoformat())
 
 
 def _load_reference(candidate, now):
@@ -136,14 +136,20 @@ def fitness() -> dict:
             sessions = pd.read_sql(_SESSION_SQL, con, parse_dates=["started_at", "ended_at"])
             windows = pd.read_sql("SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady "
                                   "FROM run_minutes WHERE model_version='shr-v1' ORDER BY external_id, minute", con)
+        legacy_ids = set(getattr(settings, "watch_source_legacy_session_ids", []))
         fingerprint = hashlib.sha256((SERVICE_VERSION + run_fitness.MODEL_VERSION + now.date().isoformat()
                                       + json.dumps(reference, sort_keys=True) + json.dumps(candidate, sort_keys=True)
+                                      + json.dumps(sorted(legacy_ids))
                                       + sessions.to_json(date_format="iso") + windows.to_json()).encode()).hexdigest()
         with Session(engine) as session:
             cached = session.get(RunAnalysisCache, "running_fitness")
             if cached and cached.fingerprint == fingerprint:
                 return json.loads(cached.payload)
-        result = _analyze_segments(windows, sessions, reference["sensor_changes"], now.date())
+        # An unresolved transition session must not calibrate the replacement sensor.
+        analysis_sessions = sessions[~sessions.external_id.isin(legacy_ids)] if legacy_ids else sessions
+        result = _analyze_segments(windows, analysis_sessions, reference["sensor_changes"], now.date())
+        if legacy_ids:
+            result["sensor_caveat"] = "Ungeklärte Übergangs-Läufe sind bis zur Quellenklärung von der Fitness-Schätzung ausgeschlossen."
         _convert(result, reference)
         result["calibration"] = {**reference, "candidate": candidate}
         result["updated_at"] = now.isoformat()

@@ -7,6 +7,7 @@ from app.metrics import health
 
 
 def steps_source(monkeypatch, rows):
+    monkeypatch.setattr(health.settings, "watch_source_switch_date", None)
     frame = pd.DataFrame(rows, columns=["day", "steps"])
     frame["day"] = pd.to_datetime(frame["day"])
     monkeypatch.setattr(health, "_steps", lambda: frame)

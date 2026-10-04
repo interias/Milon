@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type ActivityOverview, type Activity, type Report, type Consistency } from "@/lib/api";
+import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type Report, type Consistency } from "@/lib/api";
 import { Card, CardTitle, PageTitle } from "@/components/ui";
 import { Heatmap } from "@/components/Heatmap";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
+import { CheckIn } from "@/components/CheckIn";
+import { WeeklyReview } from "@/components/WeeklyReview";
 import { de, de0, dm } from "@/lib/format";
 
 type Resource<T> = { data: T | null; loading: boolean; error: boolean };
@@ -21,7 +23,6 @@ function useResource<T>(load: () => Promise<T>): Resource<T> {
 }
 const loadStrength = () => api.strengthIndex("3m");
 const loadConsistency = () => api.activityConsistency(0);
-const loadActivities = () => api.activityRecent(5);
 const loadReport = () => api.coachReports(1);
 const signed = (value: number | null | undefined, digits = 1) => value == null || !Number.isFinite(value) ? "Kein Vergleich verfügbar" : `${value > 0 ? "+" : value === 0 ? "±" : ""}${de(value, digits)}`;
 const stamp = (date: string) => Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
@@ -51,18 +52,13 @@ function ConsistencyHistory({ data, fit = false }: { data: Consistency; fit?: bo
     {days.length > 0 && <p className="mt-3 text-xs text-muted">{dm(days[0].date)}–{dm(days.at(-1)!.date)} · {days.filter((d) => d.trained).length} Trainingstage · {days.filter((d) => d.level >= 1).length} aktive Tage · aktiv ab Training oder {de0(data.step_goal / 2)} Schritten</p>}
   </div>;
 }
-function ActivityValue({ label, value, unit, change, note, href }: { label: string; value: string; unit: string; change: string; note?: string; href: string }) {
-  return <div className="min-w-0"><Link href={href} className="text-xs text-muted hover:underline">{label}</Link><p className="mt-1 font-display text-xl font-bold sm:text-2xl">{value} <span className="text-xs font-normal text-muted">{unit}</span></p><p className="mt-1 text-xs text-muted">{change}</p>{note && <p className="mt-1 text-[11px] text-muted">{note}</p>}</div>;
-}
 
 export default function Overview() {
   const body = useResource<BodySummary>(api.bodySummary);
   const running = useResource<StandardizedHr>(api.runStandardizedHr);
   const fitness = useResource<RunningFitnessData>(api.runFitness);
   const strength = useResource<StrengthIndex>(loadStrength);
-  const activity = useResource<ActivityOverview>(api.activityOverview);
   const consistency = useResource<Consistency>(loadConsistency);
-  const activities = useResource<Activity[]>(loadActivities);
   const reports = useResource<Report[]>(loadReport);
   const [yearOpen, setYearOpen] = useState(false);
 
@@ -75,11 +71,9 @@ export default function Overview() {
   const vo2 = fitness.data?.points?.filter((p) => p.vo2_eq != null).at(-1);
   const index = strength.data;
   const lastStrength = index?.series?.at(-1)?.week;
-  const a = activity.data;
   const c = consistency.data;
   const report = reports.data?.[0];
   const excerpt = report?.content.replace(/[#*`>|]/g, "").replace(/\s+/g, " ").trim() ?? "";
-  const stepsComparable = a?.steps.current_days === 7 && a?.steps.previous_days === 7;
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
@@ -114,14 +108,8 @@ export default function Overview() {
       </DevelopmentCard>
     </div>
 
-    <Card className="mt-4">
-      <CardTitle title="Aktivität" sub={a ? `${dm(a.from_date)}–${dm(a.to_date)} · Vergleich mit ${dm(a.previous_from_date)}–${dm(a.previous_to_date)} · heute noch unvollständig` : "Letzte 7 Kalendertage gegenüber den 7 Tagen davor"} />
-      {a ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <ActivityValue label="Laufkilometer" value={de(a.running.current_km, 1)} unit="km" change={`${signed(a.running.current_km - a.running.previous_km, 1)} km`} href="/laufen" />
-        <ActivityValue label="Krafttraining" value={de0(a.strength.current_sessions)} unit="Einheiten" change={`${signed(a.strength.current_sessions - a.strength.previous_sessions, 0)} Einheiten`} href="/kraft" />
-        <ActivityValue label="Schritte pro erfasstem Tag" value={de0(a.steps.current_avg)} unit="Schritte" change={stepsComparable && a.steps.current_avg != null && a.steps.previous_avg != null ? `${signed(a.steps.current_avg - a.steps.previous_avg, 0)} Schritte` : "Kein vollständiger Vergleich"} note={`${a.steps.current_days}/7 Tage erfasst · davor ${a.steps.previous_days}/7`} href="/gesundheit" />
-      </div> : <StateNote resource={activity} />}
-    </Card>
+    <CheckIn />
+    <WeeklyReview />
 
     <Card className="mt-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -131,11 +119,7 @@ export default function Overview() {
       {c ? <><ConsistencyHistory data={c} fit /><button className="mt-3 py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button></> : <StateNote resource={consistency} />}
     </Card>
 
-    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardTitle title="Letzte Aktivitäten" />
-        {activities.data?.length ? <ul className="divide-y divide-line">{activities.data.map((item, i) => <li key={`${item.date}:${i}`}><Link href={item.kind === "run" ? "/laufen" : "/kraft"} className="flex items-center gap-3 py-3 text-sm"><span className="min-w-0 flex-1"><span className="block truncate font-semibold">{item.title}</span><span className="text-xs text-muted">{item.detail}</span></span><time className="shrink-0 text-xs text-muted" dateTime={item.date}>{dm(item.date)}</time></Link></li>)}</ul> : <StateNote resource={activities} empty="Noch keine Aktivitäten erfasst." />}
-      </Card>
+    <div className="mt-4">
       <Card className="flex flex-col">
         <CardTitle title="Coach" sub={report ? `Letzter gespeicherter Beitrag · ${dm(report.created_at)}` : "Deine Daten gemeinsam einordnen"} />
         {report ? <p className="text-sm leading-relaxed text-muted">{excerpt.slice(0, 240)}{excerpt.length > 240 ? " …" : ""}</p> : <StateNote resource={reports} empty="Noch kein Coach-Beitrag vorhanden." />}

@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from ..config import settings
+from ..config import settings, watch_source_for
 from ..db import engine
 
 BIKE = 4
@@ -56,10 +56,13 @@ def steps_weekly(weeks: int = 12) -> list[dict]:
 
 def steps_summary() -> dict:
     df = _steps()
-    package = settings.steps_source_package
-    name = "Samsung Health" if package == "com.sec.android.app.shealth" else package
+    package = watch_source_for(datetime.now(ZoneInfo(settings.timezone)).date(), settings)
+    name = {"com.sec.android.app.shealth": "Samsung Health", "com.garmin.android.apps.connectmobile": "Garmin Connect"}.get(package, package)
     source_label = (f"Health Connect · Import-Auswahl: {name} (Fallback: Tagesmaximum je App)" if package
                     else "Health Connect · Import-Auswahl: Tagesmaximum je App")
+    cutoff = getattr(settings, "watch_source_switch_date", None)
+    if cutoff is not None:
+        source_label = f"Health Connect · Import-Auswahl: {name} ab {cutoff:%d.%m.%Y} (kein Quellen-Fallback)"
     if df.empty:
         return {"last": None, "last_day": None, "avg7": None, "avg30": None, "best": None,
                 "total_days": 0, "days7": 0, "days30": 0, "window_start": None,

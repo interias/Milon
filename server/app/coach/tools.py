@@ -57,6 +57,13 @@ TOOLS = [
         "aerobe Effizienz ef (Meter pro Herzschlag, hoeher = fitter — gleiche Pace bei "
         "niedrigerer HF), Oe-Drift (HF 2. vs. 1. Haelfte in %, hoch = Ausdauerdefizit/Hitze).",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
+    _fn("get_run_zones", "Fuenf Lauf-Pulszonen in %HFmax mit gespeichertem Referenzwert; "
+        "keine gemessene HFmax, keine Laktatschwellen und kein Import der Garmin-Zonen. "
+        "Schema, Datenfenster und Quelle je Zone nennen. Aktuelle Uhr hat Vorrang; "
+        "historical-Fallback ausdruecklich als fruehere Uhr vor Wechsel kennzeichnen und getrennt halten. "
+        "Tempo aus beobachteten Laufminuten, P10–P90 ist kein Konfidenzintervall; "
+        "null und reason bedeuten keine unterstuetzte Pace. "
+        "Keine fehlenden Paces extrapolieren oder als Trainingsvorgabe darstellen; caveat beachten."),
     _fn("get_run_fitness_trends", "Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, "
         "Lauf-Level-Regression): pace_at_hr (Pace bei Referenzpuls — schneller bei gleichem "
         "Puls = fitter), easy_hr (Oe-HF im Locker-Pace-Korridor — niedriger = fitter), "
@@ -81,6 +88,20 @@ TOOLS = [
         {"exercise": {"type": "string", "description": "genauer Uebungsname, z. B. 'Squat (Langhantel)'"},
          "weeks": {"type": "integer"}}, ["exercise"]),
     _fn("get_health_overview", "Allgemeine Gesundheitswerte: Schritte (letzter erfasster Tag/Oe7T/Oe30T) + Radfahren. Datenstand und Erfassungstage beachten."),
+    _fn("get_sleep_overview", "Schlafdauer und Erfassungstage aus Health Connect. Hauptschlaf ohne Wachphasen; "
+        "Nickerchen separat. Datenstand, Quelle und fehlende Naechte nennen, Schlafstadien sind Uhr-Schaetzungen.",
+        {"days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Default 90"}}),
+    _fn("get_sleep_performance", "Vorherige Nacht und folgende Trainingsleistung: Lauf-Effizienz oder "
+        "Aenderung des Uebungs-e1RM im Gym. Gruppen je Uhr getrennt, nicht zu einer Korrelation zusammenfassen. "
+        "r erst ab zehn Paaren, Konfidenzintervall und Status beachten. Freiwillige Erfassung und "
+        "Wetter/Trainingsplan erzeugen Verzerrung; niemals Ursache oder gesicherte Erholung ableiten.",
+        {"kind": {"type": "string", "enum": ["run", "strength"], "description": "Default run"},
+         "source": {"type": "string", "enum": ["current", "legacy", "all"], "description": "Default current"},
+         "days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Default 180"}}),
+    _fn("get_checkin_summary", "Freiwillige Check-ins: Energie, empfundene Trainingsbelastung und Notizen. "
+        "Fehlende Antworten bleiben unbekannt. Anzahl und Erfassungstage immer nennen; "
+        "Auswahlverzerrung verhindert allgemeine Aussagen ueber alle Tage oder Trainingseinheiten.",
+        {"days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Default 30"}}),
     _fn("get_steps", "Tagesschritte + 7-Tage-Mittel der letzten N Tage (Health Connect).",
         {"days": {"type": "integer", "description": "Default 30"}}),
     _fn("get_cycling_volume", "Wochen-Radvolumen (km) + Anzahl Fahrten der letzten N Wochen (exercise_type 4).",
@@ -123,6 +144,9 @@ def dispatch(name: str, args: dict):
         return _thin(running.vo2_trend(int(args.get("days", 365))))
     if name == "get_run_heart_rate":
         return running.heart_rate_trend(int(args.get("weeks", 12)))
+    if name == "get_run_zones":
+        from ..metrics import run_zones
+        return run_zones.zones()
     if name == "get_run_records":
         return running.best_efforts()
     if name == "get_run_achievements":
@@ -159,6 +183,21 @@ def dispatch(name: str, args: dict):
         return strength.e1rm_trend(str(args.get("exercise", "")), int(args.get("weeks", 26)))
     if name == "get_health_overview":
         return health.overview()
+    if name == "get_sleep_overview":
+        from ..metrics import sleep
+        result = sleep.overview(max(1, min(365, int(args.get("days", 90)))))
+        return {**result, "series": _thin(result.get("series", []))}
+    if name == "get_sleep_performance":
+        from ..metrics import sleep
+        kind, source = args.get("kind", "run"), args.get("source", "current")
+        if kind not in ("run", "strength") or source not in ("current", "legacy", "all"):
+            raise ValueError("Invalid sleep performance kind or source")
+        result = sleep.performance(kind, source, max(1, min(365, int(args.get("days", 180)))))
+        return {**result, "groups": [{**group, "points": _thin(group.get("points", []), 12)}
+                                    for group in result.get("groups", [])]}
+    if name == "get_checkin_summary":
+        from .. import checkins
+        return checkins.summary(max(1, min(365, int(args.get("days", 30)))))
     if name == "get_steps":
         return _thin(health.steps_trend(int(args.get("days", 30))))
     if name == "get_cycling_volume":

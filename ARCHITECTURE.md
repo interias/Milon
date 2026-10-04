@@ -1,5 +1,48 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Körpermaße: manuelle Umfangsmessungen
+
+Die Körperseite ergänzt die importierten Waagenwerte um manuelle Umfänge mit
+festen Messstellen: Bauch, Taille, Hüfte, Oberarm sowie optional Brust, Oberschenkel,
+Wade und Schultern. Bis zu vier frei gewählte Maße erscheinen als einzelne Kurven
+in der Zeilen- oder Atlasansicht; Zeitraum, Auswahl und Layout werden gespeichert.
+Eine gemeinsame Delta-Kurve ist bewusst nicht Teil der Übersicht. Startwert,
+letzter Wert, tatsächliche Messdaten und Veränderung stehen direkt an jeder Kurve.
+Einzelmessungen liefern noch keine Differenz; längere Lücken bleiben sichtbar.
+
+`/body-circumferences` verwaltet historische und aktuelle Einträge in eigenen
+SQLite-Tabellen, unabhängig von Health-Connect-Importen. Das Modal zeigt die feste
+Messdefinition und eine Markierung auf der bestehenden Silhouette. Unbekannte
+oder abweichende historische Messstellen bleiben im eingeklappten Journal, aber
+außerhalb der vergleichbaren Kurven. Definitionen tragen intern die Version `v1`.
+Gleiche Kombinationen aus Datum und Messprotokoll können bearbeitet werden;
+doppelte Neuanlagen werden abgewiesen. Umfangsänderungen werden nicht in
+Körperfettanteil oder Muskelmasse umgerechnet. Die Vorschau-Daten werden nicht
+in die Anwendung übernommen.
+
+## Uhrenwechsel: Quellen nach Datum
+
+`STEPS_SOURCE_PACKAGE` bleibt die historische Watch-Quelle. Optional wählen
+`WATCH_SOURCE_SWITCH_DATE` und `WATCH_SOURCE_PACKAGE` ab einem lokalen Stichtag
+die neue Quelle für Schritte, Sessions, Laufdistanz, Herzfrequenz, Ruhepuls und
+Lauf-Minuten. Fehlende neue Watch-Daten bleiben Lücken; es gibt ab dem Wechsel
+keinen stillen Samsung-/Handy-Fallback. Körperwerte bleiben bei Arboleaf,
+Ernährung bei FDDB und Kraft-Workouts bei Hevy.
+
+`WATCH_SOURCE_LEGACY_SESSION_IDS` bewahrt explizite Übergangs-Sessions mit der
+historischen Quelle auch bei Vollimporten. Diese Sessions bleiben bis zur Klärung
+aus der persönlichen Lauf-Fitnessschätzung ausgeschlossen. Der Sensorwechsel
+wird separat in den bestehenden versionierten Laufreferenzen gespeichert;
+Pulsreferenzwerte werden dabei nicht automatisch geändert.
+
+`python -m app.ingest.watch_switch --since YYYY-MM-DD --until YYYY-MM-DD
+--package PACKAGE [--legacy-session EXTERNAL_ID]` repariert ein zuvor anhand des
+Exports geprüftes Intervall in der lokalen Datenbank. SQLite-Backup unter
+`data/backups/`, ältere Historie sowie Körper-/Ernährungs-/Hevy-Daten bleiben
+erhalten. Nicht rekonstruierbare Lauf-Minuten und Best-Efforts erhaltener Sessions
+werden bewahrt. Den laufenden Importer vorher stoppen und das Backend mit dem
+neuen Code und den persistierten Einstellungen neu starten.
+
 ## Coach: Empfehlungen mit Datenbeleg (2026-09-20)
 
 Unter Einstellungen sind einzelne Ziele (Name, optional Termin/Zeitraum,
@@ -477,6 +520,19 @@ client = OpenAI(base_url="https://openrouter.ai/api/v1",
 ```
 
 ---
+
+### Personal dashboard additions (2026-10-04)
+
+- `sleep_sessions` stores the local wake date, watch package, sleep-window duration, known sleep/awake minutes and phase coverage. Health Connect imports it incrementally. Sleep duration requires at least 98% known non-conflicting phase coverage; otherwise it stays unknown. The longest window of at least two hours is the day's main sleep; shorter windows appear separately as naps.
+- `/metrics/sleep/{overview,performance}` powers Gesundheit. Prior-night sleep is paired with same-day running efficiency or changes against the previous comparable strength exercise. Multiple sessions on one day produce one nightly point. Devices are separate groups. Correlations start at 10 pairs, approximate Fisher intervals at 20; these remain exploratory and assume independent observations. Missing nights and phases are counted, not estimated.
+- `checkins` and `/checkins` store optional daily energy/effort, notes and a stable optional training reference. Overview offers three direct energy choices (low/okay/high, stored as 1/3/5), with one-click saving for today and undo. Previously recorded notes and training references are retained. Coverage and selection bias remain visible in summaries, coach tools and MCP.
+- `/metrics/activity/weekly-review` compares seven completed local calendar days with the previous seven. It replaces the overview activity list while preserving the three development cards. Weight comparison requires at least three distinct measured days in each window; sleep uses main nights with known phases.
+- `/metrics/body/bodyfat-band` shows the trailing 28-calendar-day median and 10th–90th percentiles of daily BIA values after seven measured days. This describes measurement spread, not uncertainty about true body fat.
+- `/metrics/running/zones` uses the configurable `RUN_HR_MAX` reference and an explicit Garmin-style five-zone %HRmax scheme. A single diagram combines zones, pulse bands, observed pace distributions and speed. The rolling 56-day analysis uses quality-checked steady minutes 10–45, at least three qualifying minutes per run/zone, and equal total weight per run. The median and P10–P90 describe observations, not confidence intervals or prescribed training pace. Single-run values are marked provisional. Current-watch data wins; historical-watch fallback is explicitly attributed per zone. No unobserved zone is extrapolated. The view refreshes on focus, every minute and manually.
+- The selected zone-field design combines pastel zone columns with open P10/P90 endpoint rings and a dark median point. The shared vertical pace/speed axis adapts to the observed ranges; the value row keeps median, zone, heart-rate interval and numeric tempo span together. Zone colors remain blue/green/yellow/orange/red. Historical sources are marked per zone; empty zones have no plotted observations. Request revisions prevent older refresh responses from overwriting newer values after an HFmax edit.
+- Minute extraction recognizes stable, downsampled Garmin streams independently per session and sensor. Typical gaps of 15–30 seconds allow up to 1.5 intervals, capped at 45 seconds; denser extra samples do not invalidate cadence. Invalid readings and real dropouts still break interpolation. Other apps retain the original 15-second limit. An observed peak does not establish physiological HRmax. The older four-zone trend analysis remains separate.
+- New coach reports store validated chart snapshots in `coach_reports.visuals`; historical reports never acquire current values. The UI displays charts in Milon's design and a larger dialog. `/coach/images` explicitly creates a 1024×1024 low-quality illustration with `openai/gpt-image-2.5-flare`, stored under ignored `data/coach-images/`.
+- Default text model: `openai/gpt-6-luna`, Chat Completions with reasoning disabled and low verbosity. Model selection and Health Connect sync findings are in `docs/research/`. A phone-side Android bridge is required for faster Health Connect ingestion; the daily export route remains operational.
 
 ## 7. Datenschutz (ehrlich markiert)
 Mit einem Cloud-LLM **verlassen deine Gesundheitsdaten die Maschine** (OpenRouter + Modellanbieter). Für ein privates Experiment deine Entscheidung. Mitigation: OpenRouter-Provider mit No-Logging wählen, oder später lokales Modell (Ollama). Alle Keys in `.env`, **nie ins Repo**. `.env`, `data/` und `*.db` in `.gitignore`.
