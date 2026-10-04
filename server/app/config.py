@@ -1,5 +1,6 @@
 """Konfiguration & Pfade. Liest server/.env (pydantic-settings)."""
 import re
+from datetime import date
 from pathlib import Path
 
 from pydantic import Field, model_validator
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     # Default: <repo>/data/tracker.db (absolut, cwd-unabhaengig)
     database_url: str = f"sqlite:///{(DATA_DIR / 'tracker.db').as_posix()}"
     openrouter_api_key: str = ""
-    openrouter_model: str = "deepseek/deepseek-chat"
+    openrouter_model: str = "openai/gpt-6-luna"
     coach_context: str = ""
     timezone: str = "Europe/Berlin"
 
@@ -44,6 +45,18 @@ class Settings(BaseSettings):
     # zählt das Handy und untertreibt an Tagen ohne Handy → wird ausgeschlossen.
     # Leer = Maximum je Tag über alle Apps (entdoppelt, aber inkl. Handy-Tage).
     steps_source_package: str = "com.sec.android.app.shealth"
+
+    # Optional watch replacement: keep the historical source before the cutoff.
+    watch_source_switch_date: date | None = None
+    watch_source_package: str = ""
+    # Explicit transition sessions retained until the handover time is clarified.
+    watch_source_legacy_session_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_watch_switch(self):
+        if self.watch_source_switch_date is not None and not self.watch_source_package:
+            raise ValueError("WATCH_SOURCE_PACKAGE is required with WATCH_SOURCE_SWITCH_DATE")
+        return self
 
     # Quell-Zugaenge (Hevy-API + FDDB-Login/Cookies)
     hevy_api_key: str = ""
@@ -77,6 +90,15 @@ class Settings(BaseSettings):
         if url.startswith(prefix):
             return f"sqlite:///{(ROOT / url[len(prefix):]).as_posix()}"
         return url
+
+
+def watch_source_for(day: date, config=None) -> str:
+    """Return the configured watch source for a local calendar date."""
+    config = config if config is not None else settings
+    cutoff = getattr(config, "watch_source_switch_date", None)
+    if cutoff is not None and day >= cutoff:
+        return getattr(config, "watch_source_package", "")
+    return config.steps_source_package
 
 
 settings = Settings()

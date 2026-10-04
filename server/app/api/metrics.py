@@ -36,6 +36,11 @@ def body_bodyfat(days: int = 180) -> list[dict]:
     return body.body_fat_trend(days)
 
 
+@router.get("/body/bodyfat-band")
+def body_bodyfat_band(days: int = 180) -> dict:
+    return body.body_fat_band(max(1, min(days, 1825)))
+
+
 @router.get("/body/tdee")
 def body_tdee(window_days: int = 14) -> dict:
     return body.adaptive_tdee(window_days)
@@ -115,6 +120,11 @@ def activity_compare(days: int = 7) -> dict:
 @router.get("/activity/overview")
 def activity_overview() -> dict:
     return activity.overview()
+
+
+@router.get("/activity/weekly-review")
+def activity_weekly_review() -> dict:
+    return activity.weekly_review()
 
 
 # --- Gesundheit (Schritte + Radfahren) ---

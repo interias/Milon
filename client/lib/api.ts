@@ -31,6 +31,7 @@ async function put<T>(path: string, body?: unknown): Promise<T> {
 
 // URL eines Fortschritts-Fotos (statisch vom Backend ausgeliefert).
 export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename}`;
+export const coachImageUrl = (path: string) => `${BASE}${path}`;
 
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
 export type BodySummary = {
@@ -80,6 +81,12 @@ export type CyclingHealth = {
 };
 export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };
 export type BodyFatPoint = { date: string; pct: number | null; avg7: number | null };
+export type BodyFatBand = { series: { date: string; median: number | null; low: number | null; high: number | null; days: number }[]; window_days: number; minimum_days: number; note: string };
+export type SleepPoint = { external_id: string; date: string; started_at: string; ended_at: string; asleep_hours: number | null; window_hours: number; awake_minutes: number | null; nap: boolean; main_sleep: boolean; source_package: string; stage_coverage: number | null };
+export type SleepOverview = { summary: { latest_date: string | null; latest_asleep_hours: number | null; latest_window_hours: number | null; avg_asleep_hours_7d: number | null; nights_7d: number; known_asleep_nights_7d: number; naps_7d: number }; series: SleepPoint[]; sources: { package: string; label: string; nights: number; known_asleep_nights: number }[]; switch_date: string | null; method: string; notes: string[] };
+export type SleepPerformancePoint = { date: string; sleep_hours: number; value: number; title: string; session_id: string };
+export type SleepPerformance = { kind: "run" | "strength"; outcome_label: string; outcome_unit: string; source: string; groups: { package: string; label: string; n: number; correlation: number | null; ci95: [number, number] | null; status: string; status_label: string; points: SleepPerformancePoint[]; missing: { no_sleep: number; unknown_sleep: number; no_outcome: number; excluded: number } }[]; method: string; caveat: string };
+export type WeeklyReview = { activity: ActivityOverview; weight: { delta_kg: number | null; current_days: number; previous_days: number }; sleep: { avg_hours: number | null; measured_nights: number; recorded_nights: number }; checkins: { days: number; count: number; energy_avg: number | null; energy_days: number }; note: string };
 export type MacroSplit = { protein: number; carb: number; fat: number };
 export type NutritionSummary = {
   window_start: string | null; recorded_days_7: number; protein_days_7: number; kcal_days_7: number;
@@ -263,7 +270,9 @@ export type SettingsUpdate = {
   openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
-export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null };
+export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
+export type CoachImage = { url: string; cost_usd: number | null; model: string };
+export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null; visuals?: CoachVisual[] };
 export type CoachStats = {
   model: string; reports_total: number; tokens_total: number;
   cost_total_usd: number; cost_known: boolean; reports_7d: number; cost_7d_usd: number; tokens_7d: number;
@@ -320,6 +329,7 @@ export const api = {
   // Körper
   bodyWeight: (days = 180) => get<WeightPoint[]>(`/metrics/body/weight?days=${days}`),
   bodyFat: (days = 180) => get<BodyFatPoint[]>(`/metrics/body/bodyfat?days=${days}`),
+  bodyFatBand: (days = 180) => get<BodyFatBand>(`/metrics/body/bodyfat-band?days=${days}`),
   bodyTdee: () => get<Tdee>("/metrics/body/tdee"),
   bodyTdeeTrend: (windowDays = 14, days = 180) => get<TdeePoint[]>(`/metrics/body/tdee-trend?window_days=${windowDays}&days=${days}`),
   bodyWeeklyWeight: (weeks = 12) => get<WeeklyWeight[]>(`/metrics/body/weight-weekly?weeks=${weeks}`),
@@ -336,6 +346,9 @@ export const api = {
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
   activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),
+  weeklyReview: () => get<WeeklyReview>("/metrics/activity/weekly-review"),
+  sleepOverview: (days = 90) => get<SleepOverview>(`/metrics/sleep/overview?days=${days}`),
+  sleepPerformance: (kind: "run" | "strength" = "run", source = "current", days = 180) => get<SleepPerformance>(`/metrics/sleep/performance?kind=${kind}&source=${source}&days=${days}`),
   bodySummary: () => get<BodySummary>("/metrics/body/summary"),
   // Gesundheit (Schritte + Radfahren)
   healthOverview: () => get<HealthOverview>("/metrics/health/overview"),
@@ -387,6 +400,7 @@ export const api = {
   coachAsk: (message: string, history?: { role: string; content: string }[]) =>
     post<Report>("/coach/ask", { message, history }),
   coachStats: () => get<CoachStats>("/coach/stats"),
+  generateCoachImage: (prompt: string) => post<CoachImage>("/coach/images", { prompt }),
   // Ingest / Sync
   ingestStatus: () => get<IngestStatus>("/ingest/status"),
   ingestRefresh: () => post<Record<string, unknown>>("/ingest/refresh"),

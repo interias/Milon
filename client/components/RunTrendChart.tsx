@@ -35,12 +35,13 @@ function axis(values: number[]) {
   return { ...best, ticks: Array.from({ length: best.count }, (_, i) => best.low + i * best.step) };
 }
 
-export function RunTrendChart({ points, unit, label, observations = [], showPoints = true }: {
+export function RunTrendChart({ points, unit, label, observations = [], showPoints = true, intervalLabel = "95%-Intervall" }: {
   points: TrendPoint[];
   unit: string;
   label: string;
   observations?: Observation[];
   showPoints?: boolean;
+  intervalLabel?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(280);
@@ -121,7 +122,7 @@ export function RunTrendChart({ points, unit, label, observations = [], showPoin
     </svg>
     {active && <div className="pointer-events-none absolute right-2 top-0 max-w-[calc(100%-3.5rem)] rounded border border-line bg-surface/95 px-3 py-2 text-xs shadow-sm" role="status" aria-live="polite">
       <p className="font-semibold">{dm(active.date)}{active.date.slice(0, 4)} · {de(active.value, 1)} {unit}</p>
-      {hasInterval(active) && <p className="mt-0.5 text-muted">95%-Intervall: {de(active.low, 1)}–{de(active.high, 1)} {unit}</p>}
+      {hasInterval(active) && <p className="mt-0.5 text-muted">{intervalLabel}: {de(active.low, 1)}–{de(active.high, 1)} {unit}</p>}
       {active.detail && <p className="mt-0.5 text-muted">{active.detail}</p>}
       {active.status === "sensitive" && <p className="mt-0.5 text-muted">Empfindlich gegenüber einzelnen Läufen</p>}
     </div>}

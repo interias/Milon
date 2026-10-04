@@ -1,0 +1,71 @@
+.field {
+  --axis-width: 42px;
+  margin-top: 16px;
+  container-type: inline-size;
+  font-variant-numeric: tabular-nums;
+  font-synthesis: none;
+}
+
+.caption, .units, .legend, .legend > span {
+  display: flex;
+  align-items: center;
+}
+.caption {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-muted);
+}
+.units { gap: 5px; }
+.units button { padding: 3px 0; cursor: pointer; }
+.units button[aria-pressed="true"] { color: var(--color-accent); font-weight: 650; }
+.units button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.legend { gap: 10px; }
+.legend > span { gap: 4px; white-space: nowrap; }
+.keyDot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-ink); }
+.keyRange { position: relative; width: 1px; height: 10px; margin: 0 4px; background: var(--color-muted); }
+.keyRange::before, .keyRange::after { content: ""; position: absolute; left: -2px; width: 5px; height: 5px; border: 1px solid var(--color-muted); border-radius: 50%; background: white; }
+.keyRange::before { top: -2px; }
+.keyRange::after { bottom: -2px; }
+
+.plot, .footer { display: grid; grid-template-columns: var(--axis-width) minmax(0, 1fr); }
+.plot { height: 124px; }
+.axis, .plotArea, .lane { position: relative; min-width: 0; }
+.axis { font-size: 11px; line-height: 14px; color: var(--color-muted); }
+.axis > span { position: absolute; right: 8px; transform: translateY(-50%); white-space: nowrap; }
+.lanes, .footerGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.lanes { position: absolute; inset: 0; }
+.lane { background: color-mix(in srgb, var(--zone) 7%, transparent); border-inline: 2px solid white; }
+.gridline { position: absolute; left: 0; right: 0; height: 1px; background: #e2e7e899; pointer-events: none; }
+.range { position: absolute; left: 50%; width: 2px; transform: translateX(-50%); background: var(--zone); z-index: 2; }
+.range::before, .range::after { content: ""; position: absolute; left: -4px; width: 10px; height: 10px; border: 2px solid var(--zone); border-radius: 50%; background: white; }
+.range::before { top: -5px; }
+.range::after { bottom: -5px; }
+.marker { position: absolute; left: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--color-ink); border: 1.5px solid white; transform: translate(-50%, -50%); z-index: 3; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-muted); }
+
+.footer { margin-top: 9px; }
+.footerAxis { position: relative; font-size: 10px; line-height: 14px; color: var(--color-muted); }
+.footerAxis > span { position: absolute; right: 8px; }
+.footerAxis > span:nth-child(1) { top: 3px; }
+.footerAxis > span:nth-child(2) { top: 50px; }
+.footerAxis > span:nth-child(3) { top: 74px; }
+.values { min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.median { margin-bottom: 6px; font-size: 16px; font-weight: 650; line-height: 20px; white-space: nowrap; }
+.missing, .noRange { color: #87918f; }
+.zone { display: inline-flex; align-items: center; justify-content: center; gap: 2px; border-top: 2px solid var(--zone); border-radius: 3px; background: color-mix(in srgb, var(--zone) 12%, white); padding: 1px 5px; font-size: 12px; font-weight: 600; line-height: 16px; }
+.zone sup { font-size: 9px; }
+.heartRate { margin-top: 4px; font-size: 11px; line-height: 14px; color: var(--color-muted); white-space: nowrap; }
+.bounds { position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 7px; min-width: 31px; border-left: 2px solid var(--zone); padding-left: 4px; font-size: 12px; font-weight: 550; line-height: 14px; white-space: nowrap; }
+.bounds::before, .bounds::after { content: ""; position: absolute; left: -2px; width: 5px; height: 2px; background: var(--zone); }
+.bounds::before { top: 0; }
+.bounds::after { bottom: 0; }
+.noRange { margin-top: 7px; font-size: 12px; line-height: 28px; }
+
+@container (max-width: 280px) {
+  .heartRate > span { display: block; }
+  .footerAxis > span:nth-child(3) { top: 88px; }
+}

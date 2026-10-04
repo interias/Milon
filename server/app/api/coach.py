@@ -6,11 +6,11 @@ import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlmodel import Session
 
-from ..coach import client, prompts, snapshot, tools
+from ..coach import client, prompts, snapshot, tools, visuals
 from ..db import engine
 from ..models import CoachReport
 
@@ -22,6 +22,17 @@ class ChatIn(BaseModel):
     history: list[dict] | None = None
 
 
+class ImageIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("prompt")
+    @classmethod
+    def trim_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Bitte ein Motiv eingeben.")
+        return value.strip()
+
+
 def _generate(kind: str, user_msg: str | None = None, history: list[dict] | None = None) -> dict:
     snap = snapshot.snapshot_text()
     messages = prompts.build_messages(kind, snap, user_msg=user_msg, history=history)
@@ -30,6 +41,7 @@ def _generate(kind: str, user_msg: str | None = None, history: list[dict] | None
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Coach/LLM fehlgeschlagen: {e}")
 
+    charts = visuals.build_visuals(kind, user_msg or "")
     with Session(engine) as s:
         from ..config import settings
         report = CoachReport(
@@ -41,13 +53,14 @@ def _generate(kind: str, user_msg: str | None = None, history: list[dict] | None
             prompt_tokens=usage.get("prompt_tokens"),
             completion_tokens=usage.get("completion_tokens"),
             cost_usd=usage.get("cost"),
+            visuals=json.dumps(charts, ensure_ascii=False),
         )
         s.add(report)
         s.commit()
         s.refresh(report)
         return {"id": report.id, "kind": kind, "content": content,
                 "model": report.model, "created_at": report.created_at.isoformat(),
-                "cost_usd": report.cost_usd}
+                "cost_usd": report.cost_usd, "visuals": charts}
 
 
 @router.post("/daily")
@@ -79,6 +92,7 @@ def ask(body: ChatIn) -> dict:
         content, used, full, usage = client.complete_with_tools(messages, tools.TOOLS, tools.dispatch)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Coach/Tools fehlgeschlagen: {e}")
+    charts = visuals.build_visuals("chat-tools", body.message, used)
     with Session(engine) as s:
         from ..config import settings
         rep = CoachReport(
@@ -87,6 +101,7 @@ def ask(body: ChatIn) -> dict:
             prompt_tokens=usage.get("prompt_tokens"),
             completion_tokens=usage.get("completion_tokens"),
             cost_usd=usage.get("cost"),
+            visuals=json.dumps(charts, ensure_ascii=False),
         )
         s.add(rep)
         s.commit()
@@ -94,7 +109,18 @@ def ask(body: ChatIn) -> dict:
         return {"id": rep.id, "kind": rep.kind, "content": content,
                 "tools_used": [u["name"] for u in used],
                 "model": rep.model, "created_at": rep.created_at.isoformat(),
-                "cost_usd": rep.cost_usd}
+                "cost_usd": rep.cost_usd, "visuals": charts}
+
+
+@router.post("/images")
+def create_image(body: ImageIn) -> dict:
+    try:
+        return visuals.generate_image(body.prompt)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        detail = str(exc) if isinstance(exc, ValueError) else "Bildgenerierung fehlgeschlagen; bitte erneut versuchen."
+        raise HTTPException(status_code=502, detail=detail) from exc
 
 
 @router.get("/reports")
@@ -105,7 +131,8 @@ def reports(limit: int = 10) -> list[dict]:
         ).scalars().all()
         return [
             {"id": r.id, "kind": r.kind, "content": r.content, "model": r.model,
-             "created_at": r.created_at.isoformat()}
+             "created_at": r.created_at.isoformat(), "cost_usd": r.cost_usd,
+             "visuals": visuals.parse_visuals(r.visuals)}
             for r in rows
         ]
 
@@ -118,7 +145,8 @@ def report_detail(report_id: int) -> dict:
         if not r:
             raise HTTPException(status_code=404, detail="Report nicht gefunden")
         return {"id": r.id, "kind": r.kind, "content": r.content, "prompt": r.prompt,
-                "model": r.model, "created_at": r.created_at.isoformat()}
+                "model": r.model, "created_at": r.created_at.isoformat(), "cost_usd": r.cost_usd,
+                "visuals": visuals.parse_visuals(r.visuals)}
 
 
 @router.get("/stats")

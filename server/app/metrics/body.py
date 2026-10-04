@@ -76,6 +76,26 @@ def body_fat_trend(days: int = 180) -> list[dict]:
     ]
 
 
+def body_fat_band(days: int = 180) -> dict:
+    """A trailing distribution of daily BIA values, not a true-fat confidence interval."""
+    df = _read("SELECT measured_at, body_fat_pct FROM body_measurements WHERE body_fat_pct IS NOT NULL",
+               parse_dates=["measured_at"])
+    note = "10.–90. Perzentil der Waagenwerte über 28 Kalendertage; kein Korridor des tatsächlichen Körperfetts."
+    if df.empty:
+        return {"series": [], "window_days": 28, "minimum_days": 7, "note": note}
+    s = df.groupby(df["measured_at"].dt.floor("D"))["body_fat_pct"].mean().sort_index().asfreq("D")
+    window = s.rolling("28D", min_periods=7)
+    median, low, high, count = window.median(), window.quantile(0.1), window.quantile(0.9), s.rolling("28D").count()
+    cutoff = s.index.max() - pd.Timedelta(days=days)
+    def value(v):
+        return None if pd.isna(v) else round(float(v), 2)
+    return {"series": [{"date": d.date().isoformat(), "median": value(median[d]) if pd.notna(s[d]) else None,
+                         "low": value(low[d]) if pd.notna(s[d]) else None,
+                         "high": value(high[d]) if pd.notna(s[d]) else None, "days": int(count[d])}
+                        for d in s.index if d >= cutoff],
+            "window_days": 28, "minimum_days": 7, "note": note}
+
+
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
     """TDEE and intake averaged over identical calendar-dated estimates."""
     trend = tdee_trend(window_days=window_days, days=400, smooth_days=smooth_days)

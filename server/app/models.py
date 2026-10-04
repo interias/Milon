@@ -161,6 +161,25 @@ class RestingHrDaily(SQLModel, table=True):
     source: str = "health_connect"
 
 
+class SleepSession(SQLModel, table=True):
+    """Local waking date and source-attributed sleep; an interval is not asleep time."""
+    __tablename__ = "sleep_sessions"
+    __table_args__ = (UniqueConstraint("external_id", "source_package", name="uq_sleep_source"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    external_id: str = Field(index=True)
+    started_at: datetime
+    ended_at: datetime
+    day: date = Field(index=True)
+    duration_window_minutes: float
+    asleep_minutes: Optional[float] = None
+    awake_minutes: Optional[float] = None
+    stage_coverage: float = 0.0
+    main_sleep: bool = True  # Candidate main sleep: interval >= 2 h; longest per waking date wins.
+    source_package: str = Field(index=True)
+    source: str = "health_connect"
+
+
 class CoachProfile(SQLModel, table=True):
     """Single-user goals and coaching context, separate from provider secrets."""
     __tablename__ = "coach_profiles"
@@ -181,6 +200,7 @@ class CoachReport(SQLModel, table=True):
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     cost_usd: Optional[float] = None
+    visuals: Optional[str] = None
 
 
 class ProgressEntry(SQLModel, table=True):

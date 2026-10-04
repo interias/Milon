@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Report, type CoachStats } from "@/lib/api";
+import { api, coachImageUrl, type Report, type CoachStats, type CoachImage } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
 import { Markdown } from "@/components/Markdown";
 import { CoachThinking } from "@/components/CoachThinking";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
+import { CoachVisuals } from "@/components/CoachVisuals";
 
 const fmtUsd = (n: number, known: boolean) => (known ? "$" + n.toFixed(n < 1 ? 4 : 2) : "n/v");
 const reportLabel = (kind: string) => kind === "daily" ? "Tagesreport" : kind === "weekly" ? "Wochenreport" : "Antwort";
@@ -20,7 +21,11 @@ export default function Coach() {
   const [busy, setBusy] = useState<null | "daily" | "weekly" | "chat">(null);
   const [message, setMessage] = useState("");
 
-  const [panel, setPanel] = useState<"history" | "usage" | null>(null);
+  const [panel, setPanel] = useState<"history" | "usage" | "visuals" | null>(null);
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageErr, setImageErr] = useState<string | null>(null);
+  const [image, setImage] = useState<CoachImage | null>(null);
 
   useEffect(() => {
     api.coachReports(10).then((items) => { setReports(items); setCurrent((selected) => selected ?? items[0] ?? null); }).catch((e) => setLoadErr(String(e)));
@@ -68,6 +73,19 @@ export default function Coach() {
     }
   }
 
+  async function createImage() {
+    if (!imagePrompt.trim() || imageBusy) return;
+    setImageBusy(true);
+    setImageErr(null);
+    try {
+      setImage(await api.generateCoachImage(imagePrompt.trim()));
+    } catch (error) {
+      setImageErr(String(error));
+    } finally {
+      setImageBusy(false);
+    }
+  }
+
   if (loadErr) return (<><PageTitle title="Coach" /><ApiError error={loadErr} /></>);
   if (!reports) return (<><PageTitle title="Coach" /><Loading /></>);
 
@@ -97,10 +115,39 @@ export default function Coach() {
     <Card className="mt-4">
       <CardTitle title={current ? reportLabel(current.kind) : "Antwort"} />
       {current ? <>
-        <p className="mb-3 text-xs text-muted">Gespeichert am {new Date(current.created_at).toLocaleString("de-DE")}</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted">Gespeichert am {new Date(current.created_at).toLocaleString("de-DE")}</p>
+          {!!current.visuals?.length && <button type="button" onClick={() => setPanel("visuals")} className="rounded border border-line px-3 py-2 text-xs">Grafische Ansicht</button>}
+        </div>
         <Markdown>{current.content}</Markdown>
+        {!!current.visuals?.length && <div className="mt-5 border-t border-line pt-4"><CoachVisuals visuals={current.visuals} compact /></div>}
       </> : <p className="text-sm text-muted">Stelle eine Frage oder erstelle einen Report.</p>}
     </Card>
+    <Card className="mt-4">
+      <CardTitle title="Illustration im Milon-Stil" sub="GPT Image 2.5 Flare · 1024 × 1024 · niedrige Qualität" />
+      <form onSubmit={(event) => { event.preventDefault(); void createImage(); }} className="flex flex-wrap gap-2">
+        <input aria-label="Motiv der Illustration" value={imagePrompt} maxLength={1000} disabled={imageBusy}
+          onChange={(event) => setImagePrompt(event.target.value)} placeholder="Zum Beispiel: Läufer bei Sonnenaufgang"
+          className="min-w-0 flex-1 basis-48 rounded-lg border border-line bg-surface-alt px-3 py-2.5 text-base focus:border-accent focus:outline-none disabled:opacity-60 sm:text-sm" />
+        <button type="submit" disabled={imageBusy || !imagePrompt.trim()}
+          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{imageBusy ? "Bild entsteht …" : "Bild generieren"}</button>
+      </form>
+      <p className="mt-2 text-xs text-muted">Jeder Klick erzeugt ein kostenpflichtiges Bild über OpenRouter. Gesendet wird nur dein Motiv mit den Designvorgaben.</p>
+      {imageBusy && <p role="status" className="mt-3 text-sm text-muted">Deine Illustration wird erstellt …</p>}
+      {imageErr && <p role="alert" className="mt-3 text-sm text-bad">{imageErr}</p>}
+      {image && <figure className="mt-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={coachImageUrl(image.url)} alt="Generierte Illustration im Milon-Stil" width={1024} height={1024} className="w-full max-w-md rounded-card border border-line" />
+        <figcaption className="mt-2 text-xs text-muted">Illustration · {image.cost_usd == null ? "Kosten nicht verfügbar" : `Kosten ${fmtUsd(image.cost_usd, true)}`}
+          <a href={coachImageUrl(image.url)} download className="ml-3 text-accent underline">Bild öffnen / speichern</a>
+        </figcaption>
+      </figure>}
+    </Card>
+    {panel === "visuals" && current && <RunAnalysisDialog title={`${reportLabel(current.kind)} · grafische Ansicht`} onClose={() => setPanel(null)} wide>
+      <p className="mb-4 text-xs text-muted">Gespeicherter Datenstand vom {new Date(current.created_at).toLocaleString("de-DE")}</p>
+      <section className="mb-5 rounded-card border border-line bg-surface-alt p-4"><Markdown>{current.content}</Markdown></section>
+      <CoachVisuals visuals={current.visuals ?? []} />
+    </RunAnalysisDialog>}
     {panel === "history" && <RunAnalysisDialog title="Verlauf · letzte zehn Einträge" onClose={() => setPanel(null)}>
       {reports.length ? <ul className="divide-y divide-line">{reports.map((report) => <li key={report.id}>
         <button type="button" aria-current={current?.id === report.id ? "true" : undefined}
@@ -113,8 +160,8 @@ export default function Coach() {
     {panel === "usage" && <RunAnalysisDialog title="Details & Nutzung" onClose={() => setPanel(null)}>
       {stats ? <dl className="grid grid-cols-2 gap-4 text-sm">
         {([
-          ["Kosten gesamt", fmtUsd(stats.cost_total_usd, stats.cost_known)],
-          ["Kosten · 7 Tage", fmtUsd(stats.cost_7d_usd, stats.cost_known)],
+          ["Textreports · Kosten gesamt", fmtUsd(stats.cost_total_usd, stats.cost_known)],
+          ["Textreports · Kosten 7 Tage", fmtUsd(stats.cost_7d_usd, stats.cost_known)],
           ["Tokens gesamt", stats.tokens_total.toLocaleString("de-DE")],
           ["Tokens · 7 Tage", stats.tokens_7d.toLocaleString("de-DE")],
           ["Gespeicherte Einträge", String(stats.reports_total)],

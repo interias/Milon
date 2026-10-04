@@ -78,7 +78,8 @@ def test_reimport_replaces_windows_but_full_import_keeps_annotations(analysis_db
     run_analysis.annotate_session("run-1", "beast", True)
     minute = {"external_id": "run-1", "minute": 22.5, "speed_m_min": 165,
               "hr_bpm": 142, "coverage": 1, "steady": True}
-    data = {"body": {}, "sessions": [source_row], "best_efforts": [], "vo2": [], "steps": [],
+    data = {"body": {}, "sessions": [source_row], "best_efforts": [], "best_efforts_invalid_ids": [],
+            "sleep": {"rows": [], "available": False, "stages_available": False}, "vo2": [], "steps": [],
             "resting": [], "skipped_body": 0,
             "run_windows": {"available": True, "session_ids": ["run-1"], "rows": [minute]}}
     monkeypatch.setattr(health_connect, "read_health_connect", lambda _: data)
@@ -105,7 +106,8 @@ def test_full_import_preserves_partial_series_but_removes_orphans(analysis_db, m
             session.add(RunMinute(external_id=name, minute=20.5, speed_m_min=166,
                                   hr_bpm=145, coverage=1, steady=True))
         session.commit()
-    data = {"body": {}, "sessions": [original, second], "best_efforts": [], "vo2": [], "steps": [],
+    data = {"body": {}, "sessions": [original, second], "best_efforts": [], "best_efforts_invalid_ids": [],
+            "sleep": {"rows": [], "available": False, "stages_available": False}, "vo2": [], "steps": [],
             "resting": [], "skipped_body": 0, "run_windows": {
                 "available": True, "session_ids": ["run-1"], "rows": [
                     {"external_id": "run-1", "minute": 21.5, "speed_m_min": 167,

@@ -6,6 +6,7 @@ import { Card, PageTitle } from "@/components/ui";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { HealthDetails } from "@/components/HealthDetails";
+import { SleepPanel } from "@/components/SleepPanel";
 import { de, de0, dm } from "@/lib/format";
 
 export default function Gesundheit() {
@@ -25,7 +26,7 @@ export default function Gesundheit() {
   const summary = overview?.steps;
   const cycling = overview?.cycling;
   return <>
-    <PageTitle title="Gesundheit" sub="Schritte & Alltagsbewegung" />
+    <PageTitle title="Gesundheit" sub="Schritte, Alltagsbewegung & Schlaf" />
     <Card>
       <h2 className="text-sm font-semibold">Schritte · 7-Tage-Mittel</h2>
       {summary ? <>
@@ -47,6 +48,7 @@ export default function Gesundheit() {
         {cycling.last_ride ? <p className="mt-3 text-sm">Letzte Fahrt: {de(cycling.last_ride.km, 1)} km · {cycling.last_ride.dur_min} min · {new Date(cycling.last_ride.date).toLocaleDateString("de-DE")}</p> : <p className="mt-3 text-xs text-muted">Noch keine geeignete Fahrt erfasst.</p>}
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
+    <SleepPanel />
     <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Historie & Details</button>
     {details && <RunAnalysisDialog title="Bewegung · Historie & Details" onClose={() => setDetails(false)}><HealthDetails overview={overview} /></RunAnalysisDialog>}
   </>;
