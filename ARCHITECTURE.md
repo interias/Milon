@@ -1,5 +1,42 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Visuelle Garmin-Auswertungen (2026-10-05)
+
+- `metrics/route_atlas.py` gruppiert alle lokal gespeicherten Strecken mit dem
+  vorhandenen symmetrischen 97-%-Vergleich gegen feste chronologische Anker.
+  Kanonische Einheiten zählen einmal; es gibt keine transitive Verkettung.
+  Geometrie und Gruppen werden nach Datenrevision begrenzt gecacht.
+  `/metrics/running/route-atlas` liefert vereinfachte Konturen und Verlauf.
+  `RunRoutes` integriert den Atlas; `RunReplay` verbindet den vorhandenen
+  UTC-Zeitcursor mit der Route. Keine Karten- oder Geokodierungsdienste.
+- `RunPoster` erzeugt SVG und 1024-Pixel-PNG im Browser. Metadaten werden
+  XML-escaped, Rastermotive als lokale Data-URLs eingebettet. Drei Farbstile,
+  sechs Motive unter `client/public/img/activity/`; Generierungsbeschreibung
+  in `design/activity-assets.json`. Persönliche Poster bleiben außerhalb Git.
+- `metrics/garmin_nights.py` liest vorhandene `garmin_daily`-Rohantworten.
+  `/metrics/garmin/nights` und `/{day}` liefern Hauptnächte, Schlafphasen und
+  begrenzte Messreihen. UTC bestimmt Dauern und den synchronen Cursor, lokale
+  Wandzeit den Rhythmus. Lücken, unbekannte Phasen und DST bleiben explizit.
+  Eine Body-Battery-Differenz braucht ausreichende durchgehende Aufzeichnung.
+  `GarminNights` sitzt auf `/gesundheit`; kein zusätzlicher Remote-Abruf.
+- Garmin-Parser v3 ergänzt einheitengeprüfte SSL%, Bodenkontakt, Schrittlänge,
+  vertikale Bewegung, Kontaktbalance und Impact-Faktor. Die Versionsänderung
+  löst beim nächsten Import ein Retrofill aus. `metrics/run_mechanics.py`
+  vergleicht mindestens sechs verschiedene frühe/späte Minutenpaare je Kanal,
+  bei ähnlicher Pace und Steigung. Unterschiede sind beschreibend.
+  `/metrics/running/mechanics/{id}` speist `RunMechanics` in den Laufdetails.
+- `/metrics/running/mechanics/load` vergleicht wöchentliche Distanz und Impact
+  Load derselben geeigneten Läufe. Impact-Einheiten werden je Aufzeichnung
+  gegen das Distanzintegral geprüft. Hevy-Beintage sind unabhängige Marker.
+  `garmin_load.py` speichert optionale tägliche Lauftoleranz in
+  `garmin_running_tolerance`; Abrufe sind auf 90 Tage und alle sechs Stunden
+  begrenzt. Fehlende Werte, Schemaabweichungen und veraltete Stände bleiben
+  sichtbar. Aus Fehlern entstehen weder null Belastung noch Importabbrüche.
+- `/metrics/activity/journal?offset=0..52` bündelt sieben abgeschlossene Tage
+  mit kanonischen Läufen, Hevy-Einheiten, quellengeprüftem Hauptschlaf und
+  Check-ins. `WeeklyReview` zeigt das Journal mit Wochenwechsel; die Auswertung
+  nutzt lokale Kalendergrenzen und löst keine LLM-Abfrage aus.
+
 ## Persönliche Vergleiche und Wochenmaßnahmen
 
 - `run_reference.py` speichert eine ausdrücklich ausgewählte Referenzrunde in

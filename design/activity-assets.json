@@ -1,0 +1,41 @@
+{
+  "generated_on": "2026-10-05",
+  "tool": "image_gen",
+  "transparent_background": true,
+  "reference": "client/public/img/run-ink-slash.png",
+  "style": "Create a new companion illustration in exactly the Milon sports identity of the attached reference: one adult masculine athlete as a simplified flat ink-charcoal (#14201f) silhouette and one modest geometric muted teal (#0a6e66) accent. Believable adult male anatomy, full body, clear separated limbs, no face details, no text, logos, texture, scenery or photorealism. Quiet clinical editorial style. Square 1024x1024, subject centered with 12 percent clear margin and a genuine transparent background. Preserve the same graphic weight and silhouette simplicity across the series. ",
+  "specs": [
+    [
+      "easy",
+      "Create a companion illustration using the reference: adult male athlete jogging easily at a relaxed sustainable pace, full body in side profile, composed posture and compact stride, moving right. Flat ink-charcoal silhouette with one thin geometric muted teal ribbon behind the lower body. No face or clothing details, eyes, text, logos, gradients, textures or photorealism. Anatomically believable masculine proportions, separated limbs, readable contour at 64px, centered square composition and transparent background."
+    ],
+    [
+      "tempo",
+      "Fast tempo run: dynamic full-length side profile moving right, forward lean and high back heel, arms driving naturally, one narrow diagonal teal slash behind the hips."
+    ],
+    [
+      "long",
+      "Long distance endurance run: full-length side profile moving right, upright steady rhythm and moderate stride, calm shoulders, one thin long horizontal gently rising teal ribbon behind the lower body."
+    ],
+    [
+      "strength",
+      "Strength training: full-length male athlete front three-quarter view at the top of a controlled barbell deadlift, weight held naturally in front of thighs, both feet on same baseline, straight barbell with simple round plates. One small diagonal teal accent beside body; no gym."
+    ],
+    [
+      "recovery",
+      "Recovery: full-length male athlete seated sideways on a low simple bench, resting calmly with forearms on thighs and feet on ground, relaxed neutral pose. One gentle curved teal arc behind the back; quiet grounded composition, no effort expression."
+    ],
+    [
+      "progress",
+      "Progress: full-length male athlete standing naturally upright, relaxed confident posture with both hands resting on hips, viewed from slight front three-quarter angle, athletic but realistic proportions. One understated rising teal arc beside the silhouette; no arrows, trophies or text."
+    ]
+  ],
+  "outputs": [
+    "client/public/img/activity/easy.png",
+    "client/public/img/activity/tempo.png",
+    "client/public/img/activity/long.png",
+    "client/public/img/activity/strength.png",
+    "client/public/img/activity/recovery.png",
+    "client/public/img/activity/progress.png"
+  ]
+}
