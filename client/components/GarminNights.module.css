@@ -1,4 +1,5 @@
 .card { min-width: 0; }
+.anchor { scroll-margin-top: 76px; }
 .header, .nightHeading, .rhythmTitle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .header h2 { font-size: 14px; font-weight: 650; }
 .header p, .note { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
@@ -24,6 +25,14 @@
 .plot .metricUnit { font-weight: 400; fill: var(--color-muted); }
 .plot:focus-visible, .period button:focus-visible, .nightRow:focus-visible, .seriesControls select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .readout { color: var(--color-muted); min-height: 18px; margin: 6px 0; font-size: 10px; }
+.referenceControl { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: space-between; margin: 9px 0 8px; color: var(--color-muted); font-size: 10px; }
+.referenceControl label { display: flex; gap: 5px; align-items: center; }
+.referenceControl input { accent-color: var(--color-accent); }
+.referenceNote { color: var(--color-muted); font-size: 10px; line-height: 1.45; margin: 4px 0 8px; }
+.referenceBand { animation: nightBandReveal 180ms ease-out; }
+.fresh { display: block; color: var(--color-accent); font-size: 8px; line-height: 9px; }
+@keyframes nightBandReveal { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .referenceBand { animation: none; } }
 .note { margin-top: 6px; }
 .rhythm { border-left: 1px solid var(--color-line); padding-left: 20px; min-width: 0; }
 .rhythmTitle { gap: 6px; }

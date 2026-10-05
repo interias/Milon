@@ -1,4 +1,4 @@
-.section { min-width:0; scroll-margin-top:76px; }
+.section { min-width:0; scroll-margin-top:76px; container-type:inline-size; }
 .card { min-width:0; }
 .header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:13px; }
 .header h3 { font-size:14px; font-weight:600; }
@@ -32,6 +32,7 @@
 .memberList>a:hover,.memberList>.activeMember { background:#f2f8f6; }
 .memberList>a span:not(:first-child) { text-align:right; white-space:nowrap; }
 .memberList small { color:#4d5b5a; font-size:9px; }
+.memberList .newLabel { display:inline-block; margin-left:4px; color:#0a6e66; font-size:9px; font-weight:600; }
 .note,.method { font-size:10px; color:#4d5b5a; line-height:1.6; margin-top:8px; }
 .method summary { cursor:pointer; }
 .method p { margin-top:7px; max-width:85ch; }
@@ -54,3 +55,4 @@
   .errorRow { flex-direction:column; align-items:flex-start; gap:4px; }
 }
 @media(max-width:1000px) { .atlasBody { grid-template-columns:1fr; gap:15px; } }
+@container(max-width:650px) { .atlasBody { grid-template-columns:1fr; gap:15px; } }

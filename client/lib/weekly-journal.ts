@@ -1,7 +1,7 @@
 export type JournalDay = {
   date: string;
-  runs: { started_at: string; distance_km: number; minutes: number }[];
-  strength: { started_at: string; title: string }[];
+  runs: { started_at: string; distance_km: number; minutes: number; activity_id: string | null }[];
+  strength: { started_at: string; title: string; exercises: string[] }[];
   sleep: { hours: number | null; source: string; label: string; window_hours: number } | null;
   checkin: { energy: number | null; training_effort: number | null } | null;
   steps: number | null;

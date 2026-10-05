@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from statistics import median, quantiles
 from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
@@ -56,7 +58,7 @@ def _phases(payload: dict, start: datetime, end: datetime) -> tuple[list[dict], 
     return intervals, False
 
 
-def _series(payload: dict, key: str, start: datetime, end: datetime) -> dict:
+def _series(payload: dict, key: str, start: datetime, end: datetime, *, downsample: bool = True) -> dict:
     field, minimum, maximum, gap_seconds = SERIES[key]
     entries = payload.get(field)
     samples = {}
@@ -105,6 +107,8 @@ def _series(payload: dict, key: str, start: datetime, end: datetime) -> dict:
             indexes.add(max(batch, key=lambda index: segment[index]["value"]))
         display.append([segment[index] for index in sorted(indexes)])
     values = [point["value"] for segment in segments for point in segment]
+    if not downsample:
+        display = segments
     return {"segments": display, "samples": count,
             "display_samples": sum(len(segment) for segment in display),
             "minimum": min(values) if values else None, "maximum": max(values) if values else None,
@@ -148,9 +152,11 @@ def _night(row: GarminDaily, *, detail: bool = False) -> dict | None:
     return value
 
 
-def nights(days: int = 14, *, now: datetime | None = None) -> dict:
+def nights(days: int = 14, *, now: datetime | None = None, end: date | None = None) -> dict:
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     today = now.astimezone(ZoneInfo(settings.timezone)).date()
+    if end is not None:
+        today = min(today, end)
     first = today - timedelta(days=days - 1)
     with Session(engine) as session:
         rows = session.exec(select(GarminDaily).where(GarminDaily.day >= first, GarminDaily.day <= today)
@@ -161,7 +167,62 @@ def nights(days: int = 14, *, now: datetime | None = None) -> dict:
             "complete_nights": sum(value["complete"] for value in values)}
 
 
+def _reference(rows: list[GarminDaily], selected: dict) -> dict:
+    day = date.fromisoformat(selected["day"])
+    first = day - timedelta(days=28)
+    selected_start = _utc(selected["started_at_utc"])
+    complete = []
+    for row in rows:
+        if not first <= row.day < day:
+            continue
+        summary = _night(row)
+        if summary and summary["complete"] and _utc(summary["ended_at_utc"]) <= selected_start:
+            complete.append((row, summary))
+    result = {"status": "ready" if len(complete) >= 7 else "collecting", "complete_nights": len(complete),
+              "minimum_nights": 7, "min_bin_nights": 5, "bin_minutes": 5,
+              "from_date": first.isoformat(), "to_date": (day - timedelta(days=1)).isoformat(),
+              "metrics": {key: {"bins": [], "nights": 0} for key in SERIES},
+              "method": "Vorherige vollständige Garmin-Hauptnächte der letzten 28 Tage; ausgewählte Nacht ausgeschlossen. "
+                        "Zeit seit Schlafbeginn, keine Streckung auf gleiche Nachtdauer. Je 5-Minuten-Abschnitt ein Median "
+                        "der vorhandenen Messwerte je Nacht; ab fünf Nächten Median und mittlere 50 %. "
+                        "Keine Interpolation, kein Normbereich und kein Konfidenzintervall."}
+    if len(complete) < 7:
+        return result
+    duration = selected["window_minutes"] * 60
+    by_metric = {key: defaultdict(list) for key in SERIES}
+    for row, summary in complete:
+        payload = _object(row.raw_json).get("sleep")
+        start, end = _utc(summary["started_at_utc"]), _utc(summary["ended_at_utc"])
+        for key in SERIES:
+            series = _series(payload, key, start, end, downsample=False)
+            by_bin = defaultdict(list)
+            for segment in series["segments"]:
+                for point in segment:
+                    if point["seconds"] < min(duration, summary["window_minutes"] * 60):
+                        by_bin[int(point["seconds"] // 300)].append(point["value"])
+            if by_bin:
+                result["metrics"][key]["nights"] += 1
+            for index, values in by_bin.items():
+                # Repeated or more frequent samples never give a night extra votes.
+                by_metric[key][index].append(median(values))
+    for key, bins in by_metric.items():
+        for index, values in sorted(bins.items()):
+            if len(values) < 5:
+                continue
+            q1, middle, q3 = quantiles(values, n=4, method="inclusive")
+            result["metrics"][key]["bins"].append({"start_seconds": index * 300,
+                "end_seconds": min((index + 1) * 300, duration), "nights": len(values),
+                "median": round(middle, 2), "q1": round(q1, 2), "q3": round(q3, 2)})
+    return result
+
+
 def night(day: date) -> dict | None:
     with Session(engine) as session:
         row = session.get(GarminDaily, day)
-        return _night(row, detail=True) if row else None
+        value = _night(row, detail=True) if row else None
+        if value is None:
+            return None
+        previous = session.exec(select(GarminDaily).where(GarminDaily.day >= day - timedelta(days=28),
+                                GarminDaily.day < day).order_by(GarminDaily.day)).all()
+        value["reference"] = _reference(previous, value)
+        return value

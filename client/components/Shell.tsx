@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { captureSyncInventory, finishManualSync } from "@/lib/sync-feedback";
+import { SyncFeedbackNotice } from "@/components/SyncFeedback";
 
 function latestSync(state: { last_sync: string | null }[]): string | null {
   const t = state.map((s) => s.last_sync).filter(Boolean) as string[];
@@ -57,16 +59,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setBusy(true);
     setRefreshMessage(null);
     setRefreshFailed(false);
+    const before = await captureSyncInventory();
     try {
       const result = await api.ingestRefresh();
-      window.dispatchEvent(new Event("milon:data-refresh"));
+      const feedback = await finishManualSync(before);
       const failed = Object.entries(result).filter(([, value]) =>
         value != null && typeof value === "object" && "error" in value
       ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect", garmin: "Garmin" }[source] || source));
       setRefreshFailed(failed.length > 0);
-      setRefreshMessage(failed.length ? `Import fehlgeschlagen: ${failed.join(", ")}.` : "Import abgeschlossen.");
-      const st = await api.ingestStatus();
-      setLast(latestSync(st.state));
+      setRefreshMessage(failed.length ? `Import teilweise fehlgeschlagen: ${failed.join(", ")}. ${feedback}` : feedback);
+      try { const st = await api.ingestStatus(); setLast(latestSync(st.state)); }
+      catch { /* A failed status read must not overwrite the completed import result. */ }
     } catch (error) {
       setRefreshFailed(true);
       setRefreshMessage(`Aktualisierung fehlgeschlagen${error instanceof Error ? `: ${error.message}` : "."}`);
@@ -172,6 +175,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 px-4 py-6 md:px-10 md:py-8">
         <div className="mx-auto max-w-[1200px]">{children}</div>
       </main>
+      <SyncFeedbackNotice />
     </div>
   );
 }

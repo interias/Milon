@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import { Card } from "@/components/ui";
 import { garminNightsApi, nightClock, nightValue, nightWallHour, type GarminNight, type GarminNightList, type NightMetric, type NightStage } from "@/lib/garmin-nights";
 import styles from "./GarminNights.module.css";
+import { useSyncFeedback } from "@/components/SyncFeedback";
 
 const STAGES: Record<NightStage, { label: string; color: string; row: number }> = {
   awake: { label: "Wach", color: "#b77b20", row: 0 },
@@ -26,6 +27,7 @@ function NightPlot({ night }: { night: GarminNight }) {
   const host = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [cursor, setCursor] = useState<number | null>(null);
+  const [typical, setTypical] = useState(false);
   const available = (Object.keys(METRICS) as NightMetric[]).filter(key => night.series[key].samples > 0);
   const [chosen, setChosen] = useState<NightMetric[]>(() => available.slice(0, 2));
   const selected = chosen.filter(key => available.includes(key)).slice(0, 2);
@@ -51,6 +53,8 @@ function NightPlot({ night }: { night: GarminNight }) {
       onChange={event => setChosen(previous => { const next = [...previous]; next[index] = event.target.value as NightMetric; return next; })}>
       {available.filter(key => selected[1 - index] !== key).map(key => <option key={key} value={key}>{METRICS[key].label}</option>)}
     </select>)}</div>
+    <div className={styles.referenceControl}><label><input type="checkbox" checked={typical} disabled={night.reference.status !== "ready"} onChange={event => setTypical(event.target.checked)} />Typische Nacht einblenden</label><span>{night.reference.complete_nights} vorherige Nächte{night.reference.status === "collecting" ? " · ab 7" : ""}</span></div>
+    {typical && <p className={styles.referenceNote}>Seit Schlafbeginn · Band: mittlere 50 %, Strich: Median · mindestens 5 Nächte je Abschnitt. Kein Normbereich.</p>}
     <svg viewBox={`0 0 ${width} ${height}`} height={height} className={styles.plot} role="group" tabIndex={0}
       aria-label="Nachtverlauf. Berühren oder mit den Pfeiltasten durch Schlafphasen und Messwerte gehen."
       onPointerMove={pick} onPointerDown={event => { event.currentTarget.focus(); pick(event); }}
@@ -76,8 +80,9 @@ function NightPlot({ night }: { night: GarminNight }) {
       {!night.phases.length && <text x={(left + right) / 2} y="37" textAnchor="middle">{night.stage_conflict ? "Phasen widersprüchlich" : "Keine Phasen verfügbar"}</text>}
       {selected.map((key, index) => {
         const series = night.series[key], metric = METRICS[key];
-        const low = Math.floor((series.minimum ?? 0) / 5) * 5;
-        const high = Math.max(low + 10, Math.ceil((series.maximum ?? 0) / 5) * 5);
+        const reference = typical ? night.reference.metrics[key].bins : [];
+        const low = Math.floor(Math.min(series.minimum ?? 0, ...reference.map(bin => bin.q1)) / 5) * 5;
+        const high = Math.max(low + 10, Math.ceil(Math.max(series.maximum ?? 0, ...reference.map(bin => bin.q3)) / 5) * 5);
         const top = 90 + index * 64, bottom = top + 33;
         const y = (value: number) => bottom - (value - low) / (high - low) * (bottom - top);
         const active = cursor === null ? null : nightValue(series, cursor);
@@ -85,18 +90,24 @@ function NightPlot({ night }: { night: GarminNight }) {
           <text x={left} y={top - 9} className={styles.metricTitle}>{metric.label} <tspan className={styles.metricUnit}>· {metric.unit}</tspan></text>
           <text x={right} y={top - 9} textAnchor="end" fill={metric.color}>{cursor !== null ? active === null ? "Lücke" : `${number(active)} ${metric.unit}` : ""}</text>
           {[low, high].map(value => <g key={value}><text x={left - 7} y={y(value) + 3} textAnchor="end">{number(value)}</text><line x1={left} x2={right} y1={y(value)} y2={y(value)} stroke="var(--color-line)" /></g>)}
+          <g key={typical ? "reference-on" : "reference-off"} className={styles.referenceBand}>{reference.map(bin => <g key={bin.start_seconds}><title>{bin.nights} Nächte · Median {number(bin.median)} · mittlere 50 % {number(bin.q1)}–{number(bin.q3)} {metric.unit}</title>
+            <rect x={x(bin.start_seconds)} y={y(bin.q3)} width={x(bin.end_seconds) - x(bin.start_seconds)} height={Math.max(.8, y(bin.q1) - y(bin.q3))} fill="#899b94" opacity=".22" />
+            <line x1={x(bin.start_seconds)} x2={x(bin.end_seconds)} y1={y(bin.median)} y2={y(bin.median)} stroke="#74847e" strokeWidth="1" strokeDasharray="2 2" />
+          </g>)}</g>
           {series.segments.map((segment, segmentIndex) => segment.length === 1 ? <circle key={segmentIndex} cx={x(segment[0].seconds)} cy={y(segment[0].value)} r="1.8" fill={metric.color} /> : <path key={segmentIndex} d={segment.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${x(point.seconds).toFixed(1)},${y(point.value).toFixed(1)}`).join(" ")} stroke={metric.color} strokeWidth="1.6" fill="none" />)}
+          {typical && !reference.length && <text x={(left + right) / 2} y={bottom + 11} textAnchor="middle">Noch nicht genug Vergleichswerte</text>}
         </g>;
       })}
-      {[0, .5, 1].map(fraction => <text key={fraction} x={x(durationSeconds * fraction)} y={height - 3} textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{clock(durationSeconds * fraction)}</text>)}
+      {[0, .5, 1].map(fraction => <text key={fraction} x={x(durationSeconds * fraction)} y={height - 3} textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{typical ? `${Math.floor(durationSeconds * fraction / 3600)}:${String(Math.floor(durationSeconds * fraction / 60) % 60).padStart(2, "0")} h` : clock(durationSeconds * fraction)}</text>)}
       {cursor !== null && <line x1={x(cursor)} x2={x(cursor)} y1="5" y2={height - 19} stroke="var(--color-muted)" strokeDasharray="3 3" />}
     </svg>
     <p className={styles.readout} role="status" aria-live="polite">{cursor === null ? "Berühren oder ← → · Schraffur: Phase unbekannt" : `${clock(cursor)} Uhr · ${activePhase ? STAGES[activePhase.stage].label : "Phase unbekannt"}`}</p>
+    {typical && <p className={styles.referenceNote}>Basis {labelDate(night.reference.from_date)}–{labelDate(night.reference.to_date)} · vollständige Nächte derselben Uhr, diese Nacht ausgeschlossen. Jede Nacht zählt einmal; Lücken werden nicht ergänzt.</p>}
     {!available.length && <p className={styles.note}>Für diese Nacht wurden keine zeitaufgelösten Messreihen geliefert.</p>}
   </div>;
 }
 
-function Rhythm({ data, selected, onSelect }: { data: GarminNightList; selected: string; onSelect: (day: string) => void }) {
+function Rhythm({ data, selected, onSelect, freshDays }: { data: GarminNightList; selected: string; onSelect: (day: string) => void; freshDays: Set<string> }) {
   const dates: string[] = [];
   for (let stamp = Date.parse(`${data.from_date}T12:00:00Z`); stamp <= Date.parse(`${data.to_date}T12:00:00Z`); stamp += 86_400_000) dates.push(new Date(stamp).toISOString().slice(0, 10));
   const bounds = data.nights.flatMap(night => [nightWallHour(night.started_at, night.day), nightWallHour(night.ended_at, night.day)]);
@@ -113,8 +124,8 @@ function Rhythm({ data, selected, onSelect }: { data: GarminNightList; selected:
       const start = position(nightWallHour(night.started_at, day)), end = position(nightWallHour(night.ended_at, day));
       const title = `${labelDate(day)} · ${nightClock(night.started_at, data.timezone)}–${nightClock(night.ended_at, data.timezone)} Uhr${night.complete ? ` · ${duration(night.asleep_minutes)} Schlaf` : " · Phasen unvollständig"}${night.clock_change ? " · Zeitumstellung" : ""}`;
       return <button type="button" key={day} title={title} aria-label={title} aria-pressed={day === selected}
-        className={`${styles.nightRow} ${day === selected ? styles.activeNight : ""}`} onClick={() => onSelect(day)}>
-        <span>{labelDate(day)}</span><span className={styles.track}><span className={`${styles.sleepBar} ${!night.complete ? styles.partialBar : ""}`} style={{ left: `${start}%`, width: `${Math.max(.6, end - start)}%` }} />
+        className={`${styles.nightRow} ${day === selected ? styles.activeNight : ""} ${freshDays.has(day) ? "milon-new-data" : ""}`} onClick={() => onSelect(day)}>
+        <span>{labelDate(day)}{freshDays.has(day) && <small className={styles.fresh}>Neu</small>}</span><span className={styles.track}><span className={`${styles.sleepBar} ${!night.complete ? styles.partialBar : ""}`} style={{ left: `${start}%`, width: `${Math.max(.6, end - start)}%` }} />
           <span className={styles.midnight} style={{ left: `${position(0)}%` }} /></span>
       </button>;
     })}</div>
@@ -123,26 +134,43 @@ function Rhythm({ data, selected, onSelect }: { data: GarminNightList; selected:
 }
 
 export function GarminNights() {
+  const section = useRef<HTMLDivElement>(null), scrolledRequest = useRef<string | undefined>(undefined);
   const [days, setDays] = useState<14 | 30>(14), [revision, setRevision] = useState(0);
   const [data, setData] = useState<GarminNightList | null>(null), [selected, setSelected] = useState("");
   const [night, setNight] = useState<GarminNight | null>(null);
   const [error, setError] = useState(""), [nightError, setNightError] = useState("");
+  const [requested, setRequested] = useState<string | undefined>(undefined), [queryReady, setQueryReady] = useState(false);
+  const feedback = useSyncFeedback();
+  const freshDays = new Set(feedback?.nights.map(item => item.date) ?? []);
+  useEffect(() => {
+    const read = () => {
+      const candidate = new URLSearchParams(window.location.search).get("night");
+      const valid = candidate && /^\d{4}-\d{2}-\d{2}$/.test(candidate) && Number.isFinite(Date.parse(`${candidate}T12:00:00Z`)) && new Date(`${candidate}T12:00:00Z`).toISOString().slice(0, 10) === candidate;
+      setRequested(valid ? candidate : undefined);
+      if (valid) setSelected(candidate);
+      setQueryReady(true);
+    };
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
     window.addEventListener("milon:data-refresh", refresh);
     return () => window.removeEventListener("milon:data-refresh", refresh);
   }, []);
   useEffect(() => {
+    if (!queryReady) return;
     const controller = new AbortController();
     setError("");
     setData(null);
-    garminNightsApi.list(days, controller.signal).then(value => {
+    garminNightsApi.list(days, controller.signal, requested).then(value => {
       if (controller.signal.aborted) return;
       setData(value);
-      setSelected(previous => value.nights.some(item => item.day === previous) ? previous : value.nights.at(-1)?.day ?? "");
+      setSelected(previous => value.nights.some(item => item.day === previous) ? previous : requested ?? value.nights.at(-1)?.day ?? "");
     }).catch(() => { if (!controller.signal.aborted) setError("Die Nächte konnten nicht geladen werden."); });
     return () => controller.abort();
-  }, [days, revision]);
+  }, [days, revision, queryReady, requested]);
   useEffect(() => {
     const controller = new AbortController();
     setNight(null); setNightError("");
@@ -150,16 +178,22 @@ export function GarminNights() {
       .catch(() => { if (!controller.signal.aborted) setNightError("Diese Nacht konnte nicht geladen werden."); });
     return () => controller.abort();
   }, [selected, revision]);
-  return <Card className={`mt-4 ${styles.card}`}>
-    <div className={styles.header}><div><h2>Deine Nacht</h2><p>Schlafphasen, Messverläufe & Rhythmus · Garmin direkt</p></div>
-      <div className={styles.period} aria-label="Zeitraum">{([14, 30] as const).map(value => <button type="button" key={value} aria-pressed={days === value} onClick={() => setDays(value)}>{value} Tage</button>)}</div>
+  useEffect(() => {
+    if (requested && scrolledRequest.current !== requested && (night || nightError)) {
+      scrolledRequest.current = requested;
+      section.current?.scrollIntoView({ block: "start" });
+    }
+  }, [requested, night, nightError]);
+  return <div ref={section} className={styles.anchor}><Card className={`mt-4 ${styles.card}`}>
+    <div className={styles.header}><div><h2>Deine Nacht</h2><p>Messwerte & Rhythmus · Garmin</p></div>
+      <div className={styles.period} aria-label="Zeitraum">{requested && <button type="button" onClick={() => { setRequested(undefined); setSelected(""); const url = new URL(window.location.href); url.searchParams.delete("night"); window.history.replaceState(window.history.state, "", url); }}>Heute</button>}{([14, 30] as const).map(value => <button type="button" key={value} aria-pressed={days === value} onClick={() => setDays(value)}>{value} Tage</button>)}</div>
     </div>
     {error && <p className={styles.error} role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p>}
     {!data && !error && <p className={styles.empty} role="status">Nächte werden geladen …</p>}
-    {data && !data.nights.length && <p className={styles.empty}>In diesen {days} Tagen ist noch keine Garmin-Hauptschlafphase verfügbar.</p>}
-    {data && data.nights.length > 0 && <div className={styles.content}>
+    {data && !data.nights.length && !requested && <p className={styles.empty}>In diesen {days} Tagen ist noch keine Garmin-Hauptschlafphase verfügbar.</p>}
+    {data && (data.nights.length > 0 || requested) && <div className={styles.content}>
       <div className={styles.detail}>
-        {nightError ? <p className={styles.error} role="alert">{nightError} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !night ? <p className={styles.empty} role="status">Nacht wird geladen …</p> : <>
+        {nightError ? <p className={styles.error} role="alert">{requested ? `Der Garmin-Verlauf zur Nacht zum ${labelDate(selected)} ist nicht verfügbar. Die allgemeine Schlafhistorie bleibt darüber sichtbar.` : nightError} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !night ? <p className={styles.empty} role="status">Nacht wird geladen …</p> : <>
           <div className={styles.nightHeading}><h3>Nacht zum {labelDate(night.day)}</h3><span>{nightClock(night.started_at, night.timezone)}–{nightClock(night.ended_at, night.timezone)} Uhr</span></div>
           <div className={styles.summary}>
             <div><span>Schlaf</span><strong>{duration(night.asleep_minutes)}</strong></div>
@@ -172,7 +206,7 @@ export function GarminNights() {
           <p className={styles.note}>Schlafphasen, Stress und Body Battery sind Garmin-Schätzungen. Lücken bleiben sichtbar.{night.sync_issue ? " Letzter Abruf fehlgeschlagen; letzter verfügbarer Stand." : ""}</p>
         </>}
       </div>
-      <Rhythm data={data} selected={selected} onSelect={setSelected} />
+      <Rhythm data={data} selected={selected} freshDays={freshDays} onSelect={day => { setSelected(day); const url = new URL(window.location.href); url.searchParams.set("night", day); window.history.replaceState(window.history.state, "", url); }} />
     </div>}
-  </Card>;
+  </Card></div>;
 }

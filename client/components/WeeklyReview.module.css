@@ -13,7 +13,10 @@
 .summary small { font-family: var(--font-sans); font-size: 11px; font-weight: 400; }
 .summary p { margin-top: 3px; font-size: 10px; line-height: 1.4; color: var(--color-muted); }
 .calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); }
-.day { position: relative; min-width: 0; padding: 12px 10px; border-right: 1px solid var(--color-line); }
+.day { position: relative; min-width: 0; padding: 12px 10px; border-right: 1px solid var(--color-line); text-align: left; transition: background-color 180ms ease, box-shadow 180ms ease; }
+.day:hover { background: #f5f9f7; }
+.selectedDay { background: #eef6f2; box-shadow: inset 0 2px var(--color-accent); }
+.day:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 .day:first-child { padding-left: 0; }
 .day:last-child { border-right: none; padding-right: 0; }
 .dayHeading { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; position: relative; z-index: 1; }
@@ -22,7 +25,7 @@
 .illustration { position: absolute; top: 8px; right: 0; width: 65px; height: 68px; opacity: .11; pointer-events: none; overflow: hidden; }
 .illustration img { width: 100%; height: 100%; object-fit: contain; }
 .training { position: relative; display: flex; flex-direction: column; gap: 5px; margin: 14px 0; min-height: 40px; }
-.training > a { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.training > .run, .training > .strength { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .run { color: var(--color-accent); }
 .strength { color: #827092; }
 .marker { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -43,6 +46,22 @@
 .note { margin-top: 7px; font-size: 10px; line-height: 1.5; color: var(--color-muted); }
 .empty { padding: 22px 0; font-size: 12px; color: var(--color-muted); }
 .empty button { margin-left: 8px; text-decoration: underline; }
+.fresh { position: absolute; right: 5px; top: 1px; color: var(--color-accent); font-size: 8px; }
+.exploreHint { margin-top: 7px; color: var(--color-muted); font-size: 10px; }
+.dayDetail { padding: 12px 14px; background: #f5f9f7; border-bottom: 1px solid var(--color-line); animation: dayReveal 180ms ease-out; }
+.detailHeading { display: flex; align-items: center; justify-content: space-between; }
+.detailHeading h3 { font-size: 12px; font-weight: 650; }
+.detailHeading button { font-size: 18px; width: 28px; height: 28px; color: var(--color-muted); }
+.detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.detailGrid h4 { margin: 3px 0 7px; color: var(--color-muted); font-size: 10px; font-weight: 500; }
+.detailGrid p { margin: 4px 0; font-size: 11px; line-height: 1.5; }
+.detailGrid a { color: var(--color-accent); }
+.detailGrid a:hover { text-decoration: underline; }
+.detailGrid small { display: block; font-size: 10px; color: var(--color-muted); }
+.exerciseLinks { display: flex; flex-wrap: wrap; gap: 3px 9px; font-size: 10px; }
+.workout + .workout { margin-top: 10px; }
+@keyframes dayReveal { from { opacity: .5; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .day { transition: none; } .dayDetail { animation: none; } }
 @media (max-width: 700px) {
   .header { align-items: flex-start; gap: 8px; }
   .summary { gap: 10px; margin: 16px 0; }
@@ -59,6 +78,8 @@
   .illustration { top: 3px; left: 65px; width: 58px; height: 49px; opacity: .08; }
   .dots { flex-wrap: wrap; gap: 3px; }
   .dots small { display: none; }
+  .dayDetail { padding: 10px 9px; }
+  .detailGrid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 }
 @media (max-width: 380px) {
   .summary strong { font-size: 19px; }

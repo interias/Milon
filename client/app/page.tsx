@@ -8,6 +8,8 @@ import { Heatmap } from "@/components/Heatmap";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { CheckIn } from "@/components/CheckIn";
 import { WeeklyReview } from "@/components/WeeklyReview";
+import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
+import type { HistoryPoint } from "@/lib/overview-history";
 import { de, de0, dm } from "@/lib/format";
 
 type Resource<T> = { data: T | null; loading: boolean; error: boolean };
@@ -61,6 +63,7 @@ export default function Overview() {
   const consistency = useResource<Consistency>(loadConsistency);
   const reports = useResource<Report[]>(loadReport);
   const [yearOpen, setYearOpen] = useState(false);
+  const [historyPoint, setHistoryPoint] = useState<HistoryPoint | null>(null);
 
   const b = body.data;
   const runPoints = running.data?.pace_series?.find((s) => s.pace_seconds === 360)?.points ?? [];
@@ -77,7 +80,7 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
-    <div className="grid gap-4 md:grid-cols-3">
+    {historyPoint ? <HistoryCards point={historyPoint} /> : <div className="grid gap-4 md:grid-cols-3">
       <DevelopmentCard title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper">
         {b?.weight_avg7 != null ? <>
           <p className="mt-3 font-display text-3xl font-extrabold">{de(b.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
@@ -106,7 +109,8 @@ export default function Overview() {
           <p className="mt-2 text-xs text-muted">{index.cohort_size} Übungen · {index.groups} Muskelgruppen</p>
         </> : <StateNote resource={strength} empty="Noch nicht genügend vergleichbare Kraftdaten." />}
       </DevelopmentCard>
-    </div>
+    </div>}
+    <OverviewHistory onSelect={setHistoryPoint} />
 
     <CheckIn />
     <WeeklyReview />

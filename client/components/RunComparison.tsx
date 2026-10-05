@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import Link from "next/link";
 import { de, de0 } from "@/lib/format";
 import { finite, paceLabel } from "@/lib/garmin";
 import { routeDate } from "@/lib/run-routes";
@@ -17,7 +18,9 @@ function differenceLabel(value: number | null, metric: Metric) {
   return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${de(Math.abs(rounded), metric === "pace_seconds" ? 0 : 1)}`;
 }
 
-function DistributionPlot({ data, metric, distribution }: { data: RunCohortComparison; metric: Metric; distribution: RunDistribution }) {
+type Selection = { activeId: string; onSelect: (id: string) => void };
+
+function DistributionPlot({ data, metric, distribution, activeId, onSelect }: { data: RunCohortComparison; metric: Metric; distribution: RunDistribution } & Selection) {
   const ref = useRef<HTMLDivElement>(null), titleId = useId();
   const [width, setWidth] = useState(600);
   useEffect(() => {
@@ -43,6 +46,19 @@ function DistributionPlot({ data, metric, distribution }: { data: RunCohortCompa
     return { run, position, lane };
   });
   const unit = metric === "pace_seconds" ? "min/km" : "bpm";
+  const ordered = [...data.cohort, data.selected].filter(run => finite(run[metric]))
+    .sort((a, b) => (a[metric] as number) - (b[metric] as number) || a.started_at.localeCompare(b.started_at) || a.activity_id.localeCompare(b.activity_id));
+  function move(event: KeyboardEvent<SVGGElement>, id: string) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    const current = ordered.findIndex(run => run.activity_id === id);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? ordered.length - 1 : event.key === "ArrowLeft" ? Math.max(0, current - 1) : event.key === "ArrowRight" ? Math.min(ordered.length - 1, current + 1) : current;
+    const target = ordered[next];
+    if (target) {
+      onSelect(target.activity_id);
+      ref.current?.querySelector<SVGGElement>(`[data-run-id="${target.activity_id}"]`)?.focus();
+    }
+  }
   return <div ref={ref} className={styles.chart}>
     <svg viewBox={`0 0 ${width} 76`} aria-labelledby={titleId}>
       <title id={titleId}>{metric === "pace_seconds" ? "Tempo" : "Durchschnittspuls"}: dieser Lauf {metricLabel(distribution.selected, metric)} {unit}; Median der {distribution.n} Vergleichsläufe {metricLabel(distribution.median, metric)} {unit}. Jeder Kreis ist ein anderer Lauf. Die Raute markiert diesen Lauf.</title>
@@ -54,12 +70,15 @@ function DistributionPlot({ data, metric, distribution }: { data: RunCohortCompa
       </g>}
       {distribution.n >= 5 && finite(distribution.q1) && finite(distribution.q3) && <rect x={x(distribution.q1)} y="28" width={Math.max(1, x(distribution.q3) - x(distribution.q1))} height="20" rx="2" className={styles.quartiles}><title>Mittlere 50 %: {metricLabel(distribution.q1, metric)}–{metricLabel(distribution.q3, metric)} {unit}</title></rect>}
       {finite(distribution.median) && <line x1={x(distribution.median)} x2={x(distribution.median)} y1="23" y2="53" className={styles.median}><title>Median: {metricLabel(distribution.median, metric)} {unit}</title></line>}
-      {dots.map(({ run, position, lane }) => <a key={run.activity_id} href={`/laufen/${run.activity_id}#vergleich`} aria-label={`Lauf vom ${dateLabel(run.started_at)} öffnen: ${metricLabel(run[metric], metric)} ${unit}; ${de(run.overlap_pct, 1)} % Streckenüberdeckung innerhalb ${de0(data.tolerance_m)} m.`} className={styles.runPoint}>
+      {dots.map(({ run, position, lane }) => <g key={run.activity_id} data-run-id={run.activity_id} role="button" tabIndex={activeId === run.activity_id || !ordered.some(item => item.activity_id === activeId) && ordered[0]?.activity_id === run.activity_id ? 0 : -1} aria-pressed={activeId === run.activity_id} aria-label={`Lauf vom ${dateLabel(run.started_at)} hervorheben: ${metricLabel(run[metric], metric)} ${unit}; ${de(run.overlap_pct, 1)} % Streckenüberdeckung.`} className={`${styles.runPoint} ${activeId === run.activity_id ? styles.activePoint : ""}`} onPointerEnter={event => { if (event.pointerType === "mouse") onSelect(run.activity_id); }} onFocus={() => onSelect(run.activity_id)} onClick={() => onSelect(run.activity_id)} onKeyDown={event => move(event, run.activity_id)}>
         <title>{routeDate(run.started_at)} · {metricLabel(run[metric], metric)} {unit} · {de(run.overlap_pct, 1)} % Überdeckung innerhalb {de0(data.tolerance_m)} m</title>
-        <circle cx={position} cy={38 + lane * 7} r="8" fill="transparent" />
+        <circle cx={position} cy={38 + lane * 7} r="12" fill="transparent" />
+        {activeId === run.activity_id && <circle cx={position} cy={38 + lane * 7} r="8" className={styles.halo} />}
         <circle cx={position} cy={38 + lane * 7} r="3.5" className={styles.dot} />
-      </a>)}
-      {finite(distribution.selected) && <g className={styles.selected}>
+      </g>)}
+      {finite(distribution.selected) && <g className={`${styles.selected} ${styles.runPoint}`} data-run-id={data.activity_id} role="button" tabIndex={activeId === data.activity_id || !ordered.some(item => item.activity_id === activeId) && ordered[0]?.activity_id === data.activity_id ? 0 : -1} aria-pressed={activeId === data.activity_id} aria-label="Diesen Lauf in beiden Diagrammen hervorheben" onFocus={() => onSelect(data.activity_id)} onPointerEnter={event => { if (event.pointerType === "mouse") onSelect(data.activity_id); }} onClick={() => onSelect(data.activity_id)} onKeyDown={event => move(event, data.activity_id)}>
+        <rect x={x(distribution.selected) - 12} y="0" width="24" height="55" fill="transparent" />
+        {activeId === data.activity_id && <circle cx={x(distribution.selected)} cy="11" r="10" className={styles.halo} />}
         <line x1={x(distribution.selected)} x2={x(distribution.selected)} y1="16" y2="50" />
         <path d={`M${x(distribution.selected)},5 l6,6 -6,6 -6,-6 Z`} />
         <title>Dieser Lauf: {metricLabel(distribution.selected, metric)} {unit}</title>
@@ -69,7 +88,7 @@ function DistributionPlot({ data, metric, distribution }: { data: RunCohortCompa
   </div>;
 }
 
-function DistributionRow({ data, metric }: { data: RunCohortComparison; metric: Metric }) {
+function DistributionRow({ data, metric, activeId, onSelect }: { data: RunCohortComparison; metric: Metric } & Selection) {
   const distribution = data.metrics[metric];
   return <div className={styles.metric}>
     <div className={styles.metricHeader}>
@@ -80,7 +99,7 @@ function DistributionRow({ data, metric }: { data: RunCohortComparison; metric: 
         <div><dt>Abstand <span>{metric === "pace_seconds" ? "s/km" : "bpm"}</span></dt><dd>{differenceLabel(distribution.delta, metric)}</dd></div>
       </dl>
     </div>
-    <DistributionPlot data={data} metric={metric} distribution={distribution} />
+    <DistributionPlot data={data} metric={metric} distribution={distribution} activeId={activeId} onSelect={onSelect} />
   </div>;
 }
 
@@ -88,6 +107,8 @@ export function RunComparison({ activityId }: { activityId: string }) {
   const headingId = useId();
   const [data, setData] = useState<RunCohortComparison | null>(null), [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [selectedId, setSelectedId] = useState(activityId);
+  useEffect(() => setSelectedId(activityId), [activityId]);
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
     const events = ["milon:data-refresh", "run-analysis-updated"];
@@ -101,6 +122,7 @@ export function RunComparison({ activityId }: { activityId: string }) {
     return () => controller.abort();
   }, [activityId, revision]);
   const current = data?.activity_id === activityId ? data : null;
+  const active = current?.cohort.find(run => run.activity_id === selectedId) || current?.selected;
   return <section className={styles.section} aria-labelledby={headingId}>
     <header className={styles.header}>
       <div><h2 id={headingId}>Läufe vergleichen</h2><p>Alle anderen passenden Läufe auf dieser Strecke</p></div>
@@ -110,8 +132,13 @@ export function RunComparison({ activityId }: { activityId: string }) {
       {current.status === "ready" ? <>
         <p className={styles.scope}><strong>{de0(current.cohort.length)} {current.cohort.length === 1 ? "Vergleichslauf" : "Vergleichsläufe"}</strong>{current.period_start && current.period_end && <span>{dateLabel(current.period_start)}{current.period_start.slice(0, 10) !== current.period_end.slice(0, 10) ? `–${dateLabel(current.period_end)}` : ""}</span>}<span>{current.sensor_label}</span></p>
         <div className={styles.legend} aria-hidden="true"><span><i className={styles.selectedKey} />Dieser Lauf</span><span><i className={styles.dotKey} />Andere Läufe</span><span><i className={styles.medianKey} />Median</span>{Math.max(current.metrics.pace_seconds.n, current.metrics.avg_hr.n) >= 5 && <span><i className={styles.quartileKey} />Mittlere 50 %</span>}</div>
-        <DistributionRow data={current} metric="pace_seconds" />
-        <DistributionRow data={current} metric="avg_hr" />
+        {active && <div className={styles.readout}>
+          <span className={styles.readoutDate}>{active.activity_id === activityId ? "Dieser Lauf" : dateLabel(active.started_at)}</span>
+          <span><strong>{paceLabel(active.pace_seconds)}</strong> min/km</span><span><strong>{de0(active.avg_hr)}</strong> bpm</span>
+          {active.activity_id !== activityId ? <Link href={`/laufen/${active.activity_id}#vergleich`}>Lauf öffnen ↗</Link> : <span className={styles.readoutHint}>Punkt antippen</span>}
+        </div>}
+        <DistributionRow data={current} metric="pace_seconds" activeId={active?.activity_id || activityId} onSelect={setSelectedId} />
+        <DistributionRow data={current} metric="avg_hr" activeId={active?.activity_id || activityId} onSelect={setSelectedId} />
         {current.cohort.length < 5 && <p className={styles.note}>{current.cohort.length === 1 ? "Erst ein Vergleichslauf: noch keine Streuung ablesbar." : "Noch wenige Wiederholungen: Einzelwerte und gesamte Spanne, kein Quartilband."}</p>}
         <p className={styles.note}>Abstand = dieser Lauf minus Median. Tempo und Puls gemeinsam lesen; Wetter und Trainingsziel wirken mit.</p>
       </> : <p className={styles.empty}>{current.reason || "Noch kein anderer Lauf erfüllt die Streckenübereinstimmung."}</p>}

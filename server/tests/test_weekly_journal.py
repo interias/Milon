@@ -9,8 +9,9 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.api.weekly_journal import router
 from app.checkins import CheckIn
+from app.garmin_activity import GarminActivity
 from app.metrics import body, running, sleep, weekly_journal as journal
-from app.models import BodyMeasurement, ExerciseSession, SleepSession, StepsDaily, Workout
+from app.models import BodyMeasurement, ExerciseSession, SleepSession, StepsDaily, Workout, WorkoutSet
 
 
 GARMIN = "com.garmin.android.apps.connectmobile"
@@ -22,7 +23,7 @@ NOW = datetime(2026, 10, 5, 12, tzinfo=timezone.utc)
 def db(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine, tables=[model.__table__ for model in
-        (BodyMeasurement, ExerciseSession, SleepSession, StepsDaily, Workout, CheckIn)])
+        (BodyMeasurement, ExerciseSession, SleepSession, StepsDaily, Workout, WorkoutSet, CheckIn, GarminActivity)])
     for module in (journal, body, running, sleep):
         monkeypatch.setattr(module, "engine", engine)
     monkeypatch.setattr(journal.settings, "timezone", "Europe/Berlin")
@@ -144,3 +145,26 @@ def test_api_offset_validation(db):
     assert client.get("/metrics/activity/journal?offset=52").status_code == 200
     assert client.get("/metrics/activity/journal?offset=-1").status_code == 422
     assert client.get("/metrics/activity/journal?offset=53").status_code == 422
+
+
+def test_day_links_use_canonical_ids_and_unique_workout_exercises(db):
+    start = datetime(2026, 9, 28, 8)
+    save(db, run(start, "canonical"),
+         GarminActivity(activity_id="123", started_at=start, canonical_external_id="canonical",
+                        summary_json="{}", series_json="[]", laps_json="[]", zones_json="{}", quality_json="{}",
+                        fingerprint="test", fetched_at=NOW),
+         GarminActivity(activity_id="999", started_at=start, canonical_external_id="unrelated",
+                        summary_json="{}", series_json="[]", laps_json="[]", zones_json="{}", quality_json="{}",
+                        fingerprint="test", fetched_at=NOW),
+         Workout(id=1, external_id="hevy-1", title="Leg day", started_at=start),
+         WorkoutSet(workout_id=1, exercise="Squat"), WorkoutSet(workout_id=1, exercise="Squat"),
+         WorkoutSet(workout_id=1, exercise="Leg Press"))
+    day = journal.journal(now=NOW)["days"][0]
+    assert day["runs"][0]["activity_id"] == "123"
+    assert day["strength"][0]["exercises"] == ["Leg Press", "Squat"]
+    save(db, run(start + timedelta(hours=2), "unlinked"))
+    assert journal.journal(now=NOW)["days"][0]["runs"][1]["activity_id"] is None
+    save(db, GarminActivity(activity_id="124", started_at=start, canonical_external_id="canonical",
+                           summary_json="{}", series_json="[]", laps_json="[]", zones_json="{}", quality_json="{}",
+                           fingerprint="test", fetched_at=NOW))
+    assert journal.journal(now=NOW)["days"][0]["runs"][0]["activity_id"] is None

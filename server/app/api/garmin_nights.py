@@ -10,8 +10,8 @@ router = APIRouter(prefix="/metrics/garmin/nights", tags=["Garmin"])
 
 
 @router.get("")
-def get_nights(days: Literal["14", "30"] = Query(default="14")):
-    return garmin_nights.nights(int(days))
+def get_nights(days: Literal["14", "30"] = Query(default="14"), end: date | None = None):
+    return garmin_nights.nights(int(days), end=end)
 
 
 @router.get("/{day}")
