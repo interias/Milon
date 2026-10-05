@@ -16,6 +16,7 @@ export type GarminActivity = {
   summary: {
     title: string;
     started_at: string;
+    started_at_utc?: string | null;
     distance_km: number | null;
     duration_seconds: number | null;
     elapsed_seconds: number | null;

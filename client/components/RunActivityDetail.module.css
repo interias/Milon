@@ -11,6 +11,21 @@
 .chartHeader { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .chartHeader h3 { font-size:12px; font-weight:600; }
 .chartHeader label { display:flex; align-items:center; gap:6px; color:var(--color-muted); font-size:11px; cursor:pointer; }
+.chartControls { display:flex; align-items:center; flex-wrap:wrap; gap:6px 13px; }
+.chartBody { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:12px; }
+.chartBody.withRoute { grid-template-columns:minmax(0,1fr) 180px; }
+.plotContainer { min-width:0; }
+.routeCursor { margin:25px 0 0; min-width:0; border:1px solid var(--color-line); border-radius:6px; background:#f8fbfa; overflow:hidden; }
+.routeCursor svg { display:block; width:100%; height:173px; }
+.routeCursor line { stroke:#e9efed; }
+.routeCursor text { font:10px var(--font-sans); fill:var(--color-muted); }
+.routeCursor figcaption { font-size:9px; color:var(--color-muted); padding:6px; text-align:center; border-top:1px solid #edf1ef; }
+.driftValue { display:flex; align-items:center; gap:18px; margin:13px 0 5px; }
+.driftValue strong { font:700 25px var(--font-display); }
+.driftValue small { font:400 11px var(--font-sans); color:var(--color-muted); }
+.driftValue>span { color:var(--color-muted); font-size:10px; line-height:1.6; }
+.method { color:var(--color-muted); font-size:10px; margin-top:10px; }
+.method summary { cursor:pointer; }
 .chart input { accent-color:var(--color-accent); }
 .legend { display:flex; flex-wrap:wrap; gap:5px 15px; font-size:10px; color:var(--color-muted); margin:7px 0 9px; }
 .hrKey,.paceKey { display:inline-flex; align-items:center; gap:5px; }
@@ -45,6 +60,10 @@
 .empty { padding:25px 0; color:var(--color-muted); font-size:12px; line-height:1.7; }
 .empty button { color:var(--color-accent); margin-top:8px; font-size:12px; cursor:pointer; }
 @media(max-width:500px) {
+  .chartBody.withRoute { grid-template-columns:minmax(0,1fr); gap:0; }
+  .routeCursor { margin:12px 0 0; }
+  .routeCursor svg { height:110px; }
+  .routeCursor figcaption { font-size:9px; padding:4px; }
   .summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px 20px; margin:17px 0 21px; }
   .summary strong { font-size:23px; }
   .legend { gap:4px 12px; }

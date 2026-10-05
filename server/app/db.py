@@ -1,5 +1,6 @@
 """DB-Engine, Schema-Erstellung, Session-Dependency."""
 from collections.abc import Iterator
+import json
 
 from sqlalchemy import func
 from sqlalchemy import select as _select
@@ -45,6 +46,17 @@ def _run_migrations() -> None:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")
         if "detail" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN detail TEXT")
+        if "last_success_at" not in sync_cols:
+            con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN last_success_at DATETIME")
+            for source, last_sync, detail in con.exec_driver_sql(
+                "SELECT source, last_sync, detail FROM sync_state WHERE status='ok' AND last_sync IS NOT NULL"
+            ).fetchall():
+                try:
+                    result = json.loads(detail or "")
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(result, dict) and result.get("mode") != "not_configured":
+                    con.exec_driver_sql("UPDATE sync_state SET last_success_at=? WHERE source=?", (last_sync, source))
         ex_cols = cols("exercise_sessions")
         for col in ("max_hr", "hr_drift_pct"):
             if col not in ex_cols:

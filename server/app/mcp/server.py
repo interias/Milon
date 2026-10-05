@@ -241,9 +241,25 @@ def get_weekly_review() -> dict:
 def get_garmin_recovery(days: int = 14) -> dict:
     """Direct Garmin recovery observations with dates; missing HRV baseline stays unknown.
     Readiness and Body Battery reuse sleep/HRV inputs, not independent evidence or clearance to train.
-    Garmin resting HR is distinct from historical HC daily minima. No GPS or raw recordings."""
+    Garmin resting HR is distinct from historical HC resting-HR entries. No GPS or raw recordings."""
     from .. import garmin_daily
     return garmin_daily.coach_summary(max(1, min(days, 90)))
+
+
+@mcp.tool()
+def get_running_intensity(weeks: int = 8) -> dict:
+    """Time-weighted Milon HRmax zones from complete Garmin runs; missing coverage is not zero training."""
+    from ..metrics import run_insights
+    return run_insights.weekly_zones(max(1, min(26, weeks)))
+
+
+@mcp.tool()
+def get_recovery_performance(metric: Literal["sleep", "hrv", "energy"] = "hrv",
+                             kind: Literal["run", "strength"] = "run", days: int = 180) -> dict:
+    """Exploratory prior-night sleep/HRV or same-day subjective energy versus training.
+    One point per day, device-separated. Correlation, including detrended values, never proves causality."""
+    from ..metrics import recovery_analysis
+    return recovery_analysis.performance(metric, kind, days=max(7, min(365, days)))
 
 
 def main() -> None:

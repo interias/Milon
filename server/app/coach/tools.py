@@ -26,6 +26,15 @@ def _fn(name: str, desc: str, props: dict | None = None, required: list[str] | N
 
 
 TOOLS = [
+    _fn("get_running_intensity", "Zeit in Milon-Pulszonen je Woche aus vollständigen Garmin-Läufen. "
+        "Aktuelle gespeicherte HFmax, nicht Garmin-Zonen. Unbekannte Zeit und leere Abdeckung beachten; keine Trainingsvorgabe.",
+        {"weeks": {"type": "integer", "minimum": 1, "maximum": 26}}),
+    _fn("get_recovery_performance", "Explorativer Zusammenhang zwischen Schlaf, nächtlicher HRV oder Energie-Check-in "
+        "und Training. HRV/Schlaf vor Training; Energie nur Selbstauskunft desselben Tages, keine Vorhersage. "
+        "Anzahl, Messzeitraum, Zeittrend und Auswahlverzerrung beachten; keine Ursache oder Trainingsfreigabe.",
+        {"metric": {"type": "string", "enum": ["sleep", "hrv", "energy"]},
+         "kind": {"type": "string", "enum": ["run", "strength"]},
+         "days": {"type": "integer", "minimum": 7, "maximum": 365}}),
     _fn("get_personal_run_vo2", "Eigener VO2-Aequivalent-Trend bei 6:00/km, rollierende 8 Wochen. "
         "Feste beobachtete Belastungsreferenz (keine gemessene HFmax), Ruhepuls ggf. ausdrueckliche Annahme. "
         "Kalibrierung, Datenalter, Luecken und sensitive-Status nennen. Keine gemessene VO2max; "
@@ -54,8 +63,8 @@ TOOLS = [
     _fn("get_vo2_trend", "VO2max-Verlauf (Uhr-Schaetzung, Trend zaehlt).",
         {"days": {"type": "integer"}}),
     _fn("get_run_heart_rate", "Herzfrequenz je Woche ueber alle Laeufe mit HF: Oe-HF, Max-HF, "
-        "aerobe Effizienz ef (Meter pro Herzschlag, hoeher = fitter — gleiche Pace bei "
-        "niedrigerer HF), Oe-Drift (HF 2. vs. 1. Haelfte in %, hoch = Ausdauerdefizit/Hitze).",
+        "aerobe Effizienz ef (Meter pro Herzschlag), Oe-Drift (HF 2. vs. 1. Haelfte in %). "
+        "Nicht belastungsbereinigt; kein Fitness- oder Ursachenurteil aus diesen Werten allein.",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
     _fn("get_run_zones", "Fuenf Lauf-Pulszonen in %HFmax mit gespeichertem Referenzwert; "
         "keine gemessene HFmax, keine Laktatschwellen und kein Import der Garmin-Zonen. "
@@ -126,6 +135,17 @@ TOOLS = [
 
 
 def dispatch(name: str, args: dict):
+    if name == "get_running_intensity":
+        from ..metrics import run_insights
+        return run_insights.weekly_zones(max(1, min(26, int(args.get("weeks", 8)))))
+    if name == "get_recovery_performance":
+        from ..metrics import recovery_analysis
+        metric, kind = args.get("metric", "hrv"), args.get("kind", "run")
+        if metric not in ("sleep", "hrv", "energy") or kind not in ("run", "strength"):
+            raise ValueError("Invalid recovery metric or training kind")
+        result = recovery_analysis.performance(metric, kind, days=max(7, min(365, int(args.get("days", 180)))))
+        return {**result, "groups": [{key: value for key, value in group.items() if key != "points"}
+                                    for group in result["groups"]]}
     if name == "get_standardized_run_hr":
         return run_fitness_service.standardized_hr()
     if name == "get_personal_run_vo2":

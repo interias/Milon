@@ -1,5 +1,46 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Garmin: Vergleich, Intensität und Datenstatus
+
+Die vorhandenen Laufdetails koppeln den Zeitcursor an einen GPS-Punkt derselben
+UTC-Aufzeichnung. Unterbrechungen und fehlende Zeitstempel bleiben Lücken. Der
+Laufvergleich legt Puls und Pace zweier Aufzeichnungen über die gelaufene Distanz;
+gleiche Kilometerposition bedeutet nicht denselben Ort. Kandidaten werden anhand
+ähnlicher Distanz und eines konservativen, richtungsabhängigen GPS-Vergleichs sortiert.
+GPS-Koordinaten bleiben lokal und werden nicht in Coach-Tools ausgegeben.
+
+`metrics/run_insights.py` berechnet eine zusätzliche beschreibende Pulsdrift und
+Pulsdifferenzen aus einmalig gepaarten gleichmäßigen Minuten mit ähnlichem Tempo
+und ähnlicher Steigung. Die ersten zehn und letzten zwei Minuten, Pausen samt
+Nachlauf, unvollständige Daten und ausgeschlossene Läufe fallen aus der Auswertung.
+15-Sekunden-Teilsteigungen verhindern, dass Gegensteigungen als flache Minute gelten.
+Mindestens sechs Minutenpaare sind eine Darstellungsgrenze, kein Signifikanznachweis.
+Die bisherige einfache Hälften-Drift bleibt eine getrennte historische Metrik.
+
+Einzel- und Wochenbilanzen berechnen die Zeit in fünf Milon-Zonen aus den vollständigen
+Pulsintervallen mit der aktuellen `RUN_HR_MAX`. Grenzübertritte werden zeitanteilig
+zugeordnet. Dies sind ausdrücklich nicht die gespeicherten Garmin-Zonen; fehlender
+Puls, Werte außerhalb 50–100 % und Wochen ohne geeignete Aufzeichnungen sind sichtbar.
+REST: `/metrics/running/insights/{id}`, `/compare?first=&second=`, `/zones?weeks=`.
+
+Der vorhandene Bereich „Erholung ↔ Leistung“ verwendet
+`/metrics/recovery/performance?metric=sleep|hrv|energy&kind=run|strength`.
+Schlaf und nächtliche HRV müssen zeitlich vor dem Training liegen. Ein Check-in
+hat keinen belegten Vorher-Zeitpunkt und wird nur als Selbstauskunft desselben Tages
+ausgewertet. Verknüpfte Einheiten begrenzen die Auswahl. Ein Punkt je Tag, getrennte
+Uhren, mindestens zehn Tage für beschreibendes r/ρ; eine zusätzliche lineare
+Zeitbereinigung benötigt zwanzig Tage über mindestens 28 Kalendertage. Alle Grenzen
+sind transparente Produktregeln, keine Garantie statistischer Belastbarkeit.
+Coach und MCP können Erholungszusammenhänge und Wochen-Zonenbilanz gezielt abrufen.
+
+`/metrics/sources` und eine eingeklappte Quellenübersicht auf Gesundheit trennen
+Abrufversuch, letzten erfolgreichen Abruf und neuestes Mess-/Protokolldatum.
+`sync_state.last_success_at` bleibt nach Fehlern erhalten; fehlende Einrichtung gilt
+nicht als erfolgreicher Abruf. Garmin-Teilfehler werden gesondert gezeigt.
+Arboleaf bleibt über Health Connect angebunden. Die Ruhepuls-Recherche grenzt die
+Definitionen ab, erklärt aber noch nicht die unterschiedliche Export-/Revisionsemantik;
+die Serien bleiben getrennt. Siehe [Recherche](docs/research/garmin-resting-heart-rate.md).
+
 ## Garmin: direkte Uhrdaten und Laufdetails
 
 `garminconnect` liest Laufaktivitäten, Messreihen und Tagesdaten direkt aus Garmin Connect.

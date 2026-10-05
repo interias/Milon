@@ -35,6 +35,12 @@ def record_sync(source: str, status: str, detail: str | None = None, cursor: str
     with Session(engine) as s:
         row = s.get(SyncState, source) or SyncState(source=source)
         row.last_sync = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+        try:
+            result = json.loads(detail or "{}")
+        except (ValueError, TypeError):
+            result = {}
+        if status == "ok" and (not isinstance(result, dict) or result.get("mode") != "not_configured"):
+            row.last_success_at = row.last_sync
         row.status = status
         row.detail = (detail or "")[:500]
         if cursor is not None:
