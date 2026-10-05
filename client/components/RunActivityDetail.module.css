@@ -1,22 +1,36 @@
 .content { min-width:0; font-variant-numeric:tabular-nums; }
+.backLink { display:inline-block; font-size:12px; font-weight:600; color:var(--color-accent); margin-bottom:12px; }
+.backLink:hover { text-decoration:underline; }
+.content h1 { font:800 24px var(--font-display); letter-spacing:-.025em; color:var(--color-ink); overflow-wrap:anywhere; }
+.panel { min-width:0; padding:20px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:8px; box-shadow:0 1px 2px rgba(20,32,31,.04); }
+.panel h2 { font-size:14px; font-weight:600; }
+.panel[id="verlauf"] { margin-top:16px; }
+.subtitle { font-size:11px; color:var(--color-muted); margin-top:4px; }
+.sectionNav { display:flex; flex-wrap:wrap; gap:8px 22px; margin:18px 0; font-size:12px; color:var(--color-accent); }
+.sectionNav a:hover { text-decoration:underline; }
+.content a:focus-visible { outline:2px solid var(--color-accent-2); outline-offset:4px; }
+.content [id] { scroll-margin-top:80px; }
+.intensityGrid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:16px; margin-top:16px; align-items:start; }
+.roundsGrid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:16px; margin:16px 0; align-items:start; }
+.sectionHeader { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 12px; }
+.sectionHeader>span { font-size:11px; color:var(--color-muted); }
 .intro { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-.intro h3 { font-size:14px; font-weight:600; }
-.intro p { color:var(--color-muted); font-size:11px; margin-top:4px; }
+.intro p { color:var(--color-muted); font-size:13px; margin-top:5px; }
 .source { flex:none; background:#edf6f3; color:var(--color-accent); border:1px solid #d6e8e2; border-radius:4px; padding:3px 6px; font-size:10px; }
-.summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:19px 0 22px; }
+.summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:0 0 24px; }
 .summary>div>span { display:block; color:var(--color-muted); font-size:11px; margin-bottom:3px; }
 .summary strong { display:block; font:700 24px var(--font-display); letter-spacing:-.02em; white-space:nowrap; }
 .summary small { color:var(--color-muted); font:400 11px var(--font-sans); letter-spacing:0; }
 .chart { min-width:0; }
 .chartHeader { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-.chartHeader h3 { font-size:12px; font-weight:600; }
+.chartHeader h2 { font-size:14px; font-weight:600; }
 .chartHeader label { display:flex; align-items:center; gap:6px; color:var(--color-muted); font-size:11px; cursor:pointer; }
 .chartControls { display:flex; align-items:center; flex-wrap:wrap; gap:6px 13px; }
 .chartBody { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:12px; }
-.chartBody.withRoute { grid-template-columns:minmax(0,1fr) 180px; }
+.chartBody.withRoute { grid-template-columns:minmax(0,1fr) minmax(180px,24%); }
 .plotContainer { min-width:0; }
 .routeCursor { margin:25px 0 0; min-width:0; border:1px solid var(--color-line); border-radius:6px; background:#f8fbfa; overflow:hidden; }
-.routeCursor svg { display:block; width:100%; height:173px; }
+.routeCursor svg { display:block; width:100%; height:206px; }
 .routeCursor line { stroke:#e9efed; }
 .routeCursor text { font:10px var(--font-sans); fill:var(--color-muted); }
 .routeCursor figcaption { font-size:9px; color:var(--color-muted); padding:6px; text-align:center; border-top:1px solid #edf1ef; }
@@ -42,7 +56,7 @@
 .cursor { stroke:var(--color-ink); stroke-dasharray:3 3; stroke-width:1; opacity:.6; }
 .readout { min-height:36px; display:flex; flex-wrap:wrap; align-items:center; gap:5px 15px; border:1px solid var(--color-line); background:#f8faf9; padding:8px 10px; border-radius:6px; font-size:11px; color:var(--color-muted); }
 .readout strong { color:var(--color-ink); font-weight:600; }
-.note { font-size:10px; line-height:1.65; color:var(--color-muted); margin-top:8px; }
+.note { font-size:11px; line-height:1.65; color:var(--color-muted); margin-top:8px; }
 .details { margin-top:13px; padding-top:13px; border-top:1px solid var(--color-line); font-size:12px; }
 .details>summary { cursor:pointer; font-weight:600; }
 .details>summary>span { color:var(--color-muted); font-size:10px; font-weight:400; margin-left:7px; }
@@ -53,23 +67,30 @@
 .tableWrap th:first-child { text-align:left; }
 .tableWrap thead { color:var(--color-muted); background:#f7f9f8; font-size:10px; }
 .tableWrap th { font-weight:500; }
-.dynamics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; margin-top:15px; }
+.dynamics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 16px; margin-top:20px; }
 .dynamics dt { color:var(--color-muted); font-size:10px; }
-.dynamics dd { margin-top:4px; font-size:16px; font-weight:600; }
+.dynamics dd { margin-top:4px; font-size:20px; font-weight:600; }
 .dynamics dd span { color:var(--color-muted); font-size:10px; font-weight:400; }
 .empty { padding:25px 0; color:var(--color-muted); font-size:12px; line-height:1.7; }
+.panel.empty { padding:20px; margin-bottom:16px; }
 .empty button { color:var(--color-accent); margin-top:8px; font-size:12px; cursor:pointer; }
+.empty h1 { margin-bottom:12px; }
+@media(max-width:1050px) {
+  .intensityGrid,.roundsGrid { grid-template-columns:minmax(0,1fr); }
+  .dynamics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
 @media(max-width:500px) {
+  .panel { padding:16px; }
+  .content h1 { font-size:23px; }
   .chartBody.withRoute { grid-template-columns:minmax(0,1fr); gap:0; }
   .routeCursor { margin:12px 0 0; }
   .routeCursor svg { height:110px; }
   .routeCursor figcaption { font-size:9px; padding:4px; }
-  .summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px 20px; margin:17px 0 21px; }
+  .summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px 20px; margin:0 0 21px; }
   .summary strong { font-size:23px; }
   .legend { gap:4px 12px; }
   .legend>span:last-child { width:100%; }
   .dynamics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .intro { gap:8px; }
-  .intro h3 { font-size:13px; }
   .tableWrap th,.tableWrap td { padding:8px 5px; }
 }

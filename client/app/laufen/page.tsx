@@ -32,6 +32,31 @@ export default function Laufen() {
     api.runBestEfforts().then(setBest).catch(() => setExtrasError(true));
     api.runAchievements().then(setAch).catch(() => setExtrasError(true));
   }, []);
+  useEffect(() => {
+    if (!week || !["#running-fitness", "#strecken"].includes(window.location.hash)) return;
+    const hash = window.location.hash;
+    const target = document.getElementById(hash.slice(1));
+    const training = document.querySelector('[aria-labelledby="running-training"]');
+    if (!target || !training) return;
+    // Async cards change page height; keep the anchor stable until user input.
+    const previousAnchor = document.documentElement.style.overflowAnchor;
+    document.documentElement.style.overflowAnchor = "none";
+    const observer = new ResizeObserver(() => target.scrollIntoView({ block: "start" }));
+    const events = ["wheel", "touchstart", "pointerdown", "keydown"];
+    const stop = () => {
+      observer.disconnect();
+      document.documentElement.style.overflowAnchor = previousAnchor;
+      events.forEach(event => window.removeEventListener(event, stop));
+      window.removeEventListener("hashchange", changedHash);
+    };
+    const changedHash = () => { if (window.location.hash !== hash) stop(); };
+    observer.observe(training);
+    const main = target.closest("main");
+    if (main) observer.observe(main);
+    events.forEach(event => window.addEventListener(event, stop, { once: true, passive: true }));
+    window.addEventListener("hashchange", changedHash);
+    return stop;
+  }, [week]);
   if (err) return <><PageTitle title="Laufen" /><ApiError error={err} /></>;
   if (!week) return <><PageTitle title="Laufen" /><Loading /></>;
   const { current, previous } = week;
@@ -66,7 +91,7 @@ export default function Laufen() {
     </section>
 
     <section className="mt-6" aria-labelledby="running-fitness">
-      <h2 id="running-fitness" className="font-display text-lg font-extrabold">Fitness</h2>
+      <h2 id="running-fitness" className="scroll-mt-20 font-display text-lg font-extrabold">Fitness</h2>
       <div className="grid items-start gap-4 xl:grid-cols-2 [&>div]:min-w-0 [&>div]:mt-3">
         <RunningFitness />
         <StandardizedRunHr />
