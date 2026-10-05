@@ -1,0 +1,60 @@
+.card { min-width: 0; }
+.header, .nightHeading, .rhythmTitle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.header h2 { font-size: 14px; font-weight: 650; }
+.header p, .note { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
+.header p { margin-top: 3px; }
+.period { display: flex; flex-shrink: 0; padding: 2px; border: 1px solid var(--color-line); border-radius: 6px; }
+.period button { padding: 5px 8px; font-size: 11px; border-radius: 4px; white-space: nowrap; }
+.period button[aria-pressed="true"] { color: var(--color-accent); background: #e9f4f1; font-weight: 650; }
+.content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .52fr); gap: 24px; margin-top: 20px; }
+.detail, .plotHost { min-width: 0; }
+.nightHeading h3, .rhythmTitle h3 { font-size: 12px; font-weight: 650; }
+.nightHeading > span, .rhythmTitle > span { color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0 12px; }
+.summary > div { display: flex; flex-direction: column; gap: 2px; }
+.summary span { color: var(--color-muted); font-size: 10px; }
+.summary strong { font-family: var(--font-display); font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.summary small { font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--color-muted); }
+.seriesControls { display: flex; align-items: center; gap: 7px; margin: 8px 0 7px; }
+.seriesControls > span { font-size: 11px; color: var(--color-muted); margin-right: auto; }
+.seriesControls select { max-width: 130px; min-width: 0; padding: 4px 6px; font-size: 11px; border: 1px solid var(--color-line); border-radius: 5px; background: white; }
+.plot { width: 100%; display: block; touch-action: pan-y; }
+.plot text { fill: var(--color-muted); font-family: var(--font-sans); font-size: 10px; }
+.plot .metricTitle { font-size: 11px; font-weight: 650; fill: var(--color-ink); }
+.plot .metricUnit { font-weight: 400; fill: var(--color-muted); }
+.plot:focus-visible, .period button:focus-visible, .nightRow:focus-visible, .seriesControls select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.readout { color: var(--color-muted); min-height: 18px; margin: 6px 0; font-size: 10px; }
+.note { margin-top: 6px; }
+.rhythm { border-left: 1px solid var(--color-line); padding-left: 20px; min-width: 0; }
+.rhythmTitle { gap: 6px; }
+.rhythmAxis { position: relative; margin: 14px 0 5px 43px; display: flex; justify-content: space-between; color: var(--color-muted); font-size: 9px; }
+.midnightLabel { position: absolute; transform: translateX(-50%); }
+.nights { display: grid; gap: 2px; }
+.nightRow { display: grid; grid-template-columns: 39px minmax(0, 1fr); gap: 4px; align-items: center; min-height: 18px; width: 100%; padding: 1px 3px 1px 0; font-size: 10px; text-align: left; border-radius: 3px; font-variant-numeric: tabular-nums; }
+.nightRow > span:first-child { color: var(--color-muted); }
+.track { position: relative; display: block; height: 14px; color: #72817e; font-size: 9px; line-height: 14px; }
+.sleepBar { position: absolute; display: block; top: 2px; height: 10px; background: #8bc4ba; border-radius: 2px; }
+.partialBar { background: repeating-linear-gradient(135deg, #d3e6df, #d3e6df 3px, #aec5bd 3px, #aec5bd 4px); }
+.midnight { position: absolute; width: 1px; top: 0; bottom: 0; background: #cbd6d2; opacity: .8; }
+.activeNight { background: #eaf5f1; }
+.activeNight .sleepBar { background: var(--color-accent); }
+.activeNight .partialBar { background: repeating-linear-gradient(135deg, #3b8980, #3b8980 3px, #7ab1a5 3px, #7ab1a5 4px); }
+.activeNight > span:first-child { color: var(--color-accent); font-weight: 650; }
+.noNight .track { color: #899491; }
+.empty { padding: 22px 0; color: var(--color-muted); font-size: 12px; }
+.error { margin: 14px 0; font-size: 12px; color: var(--color-bad); }
+.error button { text-decoration: underline; margin-left: 6px; }
+@media (max-width: 900px) {
+  .content { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .rhythm { border-left: none; border-top: 1px solid var(--color-line); padding: 14px 0 0; }
+  .rhythmAxis { margin-top: 9px; }
+  .nightRow { min-height: 18px; }
+}
+@media (max-width: 420px) {
+  .header { align-items: flex-start; gap: 7px; }
+  .header p { max-width: 170px; }
+  .period button { padding: 5px 6px; }
+  .summary { gap: 8px; }
+  .summary strong { font-size: 18px; }
+  .seriesControls select { font-size: 16px; max-width: 133px; padding: 2px 3px; }
+}

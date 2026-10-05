@@ -2,35 +2,65 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type WeeklyReview as Review } from "@/lib/api";
-import { Card, CardTitle } from "@/components/ui";
+import { Card } from "@/components/ui";
+import { weeklyJournal, type JournalDay, type WeeklyJournal } from "@/lib/weekly-journal";
 import { de, de0, dm } from "@/lib/format";
+import styles from "./WeeklyReview.module.css";
 
-const change = (value: number | null, unit: string, digits = 1) => value == null ? "Vergleich noch nicht verfügbar" : `${value > 0 ? "+" : ""}${de(value, digits)} ${unit} gegenüber davor`;
+const delta = (value: number, unit: string, digits = 1) => `${value > 0 ? "+" : ""}${de(value, digits)} ${unit} zur Vorwoche`;
+const sleepTime = (hours: number | null | undefined) => hours == null ? "—" : `${Math.floor(Math.round(hours * 60) / 60)}:${String(Math.round(hours * 60) % 60).padStart(2, "0")} h`;
+
+function JournalCell({ day }: { day: JournalDay }) {
+  const runningKm = day.runs.reduce((sum, run) => sum + run.distance_km, 0);
+  const energy = day.checkin?.energy;
+  const dayLabel = new Date(`${day.date}T12:00:00Z`).toLocaleDateString("de-DE", { timeZone: "UTC", weekday: "short" });
+  const asset = day.runs.length ? "easy" : day.strength.length ? "strength" : null;
+  return <div className={styles.day}>
+    <div className={styles.dayHeading}><strong>{dayLabel}</strong><span>{dm(day.date)}</span></div>
+    {asset && <div className={styles.illustration} aria-hidden="true">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={`/img/activity/${asset}.png`} alt="" /></div>}
+    <div className={styles.training}>
+      {day.runs.length ? <Link href="/laufen" className={styles.run} title={`${day.runs.length} erfasste ${day.runs.length === 1 ? "Laufeinheit" : "Laufeinheiten"}`}><span className={styles.marker} />{de(runningKm, 1)} km</Link> : <span className={styles.missing}>— <small>Laufen</small></span>}
+      {day.strength.length ? <Link href="/kraft" className={styles.strength} title={day.strength.map(workout => workout.title).join(" · ")}><span className={styles.marker} />Gym{day.strength.length > 1 ? ` · ${day.strength.length}×` : ""}</Link> : <span className={styles.missing}>— <small>Gym</small></span>}
+    </div>
+    <div className={styles.sleep}><span>Schlaf</span><strong title={day.sleep ? `${day.sleep.label} · ${day.sleep.hours == null ? "Schlafzeit unbekannt" : "Hauptschlaf"}` : "Keine Hauptschlafphase erfasst"}>{sleepTime(day.sleep?.hours)}</strong>
+      <div className={styles.sleepTrack} aria-hidden="true" title="Schlafdauer · Skala 0–10 Stunden">{day.sleep?.hours != null && <div style={{ width: `${Math.min(100, day.sleep.hours * 10)}%` }} />}</div>
+    </div>
+    <div className={styles.energy}><span>Energie</span>{energy == null ? <strong className={styles.missing}>—</strong> : <div className={styles.dots} role="img" aria-label={`Energie ${energy} von 5`} title={`Energie ${energy} von 5`}>{[1, 2, 3, 4, 5].map(value => <i key={value} className={value <= energy ? styles.filled : ""} />)}<small>{energy}/5</small></div>}</div>
+  </div>;
+}
 
 export function WeeklyReview() {
-  const [data, setData] = useState<Review | null>(null);
-  const [error, setError] = useState(false);
+  const [offset, setOffset] = useState(0), [revision, setRevision] = useState(0);
+  const [data, setData] = useState<WeeklyJournal | null>(null), [error, setError] = useState(false);
   useEffect(() => {
-    let active = true;
-    api.weeklyReview().then((value) => { if (active) setData(value); }).catch(() => { if (active) setError(true); });
-    return () => { active = false; };
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("milon:data-refresh", refresh);
+    return () => window.removeEventListener("milon:data-refresh", refresh);
   }, []);
-  const a = data?.activity;
-  const stepsComparable = a?.steps.current_days === 7 && a.steps.previous_days === 7;
-  return <Card className="mt-4">
-    <CardTitle title="Deine Wochenbilanz" sub={a ? `${dm(a.from_date)}–${dm(a.to_date)} · sieben abgeschlossene Kalendertage` : "Training, Körper und Erholung zusammen"} />
-    {data && a ? <>
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <div><p className="text-xs text-muted">Laufen</p><p className="mt-1 font-display text-2xl font-bold">{de(a.running.current_km, 1)} <span className="text-xs font-normal">km</span></p><p className="mt-2 text-xs text-muted">{change(a.running.current_km - a.running.previous_km, "km")}</p></div>
-        <div><p className="text-xs text-muted">Krafttraining</p><p className="mt-1 font-display text-2xl font-bold">{de0(a.strength.current_sessions)} <span className="text-xs font-normal">{a.strength.current_sessions === 1 ? "Einheit" : "Einheiten"}</span></p><p className="mt-2 text-xs text-muted">{change(a.strength.current_sessions - a.strength.previous_sessions, Math.abs(a.strength.current_sessions - a.strength.previous_sessions) === 1 ? "Einheit" : "Einheiten", 0)}</p></div>
-        <div><p className="text-xs text-muted">Gewichtsverlauf</p><p className="mt-1 font-display text-2xl font-bold">{data.weight.delta_kg == null ? "—" : `${data.weight.delta_kg > 0 ? "+" : ""}${de(data.weight.delta_kg, 2)}`} <span className="text-xs font-normal">kg</span></p><p className="mt-2 text-xs text-muted">Wochenmittel · {data.weight.current_days}/7 Messtage, davor {data.weight.previous_days}/7</p></div>
-        <div><p className="text-xs text-muted">Schlaf</p><p className="mt-1 font-display text-2xl font-bold">{de(data.sleep.avg_hours, 1)} <span className="text-xs font-normal">h / Nacht</span></p><p className="mt-2 text-xs text-muted">{data.sleep.measured_nights}/7 Nächte mit bekannter Schlafzeit</p></div>
+  useEffect(() => {
+    const controller = new AbortController();
+    setData(null); setError(false);
+    weeklyJournal(offset, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); })
+      .catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, [offset, revision]);
+  const summary = data?.summary;
+  return <Card className={`mt-4 ${styles.card}`}>
+    <div className={styles.header}><div><h2>Deine Woche</h2><p>{data ? `${dm(data.from_date)}–${dm(data.to_date)} · sieben abgeschlossene Kalendertage` : "Training, Schlaf & Energie"}</p></div>
+      <div className={styles.navigation}><button type="button" aria-label="Sieben Tage früher" title="Sieben Tage früher" disabled={offset >= 52} onClick={() => setOffset(value => value + 1)}>←</button>
+        <button type="button" aria-label="Letzte abgeschlossene Woche" disabled={offset === 0} onClick={() => setOffset(0)}>Aktuell</button>
+        <button type="button" aria-label="Sieben Tage später" title="Sieben Tage später" disabled={offset === 0} onClick={() => setOffset(value => value - 1)}>→</button></div>
+    </div>
+    {!data ? <p className={styles.empty} role={error ? "alert" : "status"}>{error ? "Wochenjournal konnte nicht geladen werden." : "Woche wird geladen …"}{error && <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button>}</p> : <>
+      <div className={styles.summary}>
+        <div><span>Laufen · erfasst</span><strong>{de(summary!.running_km, 1)} <small>km</small></strong><p>{delta(summary!.running_delta_km, "km")}</p></div>
+        <div><span>Gym · erfasst</span><strong>{summary!.strength_sessions} <small>{summary!.strength_sessions === 1 ? "Einheit" : "Einheiten"}</small></strong><p>{delta(summary!.strength_delta_sessions, "Einheiten", 0)}</p></div>
+        <div><span>Schlaf · Ø</span><strong>{sleepTime(summary!.sleep_hours)}</strong><p>{summary!.sleep_nights}/7 Nächte · {data.sources.join(" / ") || "noch ohne Messung"}</p></div>
       </div>
-      <p className="mt-5 border-t border-line pt-3 text-xs text-muted">Alltagsbewegung: {de0(a.steps.current_avg)} Schritte je erfasstem Tag · {a.steps.current_days}/7 Tage{stepsComparable && a.steps.current_avg != null && a.steps.previous_avg != null ? ` · ${change(a.steps.current_avg - a.steps.previous_avg, "Schritte", 0)}` : " · kein vollständiger Vergleich"}</p>
-      <p className="mt-2 text-xs text-muted">{data.note}</p>
-      {data.checkins.count > 0 && <p className="mt-2 text-xs text-muted">Freiwillige Check-ins: {data.checkins.count}/7 Tage · Energie {de(data.checkins.energy_avg, 1)}/5 aus {data.checkins.energy_days} Angaben</p>}
-      <Link href="/coach" className="mt-3 inline-block py-1 text-xs font-semibold text-accent">Mit dem Coach einordnen →</Link>
-    </> : <p role="status" className="text-sm text-muted">{error ? "Wochenbilanz konnte nicht geladen werden." : "Wird geladen …"}</p>}
+      <div className={styles.calendar} aria-label="Tagebuch für sieben abgeschlossene Tage">{data.days.map(day => <JournalCell key={day.date} day={day} />)}</div>
+      <div className={styles.footer}><p><strong>Gewicht {summary!.weight_delta_kg == null ? "—" : `${summary!.weight_delta_kg > 0 ? "+" : ""}${de(summary!.weight_delta_kg, 2)} kg`}</strong> · Wochenmittel, {summary!.weight_days}/7 Messtage, davor {summary!.previous_weight_days}/7</p>
+        <p><strong>{de0(summary!.steps_avg)} Schritte/Tag</strong> · {summary!.steps_days}/7 Tage erfasst · {summary!.checkin_days}/7 Check-ins</p></div>
+      <p className={styles.note}>{data.note}{data.sources.length > 1 ? " Diese Woche enthält einen Uhrenwechsel." : ""}</p>
+    </>}
   </Card>;
 }

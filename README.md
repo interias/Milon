@@ -34,19 +34,36 @@ Details stehen unter [Datenschutz und Betrieb](#datenschutz-und-betrieb).
 
 | Bereich | Aktueller Funktionsumfang |
 |---|---|
-| **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, Wochenbilanz, Konsistenz, freiwilliger kurzer Check-in |
+| **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, visuelles Wochenjournal mit Training, Schlaf und Energie, Konsistenz, freiwilliger kurzer Check-in |
 | **Körper** | Gemeinsamer Vergleich von Bauch/Taille, Gewicht und Kraftleistung; Gewichtstrends, TDEE, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, Einzeltrends und Messjournal |
-| **Laufen** | Persönliche Referenzrunde mit passenden Wiederholungen, Wochenvolumen, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
-| **Einzelne Läufe** | Eigene Detailseite: freiwilliges Laufziel und Anstrengung, Garmin-Stationswetter, Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und automatischer statistischer Streckenvergleich |
-| **Gesundheit** | Schritte, Radfahren, Schlaf, HRV, Garmin-Erholungswerte, Zusammenhänge zwischen Erholung und Leistung sowie Quellen- und Importstatus |
+| **Laufen** | Streckenatlas mit automatisch gruppierten Runden, persönliche Referenzrunde, Wochenvolumen und mechanische Belastung, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
+| **Einzelne Läufe** | Eigene Detailseite: Laufziel und Anstrengung, Stationswetter, Trainingsreiz, Pulsstabilität, gekoppelte Strecke und Puls-/Tempokurve, lokale Routenwiedergabe, Laufposter als PNG/SVG, Höhenprofil, Zonen, Runden, Laufstil früh/spät und automatischer statistischer Streckenvergleich |
+| **Gesundheit** | Schritte, Radfahren, Schlaf, interaktive Nachtansicht mit Schlafphasen und Messreihen, Schlafrhythmus, HRV, Garmin-Erholungswerte, Zusammenhänge zwischen Erholung und Leistung sowie Quellen- und Importstatus |
 | **Kraft** | Übungen nach Muskelgruppe, Detailseiten, e1RM, Tonnage, RPE, Gesamtstärke-Index und Zusammenhang mit der Energiebilanz |
 | **Ernährung** | Kalorien, Makros, Proteinziel und Defizit gegenüber dem geschätzten TDEE |
 | **Fortschritt** | Foto-Timeline, Zuschnitt, mehrere Ansichten und Silhouetten als Aufnahmehilfe |
 | **Coach** | Kurze Antworten mit Kennzahlen, persönliche Ziele, ausdrücklich übernommene Wochenmaßnahme mit Rückmeldung und Messvergleich, lokale Diagramme, Berichte, Kostenübersicht und angeforderte Bildgenerierung |
 
-Die Laufdetails öffnen über **Laufen → Gelaufene Strecken → Laufdetails** eine eigene
+Die Laufdetails öffnen über **Laufen → Dein Streckenatlas → Laufdetails** eine eigene
 Adresse `/laufen/<Garmin-Aktivitäts-ID>`. Die wichtigsten Einordnungen stehen oben;
 die Analysen darunter sind direkt sichtbar. Methodik und Datenbasis bleiben einklappbar.
+
+- **Streckenatlas:** Wiederholungen werden mit mindestens 97 % Überdeckung einer
+  festen Referenzstrecke zugeordnet. Konturen und Verlauf bleiben lokal; die
+  Laufdetails bieten eine abspielbare Position mit synchronen Messwerten.
+- **Laufposter:** Drei Farbstile und sechs Ink-/Teal-Motive, mit echter Strecke
+  und Laufwerten als 1024 × 1024 PNG oder SVG. Der Export entsteht im Browser.
+- **Deine Nacht:** Schlafphasen und bis zu zwei auswählbare Verläufe (Puls, Stress,
+  Body Battery, HRV) teilen eine Zeitachse. Die 14-/30-Tage-Ansicht zeigt den
+  Schlafrhythmus; unvollständige Phasen und Messlücken bleiben erkennbar.
+- **Laufstil und Belastung:** Frühe/späte Minuten werden bei ähnlichem Tempo und
+  Gefälle verglichen, unter anderem für Schrittbremsung (SSL%), Bodenkontakt und
+  Kadenz. Wochenbalken trennen gelaufene Kilometer von Garmins Impact Load;
+  Hevy-Beintage erscheinen separat. Lauftoleranz wird nur gezeigt, wenn Garmin
+  geeignete Werte liefert. [Methodik](docs/research/garmin-running-mechanics.md).
+- **Wochenjournal:** Sieben abgeschlossene lokale Kalendertage mit Läufen,
+  Krafttraining, Hauptschlaf und freiwilliger Energieangabe. Frühere Zeiträume
+  lassen sich wochenweise aufrufen; fehlende Messwerte bleiben offen.
 
 - **Referenzrunde:** In den Laufdetails eine Runde auswählen. Die Laufübersicht sammelt
   passende Wiederholungen derselben Sensorperiode und Richtung. Einzelne Pulsunterschiede

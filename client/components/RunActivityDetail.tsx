@@ -8,6 +8,9 @@ import { RunIntensityZones } from "@/components/RunIntensityZones";
 import { RunQuickAssessment } from "@/components/RunQuickAssessment";
 import { RunContext } from "@/components/RunContext";
 import { RunReferenceControl } from "@/components/RunReference";
+import { RunPoster } from "@/components/RunPoster";
+import { RunReplay } from "@/components/RunReplay";
+import { RunMechanics } from "@/components/RunMechanics";
 import { activitySegments, finite, garminApi, nearestActivityPoint, paceLabel, paceSeconds, type GarminActivity, type GarminActivityPoint } from "@/lib/garmin";
 import { routeDate, runRoutesApi, type RunRouteDetail } from "@/lib/run-routes";
 import { runInsightsApi, type RunInsights } from "@/lib/run-insights";
@@ -120,8 +123,8 @@ function ActivityContent({ data, route, insights, insightsError }: { data: Garmi
   ] as const;
   const visibleDynamics = dynamics.filter(([, value]) => finite(value));
   return <>
-    <header className={styles.intro}><div><h1>{summary.title || "Lauf"}</h1><p>{routeDate(summary.started_at)} · Laufdetails</p></div><span className={styles.source}>Garmin direkt</span></header>
-    <nav className={styles.sectionNav} aria-label="Abschnitte dieses Laufs"><a href="#verlauf">Verlauf</a><a href="#intensitaet">Intensität</a><a href="#runden">Runden & Dynamik</a><a href="#vergleich">Vergleich</a></nav>
+    <header className={styles.intro}><div><h1>{summary.title || "Lauf"}</h1><p>{routeDate(summary.started_at)} · Laufdetails</p></div><div className="flex flex-wrap items-center gap-3"><span className={styles.source}>Garmin direkt</span>{route && <RunPoster route={route} />}</div></header>
+    <nav className={styles.sectionNav} aria-label="Abschnitte dieses Laufs"><a href="#verlauf">Verlauf</a><a href="#intensitaet">Intensität</a><a href="#runden">Runden & Dynamik</a><a href="#laufstil">Laufstil</a><a href="#vergleich">Vergleich</a></nav>
     <div className="mb-3"><RunReferenceControl activityId={data.activity_id} /></div>
     <RunContext key={data.activity_id} activityId={data.activity_id} />
     <RunQuickAssessment data={data} insights={insights} insightsError={insightsError} />
@@ -133,6 +136,7 @@ function ActivityContent({ data, route, insights, insightsError }: { data: Garmi
       <div><span>Aktive Dauer</span><strong>{dur(summary.duration_seconds)}</strong></div>
     </div>
     <ActivityChart key={data.activity_id} points={data.series} route={route} startedAtUtc={summary.started_at_utc} />
+    {route && <RunReplay route={route} points={data.series} startedAtUtc={summary.started_at_utc} />}
     </section>
     <div id="intensitaet" className={styles.intensityGrid}>
     {insightsError ? <p className={`${styles.panel} ${styles.note}`} role="alert">{insightsError}</p> : !insights ? <p className={`${styles.panel} ${styles.note}`} role="status">Weitere Laufanalysen werden geladen …</p> : insights.available && <>
@@ -156,6 +160,7 @@ function ActivityContent({ data, route, insights, insightsError }: { data: Garmi
     {visibleDynamics.length > 0 ? <dl className={styles.dynamics}>{visibleDynamics.map(([label, value, unit, decimals]) => <div key={label}><dt>{label}</dt><dd>{de(value, decimals)} <span>{unit}</span></dd></div>)}</dl> : <p className={styles.note}>Für diesen Lauf sind keine Laufdynamik-Werte verfügbar.</p>}
     </section>
     </div>
+    <div id="laufstil"><RunMechanics activityId={data.activity_id} /></div>
     <div id="vergleich">{insights?.available && <RunComparison key={data.activity_id} activityId={data.activity_id} />}</div>
     <details className={styles.details}><summary>Datenbasis <span>{de0(data.quality.points)} Messpunkte</span></summary>
       <p className={styles.note}>Zeitabdeckung: Puls {de0(data.quality.hr_coverage * 100)} % · Tempo {de0(data.quality.speed_coverage * 100)} % der aktiven Dauer. Das Diagramm zeigt eine ausgedünnte Darstellung; für die Analyse bleibt die vollständige Aufzeichnung gespeichert.</p>

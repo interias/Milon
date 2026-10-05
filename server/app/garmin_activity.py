@@ -18,7 +18,7 @@ from .models import ExerciseSession, RunBestEffort, RunMinute
 
 
 SOURCE = "garmin_direct"
-PARSER_VERSION = "garmin-recording-v2"
+PARSER_VERSION = "garmin-recording-v3"
 MAX_POINTS = 100_000
 BEST_DISTANCES = (1000, 5000, 10000, 15000, 20000)
 OUTDOOR_RUN_TYPES = {"running", "trail_running", "track_running", "ultra_run"}
@@ -102,11 +102,16 @@ def normalize_summary(activity: dict) -> dict:
         "stride_length_cm": ("strideLength", 0, 500),
         "vertical_oscillation_cm": ("verticalOscillation", 0, 50),
         "vertical_ratio_pct": ("verticalRatio", 0, 100),
+        "ground_contact_balance_left_pct": ("groundContactBalanceLeft", 0, 100),
+        "step_speed_loss_pct": ("stepSpeedLossPercent", 0, 100),
         "training_effect": ("trainingEffect", 0, 5),
         "anaerobic_training_effect": ("anaerobicTrainingEffect", 0, 5),
     }
     for name, (key, low, high) in fields.items():
         result[name] = _number(raw.get(key), low, high)
+    impact = _number(raw.get("impactLoad"), 0, 1_000_000)
+    # Confirm this metre-scale summary against distance × impact factor below.
+    result["impact_load_km"] = impact / 1000 if impact is not None else None
     return result
 
 
@@ -114,6 +119,7 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
     """Descriptor values are already SI; unit.factor is presentation metadata."""
     descriptors = details.get("metricDescriptors") or []
     indices = {d.get("key"): d.get("metricsIndex") for d in descriptors if isinstance(d, dict)}
+    units = {d.get("key"): (d.get("unit") or {}).get("key") for d in descriptors if isinstance(d, dict)}
     rows = details.get("activityDetailMetrics") or []
     if not isinstance(rows, list) or len(rows) > MAX_POINTS:
         raise ValueError("Ungültige Garmin-Messreihe.")
@@ -126,6 +132,15 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
         "altitude_m": ("directElevation", -1000, 10000),
         "cadence_spm": ("directDoubleCadence", 0, 300),
         "power_w": ("directPower", 0, 2500),
+    }
+    mechanics = {
+        "ground_contact_ms": ("directGroundContactTime", "ms", 0, 2000),
+        "stride_length_cm": ("directStrideLength", "centimeter", 0, 500),
+        "vertical_oscillation_cm": ("directVerticalOscillation", "centimeter", 0, 50),
+        "vertical_ratio_pct": ("directVerticalRatio", "dimensionless", 0, 100),
+        "ground_contact_balance_left_pct": ("directGroundContactBalanceLeft", "dimensionless", 0, 100),
+        "step_speed_loss_pct": ("directStepSpeedLossPercent", "dimensionless", 0, 100),
+        "impact_load_factor": ("directImpactLoadFactor", "dimensionless", 0, 10),
     }
 
     def value(raw, key, low=None, high=None):
@@ -142,6 +157,8 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
             invalid_timestamps += 1
             continue
         point = {name: value(raw, key, low, high) for name, (key, low, high) in channels.items()}
+        point.update({name: value(raw, key, low, high) if units.get(key) == unit else None
+                      for name, (key, unit, low, high) in mechanics.items()})
         point["elapsed_seconds"] = max(0.0, elapsed)
         point["gap"] = False
         if series:
@@ -189,6 +206,19 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
         return min(1.0, seconds / summary["duration_seconds"])
 
     hr_coverage, speed_coverage = coverage("hr_bpm"), coverage("speed_m_s")
+    impact_distance = impact_sum = 0.0
+    for left, right in zip(series, series[1:]):
+        distance = (right["distance_m"] - left["distance_m"]
+                    if left["distance_m"] is not None and right["distance_m"] is not None else None)
+        if not right["gap"] and distance is not None and distance > 0 and right["impact_load_factor"] is not None:
+            impact_distance += distance
+            impact_sum += distance * right["impact_load_factor"]
+    impact = summary.get("impact_load_km")
+    impact_verified = (impact is not None and impact_sum > 0
+                       and impact_distance >= summary["distance_km"] * 900
+                       and abs(impact * 1000 / impact_sum - 1) <= .1)
+    if not impact_verified:
+        summary["impact_load_km"] = None
     # A full chart count alone does not prove a dense sensor recording.
     gaps = np.diff([p["elapsed_seconds"] for p in series])
     typical_gap = float(np.median(gaps)) if len(gaps) else None
@@ -200,6 +230,7 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
                "reported_points": int(reported) if reported is not None else None,
                "hr_coverage": round(hr_coverage, 4), "speed_coverage": round(speed_coverage, 4),
                "typical_interval_seconds": typical_gap, "reason": " ".join(reasons) or None,
+               "impact_unit_verified": impact_verified,
                "source": SOURCE}
     return series, quality
 
@@ -479,8 +510,10 @@ def _display_series(series: list[dict], limit: int = 600) -> list[dict]:
         section = series[previous + 1:index + 1]
         point["gap"] = any(p["gap"] for p in section)
         # A display sample must not bridge a missing channel between selected points.
-        for key in ("hr_bpm", "speed_m_s", "altitude_m", "cadence_spm", "power_w"):
-            if any(p[key] is None for p in section):
+        for key in ("hr_bpm", "speed_m_s", "altitude_m", "cadence_spm", "power_w",
+                    "ground_contact_ms", "stride_length_cm", "vertical_oscillation_cm", "vertical_ratio_pct",
+                    "ground_contact_balance_left_pct", "step_speed_loss_pct", "impact_load_factor"):
+            if any(p.get(key) is None for p in section):
                 point[key] = None
         result.append(point)
         previous = index

@@ -13,6 +13,7 @@ import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { RunZones } from "@/components/RunZones";
 import { RunRoutes } from "@/components/RunRoutes";
 import { RunReferenceCard } from "@/components/RunReference";
+import { RunningLoad } from "@/components/RunningLoad";
 import { de, de0, dm, dur } from "@/lib/format";
 
 type Panel = "analyses" | "achievements" | "records" | null;
@@ -90,6 +91,7 @@ export default function Laufen() {
         <div className="min-w-0"><RunRoutes /></div>
       </div>
       <RunReferenceCard />
+      <RunningLoad />
     </section>
 
     <section className="mt-6" aria-labelledby="running-fitness">

@@ -9,6 +9,7 @@ from .api import checkins, circumferences, coach, garmin_routes, ingest, metrics
 from .api import settings as settings_api
 from .api import garmin_activity, garmin_daily, recovery_analysis, run_insights, source_status
 from .api import body_progress, coach_actions, run_context, run_reference
+from .api import garmin_nights, route_atlas, run_mechanics, weekly_journal
 from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
 from .sync import scheduler
@@ -63,6 +64,10 @@ app.include_router(source_status.router)
 app.include_router(body_progress.router)
 app.include_router(run_context.router)
 app.include_router(run_reference.router)
+app.include_router(garmin_nights.router)
+app.include_router(route_atlas.router)
+app.include_router(run_mechanics.router)
+app.include_router(weekly_journal.router)
 
 # Statische Auslieferung der Fortschritts-Fotos
 app.mount("/media/progress", StaticFiles(directory=str(PROGRESS_DIR)), name="progress-media")

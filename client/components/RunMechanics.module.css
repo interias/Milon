@@ -1,0 +1,22 @@
+.section { min-width:0; padding:20px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:8px; font-variant-numeric:tabular-nums; }
+.header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.header h2 { font-size:14px; font-weight:600; }
+.header p { margin-top:4px; font-size:11px; color:var(--color-muted); }
+.badge { color:var(--color-accent); background:#edf6f3; border:1px solid #d9e9e4; padding:4px 7px; border-radius:4px; font-size:10px; }
+.toolbar { margin-top:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.toolbar select { max-width:100%; border:1px solid var(--color-line); border-radius:5px; padding:6px 8px; font-size:12px; background:var(--color-surface); color:var(--color-ink); }
+.toolbar>span { font-size:10px; color:var(--color-muted); }
+.values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0 8px; }
+.values>div>span { display:block; font-size:10px; color:var(--color-muted); }
+.values strong { display:block; margin-top:3px; font:600 24px var(--font-display); white-space:nowrap; }
+.values small { padding-left:5px; font:400 10px var(--font-sans); color:var(--color-muted); }
+.values .delta { color:var(--color-accent); }
+.chart { display:block; width:100%; height:auto; min-height:110px; }
+.chart text { font:10px var(--font-sans); fill:var(--color-muted); }
+.note,.method { font-size:10px; line-height:1.65; color:var(--color-muted); margin-top:9px; }
+.method summary { cursor:pointer; width:fit-content; }
+.method p { margin-top:7px; max-width:90ch; }
+.empty { margin-top:18px; font-size:12px; color:var(--color-muted); }
+.section button { color:var(--color-accent); text-decoration:underline; cursor:pointer; }
+.section select:focus-visible,.section button:focus-visible,.section summary:focus-visible { outline:2px solid var(--color-accent-2); outline-offset:3px; }
+@media(max-width:500px) { .section { padding:16px; }.toolbar select { font-size:16px; }.values { gap:6px; }.values strong { font-size:21px; }.values small { font-size:9px; padding-left:3px; } }

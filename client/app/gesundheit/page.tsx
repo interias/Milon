@@ -8,6 +8,7 @@ import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { HealthDetails } from "@/components/HealthDetails";
 import { SleepPanel } from "@/components/SleepPanel";
 import { GarminRecovery } from "@/components/GarminRecovery";
+import { GarminNights } from "@/components/GarminNights";
 import { SourceStatus } from "@/components/SourceStatus";
 import { de, de0, dm } from "@/lib/format";
 
@@ -59,6 +60,7 @@ export default function Gesundheit() {
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
     <SleepPanel />
+    <GarminNights />
     <GarminRecovery />
     <SourceStatus />
     <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Historie & Details</button>
