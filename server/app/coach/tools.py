@@ -26,6 +26,10 @@ def _fn(name: str, desc: str, props: dict | None = None, required: list[str] | N
 
 
 TOOLS = [
+    _fn("get_coach_actions", "Die letzten drei ausdrücklich übernommenen Wochenmaßnahmen mit freiwilliger "
+        "Rückmeldung und beobachtetem Zielwert. Vor einer neuen Wochenempfehlung prüfen. "
+        "Offen bedeutet nicht gescheitert; fehlende Tage sind unbekannt. Vorher-/Zeitraum-Unterschiede "
+        "sind keine Wirkung der Maßnahme. Dieses Tool liest nur und übernimmt keine Empfehlung."),
     _fn("get_running_intensity", "Zeit in Milon-Pulszonen je Woche aus vollständigen Garmin-Läufen. "
         "Aktuelle gespeicherte HFmax, nicht Garmin-Zonen. Unbekannte Zeit und leere Abdeckung beachten; keine Trainingsvorgabe.",
         {"weeks": {"type": "integer", "minimum": 1, "maximum": 26}}),
@@ -135,6 +139,9 @@ TOOLS = [
 
 
 def dispatch(name: str, args: dict):
+    if name == "get_coach_actions":
+        from .. import coach_actions
+        return coach_actions.coach_context()
     if name == "get_running_intensity":
         from ..metrics import run_insights
         return run_insights.weekly_zones(max(1, min(26, int(args.get("weeks", 8)))))

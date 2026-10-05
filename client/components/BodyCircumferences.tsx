@@ -182,7 +182,7 @@ function PreferencesDialog({ data, onClose, onSave }: {
 
 type OpenEntry = { entry?: CircumferenceEntry; historical?: boolean };
 
-export function BodyCircumferences() {
+export function BodyCircumferences({ onChange }: { onChange?: () => void }) {
   const [data, setData] = useState<CircumferenceData | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [preferenceBusy, setPreferenceBusy] = useState(false), [deletingId, setDeletingId] = useState<number | null>(null);
   const [selected, setSelected] = useState<MeasureKey>("abdomen_navel"), [entry, setEntry] = useState<OpenEntry | null>(null);
@@ -216,6 +216,7 @@ export function BodyCircumferences() {
   function entrySaved(saved: CircumferenceEntry) {
     setData(previous => previous ? { ...previous, entries: [...previous.entries.filter(entry => entry.id !== saved.id), saved].sort((a, b) => b.date.localeCompare(a.date)) } : previous);
     setEntry(null); setNotice("Messung gespeichert.");
+    onChange?.();
     void load(undefined, "Die Messung wurde gespeichert.");
   }
   async function remove(entry: CircumferenceEntry) {
@@ -225,6 +226,7 @@ export function BodyCircumferences() {
       await circumferenceApi.remove(entry.id);
       setData(previous => previous ? { ...previous, entries: previous.entries.filter(item => item.id !== entry.id) } : previous);
       setNotice("Messung gelöscht.");
+      onChange?.();
       await load(undefined, "Die Messung wurde gelöscht.");
     } catch (error) { setError(errorMessage(error)); }
     finally { setDeletingId(null); }

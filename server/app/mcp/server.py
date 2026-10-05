@@ -226,6 +226,15 @@ def get_sleep_performance(kind: Literal["run", "strength"] = "run", source: Lite
 
 
 @mcp.tool()
+def get_coach_actions() -> list:
+    """User-accepted weekly actions, voluntary feedback and descriptive metric comparisons.
+    Read only: never infer acceptance or failure from free text or missing feedback.
+    Coverage and device boundaries apply; observed changes do not demonstrate causality."""
+    from .. import coach_actions
+    return coach_actions.coach_context()
+
+
+@mcp.tool()
 def get_checkin_summary(days: int = 30) -> dict:
     """Optional self-reported energy and effort (1–5), counts and coverage; missing is unknown."""
     return checkins.summary(max(1, min(days, 365)))

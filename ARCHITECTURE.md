@@ -1,5 +1,38 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Persönliche Vergleiche und Wochenmaßnahmen
+
+- `run_reference.py` speichert eine ausdrücklich ausgewählte Referenzrunde in
+  `run_route_reference`. `/running/reference` bietet Auswahl, Entfernen und
+  90/180/365-Tage-Auswertung. Nur vollständige freigegebene Garmin-Läufe derselben
+  Sensorperiode, gleicher Richtung, Distanz ±10 % und Dauer ±20 % werden verglichen.
+  Mindestens sechs einmalig gepaarte gleichmäßige Minuten; Einzelbeobachtungen mit
+  Paceabweichung und Paarzahl, keine Signifikanzbehauptung.
+- `run_context.py` hält die freiwillige Absicht locker/lang/Tempo unabhängig vom
+  Import in `run_intents`. `/running/context/{id}` liest den vorhandenen verknüpften
+  Check-in und ändert dessen Anstrengung gezielt. Energie/Notiz bleiben erhalten;
+  ein bereits anderweitig belegter Tages-Check-in wird nicht umgehängt.
+- `garmin_weather.py` importiert optional Aktivitäts-Stationswetter in `garmin_weather`.
+  Fahrenheit wird zu Celsius konvertiert; Feuchte, Windrichtung, UTC-Messzeit und
+  letzter erfolgreicher Abruf bleiben erhalten. Stationskoordinaten werden verworfen.
+  `windSpeed` ohne belegte Einheit bleibt ungenutzt. Erfolgreiche Abrufe werden
+  gecacht; fehlende/fehlgeschlagene Werte frühestens täglich oder mit `full=true`
+  erneut geprüft. Wetterfehler unterbrechen den Laufimport nicht und löschen keinen
+  vorhandenen Wert. Zeitabstand zur Aktivität und vorheriger Stand sind im UI sichtbar.
+- `/metrics/body/progress?weeks=4|8|12&measure=abdomen_navel|waist_narrowest`
+  vergleicht dieselben ersten/letzten 14 Tage. Umfang: Median nur gleicher Standard-
+  Messdefinition. Gewicht: Tagesmittel, mindestens drei Tage je Fenster. Kraft:
+  Median der Tages-Best-e1RM bei mindestens zwei Trainingstagen je Übung/Fenster;
+  ein fester Korb von mindestens drei Übungen aus zwei Muskelgruppen, muskelbalancierte
+  geometrische Veränderung. Übungswechsel und Abdeckung bleiben sichtbar. Kein KFA-
+  oder Muskelmassennachweis, keine Interpolation fehlender Ausgangswerte.
+- `coach_actions` speichert eine vom Nutzer übernommene Handlung für sieben Tage,
+  optionalen Berichtbezug, Beobachtungsmetrik und Rückmeldung. `/coach/actions`
+  verhindert überlappende Maßnahmen. Vergleich: sieben Tage davor gegen abgeschlossene
+  Maßnahmentage, mindestens drei erfasste Tage je Fenster, Quellenwechsel unterbrechen
+  Schlaf-/Schrittvergleiche. Keine kausale Wirkungsaussage. Snapshot, Coach-Tool und
+  MCP `get_coach_actions` lesen die Maßnahmen; Schreibwerkzeuge für das LLM fehlen bewusst.
+
 ## Garmin: Vergleich, Intensität und Datenstatus
 
 Jeder importierte Garmin-Lauf hat eine direkt verlinkbare Detailseite unter

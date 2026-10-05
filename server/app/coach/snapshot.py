@@ -6,7 +6,7 @@ import json
 from zoneinfo import ZoneInfo
 
 from ..config import settings
-from .. import checkins
+from .. import checkins, coach_actions
 from ..metrics import body, health, nutrition, running, sleep, strength
 
 
@@ -39,6 +39,7 @@ def build_snapshot() -> dict:
         "kraft_index": strength.strength_index("3m"),
         "schlaf": sleep.overview(30)["summary"],
         "checkins": checkins.summary(30),
+        "wochenmassnahmen": coach_actions.coach_context(),
         "garmin_erholung": garmin_daily.coach_summary(14),
     }
 
@@ -116,4 +117,8 @@ def snapshot_text() -> str:
     if snap.get("garmin_erholung"):
         lines.append("GARMIN ERHOLUNG (Schätzungen, Messdaten beachten): "
                      + json.dumps(snap["garmin_erholung"], ensure_ascii=False, allow_nan=False))
+    if snap.get("wochenmassnahmen"):
+        lines.append("ÜBERNOMMENE WOCHENMASSNAHMEN (Nutzerentscheidung und Rückmeldung; "
+                     "beobachtete Unterschiede sind kein Wirkungsnachweis): "
+                     + json.dumps(snap["wochenmassnahmen"], ensure_ascii=False, allow_nan=False))
     return "\n".join(lines)

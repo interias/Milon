@@ -35,18 +35,31 @@ Details stehen unter [Datenschutz und Betrieb](#datenschutz-und-betrieb).
 | Bereich | Aktueller Funktionsumfang |
 |---|---|
 | **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, Wochenbilanz, Konsistenz, freiwilliger kurzer Check-in |
-| **Körper** | Gewichtstrends, TDEE und Energiebilanz, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, konfigurierbare Einzeltrends und Messjournal |
-| **Laufen** | Wochenvolumen, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
-| **Einzelne Läufe** | Eigene Detailseite: Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und Vergleich zweier Läufe |
+| **Körper** | Gemeinsamer Vergleich von Bauch/Taille, Gewicht und Kraftleistung; Gewichtstrends, TDEE, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, Einzeltrends und Messjournal |
+| **Laufen** | Persönliche Referenzrunde mit passenden Wiederholungen, Wochenvolumen, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
+| **Einzelne Läufe** | Eigene Detailseite: freiwilliges Laufziel und Anstrengung, Garmin-Stationswetter, Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und Vergleich zweier Läufe |
 | **Gesundheit** | Schritte, Radfahren, Schlaf, HRV, Garmin-Erholungswerte, Zusammenhänge zwischen Erholung und Leistung sowie Quellen- und Importstatus |
 | **Kraft** | Übungen nach Muskelgruppe, Detailseiten, e1RM, Tonnage, RPE, Gesamtstärke-Index und Zusammenhang mit der Energiebilanz |
 | **Ernährung** | Kalorien, Makros, Proteinziel und Defizit gegenüber dem geschätzten TDEE |
 | **Fortschritt** | Foto-Timeline, Zuschnitt, mehrere Ansichten und Silhouetten als Aufnahmehilfe |
-| **Coach** | Kurze Antworten mit echten Kennzahlen, persönliche Ziele, lokale Diagramme, Berichte, Kostenübersicht und ausdrücklich angeforderte Bildgenerierung |
+| **Coach** | Kurze Antworten mit Kennzahlen, persönliche Ziele, ausdrücklich übernommene Wochenmaßnahme mit Rückmeldung und Messvergleich, lokale Diagramme, Berichte, Kostenübersicht und angeforderte Bildgenerierung |
 
 Die Laufdetails öffnen über **Laufen → Gelaufene Strecken → Laufdetails** eine eigene
 Adresse `/laufen/<Garmin-Aktivitäts-ID>`. Die wichtigsten Einordnungen stehen oben;
 die Analysen darunter sind direkt sichtbar. Methodik und Datenbasis bleiben einklappbar.
+
+- **Referenzrunde:** In den Laufdetails eine Runde auswählen. Die Laufübersicht sammelt
+  passende Wiederholungen derselben Sensorperiode und Richtung. Einzelne Pulsunterschiede
+  beschreiben Beobachtungen; sie beweisen keine Fitnessveränderung.
+- **Körperfortschritt:** 4, 8 oder 12 Wochen auswählen. Die ersten und letzten 14 Tage
+  bilden gemeinsame Vergleichsfenster für Bauch/Taille, Gewichtsmittel und gleiche Übungen.
+- **Wochenmaßnahme:** Unter Coach eine konkrete Handlung ausdrücklich übernehmen,
+  optional einen Messwert auswählen und später kurz rückmelden. Der Coach kann bestehende
+  Maßnahmen lesen; anlegen oder ändern kann sie nur der Nutzer.
+
+Garmin-Stationswetter ergänzt Laufdetails und Vergleiche mit Temperatur, Feuchte,
+Windrichtung und Messzeit. Die Windgeschwindigkeit bleibt wegen fehlender belegter
+API-Einheit ausgenommen. Wetter verändert keine berechnete Pace oder Pulsdifferenz.
 
 Auswertungen kennzeichnen fehlende Daten und Unsicherheit. Sensorwechsel werden
 berücksichtigt; ältere Werte werden nicht als aktuelle Fitness ausgegeben. Ein
@@ -262,7 +275,8 @@ docs/     Dokumentation, Recherche und README-Bilder
 [AGENTS.md](AGENTS.md) hält die Arbeitskonventionen fest. Ideen für weitere Schritte:
 [Laufen](docs/research/running-next-steps.md) und
 [Körperentwicklung, Erholung und Coach](docs/research/fitness-next-steps.md).
-Diese Recherchevorschläge sind noch keine implementierten Funktionen.
+Referenzrunde, Laufabsicht, Stationswetter, gemeinsamer Körpervergleich und
+Wochenmaßnahmen sind umgesetzt; die Notizen nennen auch weiter offene Vorschläge.
 
 ## Lizenz
 

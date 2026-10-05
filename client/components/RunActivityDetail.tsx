@@ -6,6 +6,8 @@ import { RunRouteCursor } from "@/components/RunRouteCursor";
 import { RunComparison } from "@/components/RunComparison";
 import { RunIntensityZones } from "@/components/RunIntensityZones";
 import { RunQuickAssessment } from "@/components/RunQuickAssessment";
+import { RunContext } from "@/components/RunContext";
+import { RunReferenceControl } from "@/components/RunReference";
 import { activitySegments, finite, garminApi, nearestActivityPoint, paceLabel, paceSeconds, type GarminActivity, type GarminActivityPoint } from "@/lib/garmin";
 import { routeDate, runRoutesApi, type RunRouteDetail } from "@/lib/run-routes";
 import { runInsightsApi, type RunInsights } from "@/lib/run-insights";
@@ -120,6 +122,8 @@ function ActivityContent({ data, route, insights, insightsError }: { data: Garmi
   return <>
     <header className={styles.intro}><div><h1>{summary.title || "Lauf"}</h1><p>{routeDate(summary.started_at)} · Laufdetails</p></div><span className={styles.source}>Garmin direkt</span></header>
     <nav className={styles.sectionNav} aria-label="Abschnitte dieses Laufs"><a href="#verlauf">Verlauf</a><a href="#intensitaet">Intensität</a><a href="#runden">Runden & Dynamik</a><a href="#vergleich">Vergleich</a></nav>
+    <div className="mb-3"><RunReferenceControl activityId={data.activity_id} /></div>
+    <RunContext key={data.activity_id} activityId={data.activity_id} />
     <RunQuickAssessment data={data} insights={insights} insightsError={insightsError} />
     <section id="verlauf" className={styles.panel} aria-label="Laufkennzahlen und Verlauf">
     <div className={styles.summary}>

@@ -12,6 +12,7 @@ import { RunningMoreAnalyses } from "@/components/RunningMoreAnalyses";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { RunZones } from "@/components/RunZones";
 import { RunRoutes } from "@/components/RunRoutes";
+import { RunReferenceCard } from "@/components/RunReference";
 import { de, de0, dm, dur } from "@/lib/format";
 
 type Panel = "analyses" | "achievements" | "records" | null;
@@ -33,7 +34,7 @@ export default function Laufen() {
     api.runAchievements().then(setAch).catch(() => setExtrasError(true));
   }, []);
   useEffect(() => {
-    if (!week || !["#running-fitness", "#strecken"].includes(window.location.hash)) return;
+    if (!week || !["#running-fitness", "#strecken", "#referenzrunde"].includes(window.location.hash)) return;
     const hash = window.location.hash;
     const target = document.getElementById(hash.slice(1));
     const training = document.querySelector('[aria-labelledby="running-training"]');
@@ -88,6 +89,7 @@ export default function Laufen() {
         <div className="min-w-0"><RunZones /></div>
         <div className="min-w-0"><RunRoutes /></div>
       </div>
+      <RunReferenceCard />
     </section>
 
     <section className="mt-6" aria-labelledby="running-fitness">

@@ -6,6 +6,7 @@ import { finite, paceLabel } from "@/lib/garmin";
 import { routeDate } from "@/lib/run-routes";
 import { comparisonSegments, runInsightsApi, type ComparedRun, type ComparisonPoint, type RunComparisonData, type RunInsightCandidate } from "@/lib/run-insights";
 import styles from "./RunComparison.module.css";
+import { ComparisonWeather } from "./RunContext";
 
 function extent(values: number[], step: number, fallback: [number, number]): [number, number] {
   if (!values.length) return fallback;
@@ -58,7 +59,12 @@ function ComparisonChart({ data }: { data: RunComparisonData }) {
 export function RunComparison({ activityId, candidates }: { activityId: string; candidates: RunInsightCandidate[] }) {
   const selectId = useId(), headingId = useId();
   const [selected, setSelected] = useState("");
-  const selectedId = candidates.some(candidate => candidate.activity_id === selected) ? selected : candidates[0]?.activity_id || "";
+  const [reference, setReference] = useState("");
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("compare") || "";
+    if (/^[0-9]{1,30}$/.test(value) && value !== activityId) { setReference(value); setSelected(value); }
+  }, [activityId]);
+  const selectedId = selected && (selected === reference || candidates.some(candidate => candidate.activity_id === selected)) ? selected : candidates[0]?.activity_id || "";
   const [data, setData] = useState<RunComparisonData | null>(null), [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -75,15 +81,18 @@ export function RunComparison({ activityId, candidates }: { activityId: string; 
   }, [activityId, selectedId, revision]);
   const current = data?.first.activity_id === activityId && data.second.activity_id === selectedId ? data : null;
   const result = current?.comparison;
+  const referenceComparison = selectedId === reference;
+  const delta = finite(result?.hr_delta_bpm) ? result.hr_delta_bpm * (referenceComparison ? -1 : 1) : null;
   return <section className={styles.section} aria-labelledby={headingId}>
     <header className={styles.header}><div><h2 id={headingId}>Läufe vergleichen</h2><p>Puls & Tempo über die Distanz</p></div>
-      {candidates.length > 0 && <div className={styles.picker}><label className={styles.label} htmlFor={selectId}>Vergleichslauf</label><select id={selectId} value={selectedId} onChange={event => setSelected(event.target.value)} className={styles.select}>{candidates.map(candidate => <option key={candidate.activity_id} value={candidate.activity_id}>{routeDate(candidate.started_at)} · {de(candidate.distance_km, 2)} km · {candidate.similarity_label}</option>)}</select></div>}
+      {selectedId && <div className={styles.picker}><label className={styles.label} htmlFor={selectId}>Vergleichslauf</label><select id={selectId} value={selectedId} onChange={event => setSelected(event.target.value)} className={styles.select}>{reference && !candidates.some(candidate => candidate.activity_id === reference) && <option value={reference}>Referenzlauf</option>}{candidates.map(candidate => <option key={candidate.activity_id} value={candidate.activity_id}>{routeDate(candidate.started_at)} · {de(candidate.distance_km, 2)} km · {candidate.similarity_label}</option>)}</select></div>}
     </header>
-    {!candidates.length ? <p className={styles.note}>Noch kein weiterer geeigneter Lauf mit vollständiger Aufzeichnung vorhanden.</p> : <>
+    {!selectedId ? <p className={styles.note}>Noch kein weiterer geeigneter Lauf mit vollständiger Aufzeichnung vorhanden.</p> : <>
       {error ? <p className={styles.note} role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !current ? <p className={styles.note} role="status">Vergleich wird geladen …</p> : <>
-        {result?.status === "observed" && <div className={styles.result}><div><span>Pulsdifferenz</span><strong>{finite(result.hr_delta_bpm) ? `${result.hr_delta_bpm > 0 ? "+" : ""}${de(result.hr_delta_bpm, 1)}` : "–"} <small>bpm</small></strong></div><p>Vergleich minus ausgewählter Lauf · {result.matched_pairs} passende Minutenpaare bei ähnlichem Tempo und Gefälle.</p></div>}
+        {result?.status === "observed" && <div className={styles.result}><div><span>Pulsdifferenz</span><strong>{finite(delta) ? `${delta > 0 ? "+" : ""}${de(delta, 1)}` : "–"} <small>bpm</small></strong></div><p>{referenceComparison ? "Dieser Lauf minus Referenz" : "Vergleich minus ausgewählter Lauf"} · {result.matched_pairs} passende Minutenpaare bei ähnlichem Tempo und Gefälle.{referenceComparison ? " Detailvergleich über den gesamten Lauf; die Referenzkarte begrenzt das Zeitfenster zusätzlich." : ""}</p></div>}
         <p className={styles.note}>{result?.reason}</p>
         <ComparisonChart data={current} />
+        <ComparisonWeather key={`${activityId}-${selectedId}-${revision}`} first={activityId} second={selectedId} />
         <details className={styles.method}><summary>So wird verglichen</summary><p className={styles.note}>{result?.method}</p></details>
       </>}
     </>}

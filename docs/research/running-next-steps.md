@@ -4,6 +4,14 @@ Stand: 2026-10-05. Recherche anhand des aktuellen Codes, der installierten
 `garminconnect`-Version 0.3.17 und Primärquellen. Keine persönlichen Messwerte oder
 Routen wurden für diese Recherche an externe Dienste übermittelt.
 
+**Umsetzungsstand:** Referenzrunde und freiwillige Laufabsicht sind umgesetzt.
+Stationswetter wurde im verbundenen Konto geprüft und wird direkt importiert:
+Temperatur (Fahrenheit → Celsius), Feuchte, Windrichtung und Messzeit. `windSpeed`
+enthält keine Einheit; weder Bibliothek noch untersuchte Original-FIT-Aufzeichnung
+konnten sie belegen. Deshalb wird keine Geschwindigkeit behauptet oder umgerechnet.
+Fehlende Werte bleiben unbekannt, bisherige Wetterwerte nach Abruffehlern erhalten.
+Der übrige Text hält den Recherche-Ausgangspunkt und die methodischen Grenzen fest.
+
 ## Ausgangspunkt
 
 Milon zeigt bereits Trainingswirkung, Pulsstabilität, standardisierten Puls-Trend,
