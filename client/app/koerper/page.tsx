@@ -9,6 +9,7 @@ import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { BodyDetails } from "@/components/BodyDetails";
 import { EnergyBalance } from "@/components/EnergyBalance";
 import { BodyCircumferences } from "@/components/BodyCircumferences";
+import { BodyProgress } from "@/components/BodyProgress";
 import { de, dm } from "@/lib/format";
 
 export default function Koerper() {
@@ -21,6 +22,7 @@ export default function Koerper() {
   const [rawFat, setRawFat] = useState(false);
   const [showFatBand, setShowFatBand] = useState(false);
   const [details, setDetails] = useState(false);
+  const [measurementsRevision, setMeasurementsRevision] = useState(0);
   useEffect(() => {
     let active = true;
     const failed = (key: string) => { if (active) setErrors((previous) => [...previous, key]); };
@@ -35,7 +37,8 @@ export default function Koerper() {
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : "Wird geladen …";
   return <>
     <PageTitle title="Körper" sub="Körpermaße, Gewicht & Körperzusammensetzung" />
-    <div className="mb-5"><BodyCircumferences /></div>
+    <BodyProgress revision={measurementsRevision} />
+    <div className="mb-5"><BodyCircumferences onChange={() => setMeasurementsRevision(value => value + 1)} /></div>
     <div className="grid items-start gap-4 xl:grid-cols-2">
       <Card className="min-w-0">
         <h2 className="text-sm font-semibold">Gewicht</h2>

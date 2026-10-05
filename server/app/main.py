@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import checkins, circumferences, coach, garmin_routes, ingest, metrics, progress, run_zones, sleep
 from .api import settings as settings_api
 from .api import garmin_activity, garmin_daily, recovery_analysis, run_insights, source_status
+from .api import body_progress, coach_actions, run_context, run_reference
 from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
 from .sync import scheduler
@@ -45,6 +46,7 @@ def health() -> dict:
 
 app.include_router(ingest.router)
 app.include_router(metrics.router)
+app.include_router(coach_actions.router)
 app.include_router(coach.router)
 app.include_router(progress.router)
 app.include_router(settings_api.router)
@@ -58,6 +60,9 @@ app.include_router(garmin_daily.router)
 app.include_router(run_insights.router)
 app.include_router(recovery_analysis.router)
 app.include_router(source_status.router)
+app.include_router(body_progress.router)
+app.include_router(run_context.router)
+app.include_router(run_reference.router)
 
 # Statische Auslieferung der Fortschritts-Fotos
 app.mount("/media/progress", StaticFiles(directory=str(PROGRESS_DIR)), name="progress-media")

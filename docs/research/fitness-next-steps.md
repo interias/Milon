@@ -1,7 +1,8 @@
 # Nächste Schritte für Körperfortschritt und Coach
 
-Stand: 2026-10-05. Recherche und Produktvorschläge, keine bereits implementierten
-Funktionen. Grundlage sind der aktuelle Code und Primärquellen; persönliche
+Stand: 2026-10-05. Die folgenden Überlegungen dokumentieren die ursprüngliche
+Recherche. Gemeinsamer Körpervergleich (Punkt 1) und Wochenmaßnahmen sind inzwischen
+umgesetzt; Versuchspläne und weitere Vorschläge bleiben offen. Grundlage sind Code und Primärquellen; persönliche
 Messdaten wurden für diese Recherche weder gelesen noch an Suchdienste gesendet.
 
 ## Was bereits vorhanden ist

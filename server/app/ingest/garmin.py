@@ -210,12 +210,13 @@ def _pull_routes(api, full: bool, collected: list[dict] | None = None) -> dict:
 
 
 def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
-    from .. import garmin_activity, garmin_daily
+    from .. import garmin_activity, garmin_daily, garmin_weather
 
     outcomes = {}
     for name, pull in (
         ("activities", lambda: garmin_activity.sync_activities(api, activities, full=full)),
         ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
+        ("weather", lambda: garmin_weather.sync_weather(api, activities, full=full)),
     ):
         try:
             outcomes[name] = pull()

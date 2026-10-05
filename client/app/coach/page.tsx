@@ -7,6 +7,7 @@ import { Markdown } from "@/components/Markdown";
 import { CoachThinking } from "@/components/CoachThinking";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { CoachVisuals } from "@/components/CoachVisuals";
+import { CoachActions } from "@/components/CoachActions";
 
 const fmtUsd = (n: number, known: boolean) => (known ? "$" + n.toFixed(n < 1 ? 4 : 2) : "n/v");
 const reportLabel = (kind: string) => kind === "daily" ? "Tagesreport" : kind === "weekly" ? "Wochenreport" : "Antwort";
@@ -123,6 +124,7 @@ export default function Coach() {
         {!!current.visuals?.length && <div className="mt-5 border-t border-line pt-4"><CoachVisuals visuals={current.visuals} compact /></div>}
       </> : <p className="text-sm text-muted">Stelle eine Frage oder erstelle einen Report.</p>}
     </Card>
+    <CoachActions reportId={current?.id ?? null} />
     <Card className="mt-4">
       <CardTitle title="Illustration im Milon-Stil" sub="GPT Image 2.5 Flare · 1024 × 1024 · niedrige Qualität" />
       <form onSubmit={(event) => { event.preventDefault(); void createImage(); }} className="flex flex-wrap gap-2">
