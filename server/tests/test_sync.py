@@ -44,6 +44,7 @@ class SyncTests(TestCase):
             patch.object(ingest.fddb, "import_fddb", side_effect=RuntimeError("Provider unavailable")),
             patch.object(ingest.settings, "hc_drive_file_id", "test-file"),
             patch.object(ingest.drive, "pull", return_value={"new_body": 1}),
+            patch.object(ingest.garmin, "configured", return_value=False),
             patch.object(ingest, "HC_DB") as hc_db,
             TestClient(app) as client,
         ):
@@ -55,6 +56,37 @@ class SyncTests(TestCase):
             self.assertEqual(response.json()["health_connect"], {"new_body": 1})
             states = {row["source"]: row["status"] for row in client.get("/ingest/status").json()["state"]}
             self.assertEqual(states, {"hevy": "ok", "fddb": "error", "health_connect": "ok"})
+
+    def test_garmin_endpoint_records_sanitized_failure(self):
+        app = FastAPI()
+        app.include_router(ingest.router)
+        with (
+            patch.object(ingest.garmin, "import_garmin", side_effect=RuntimeError("Garmin nicht erreichbar.")),
+            TestClient(app) as client,
+        ):
+            response = client.post("/ingest/garmin")
+            self.assertEqual(response.status_code, 502)
+            state = client.get("/ingest/status").json()["state"][0]
+            self.assertEqual(state["source"], "garmin")
+            self.assertEqual(state["status"], "error")
+
+    def test_refresh_includes_configured_garmin(self):
+        app = FastAPI()
+        app.include_router(ingest.router)
+        with (
+            patch.object(ingest.hevy, "import_hevy", return_value={"events": 0}),
+            patch.object(ingest.fddb, "import_fddb", return_value={"new": 0}),
+            patch.object(ingest.settings, "hc_drive_file_id", ""),
+            patch.object(ingest, "HC_DB") as hc_db,
+            patch.object(ingest.garmin, "configured", return_value=True),
+            patch.object(ingest.garmin, "import_garmin", return_value={"imported": 2}) as sync,
+            TestClient(app) as client,
+        ):
+            hc_db.exists.return_value = False
+            response = client.post("/ingest/refresh?full=true")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["garmin"], {"imported": 2})
+            sync.assert_called_once_with(full=True)
 
 
 if __name__ == "__main__":

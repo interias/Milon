@@ -32,4 +32,6 @@ It could shorten prototyping, but a backend deployment alone is insufficient: in
 
 ## Direct Garmin API
 
-Garmin's official Connect developer program is for business/enterprise use and requires application approval; it is not an immediately available personal-account API. Garmin documents OAuth 2.0 and typical integration of one to four weeks after the application process. Therefore Garmin → Health Connect remains the practical existing route for this single-user dashboard. [Garmin program FAQ](https://developer.garmin.com/gc-developer-program/program-faq/)
+Garmin's official Connect developer program is for business/enterprise use and requires application approval; it is not an immediately available personal-account API. Garmin documents OAuth 2.0 and typical integration of one to four weeks after the application process. [Garmin program FAQ](https://developer.garmin.com/gc-developer-program/program-faq/)
+
+Update, 2026-10-05: Milon now imports running GPS routes directly through the unofficial `garminconnect==0.3.17` client and a locally stored authenticated session. This bypasses the Health Connect export for routes; other metrics still use their existing sources. Further direct imports and source-reconciliation requirements are evaluated in [Garmin direct-data research](garmin-direct-data.md). This is separate from Garmin's official developer program and depends on Connect's private interfaces. [Client source](https://github.com/cyberjunky/python-garminconnect/tree/0.3.17)

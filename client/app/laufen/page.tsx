@@ -11,6 +11,7 @@ import { RunningFitness } from "@/components/RunningFitness";
 import { RunningMoreAnalyses } from "@/components/RunningMoreAnalyses";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { RunZones } from "@/components/RunZones";
+import { RunRoutes } from "@/components/RunRoutes";
 import { de, de0, dm, dur } from "@/lib/format";
 
 type Panel = "analyses" | "achievements" | "records" | null;
@@ -58,7 +59,10 @@ export default function Laufen() {
           })} unit="km" height={150} /> : <p className="text-xs text-muted">{extrasError ? "Wochenkilometer nicht verfügbar." : "Wochenkilometer werden geladen …"}</p>}
         </div>
       </Card>
-      <div className="mt-4"><RunZones /></div>
+      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+        <div className="min-w-0"><RunZones /></div>
+        <div className="min-w-0"><RunRoutes /></div>
+      </div>
     </section>
 
     <section className="mt-6" aria-labelledby="running-fitness">

@@ -29,7 +29,8 @@ RUN pip install \
       "pytz>=2024.1" \
       "pillow>=10.0" \
       "mcp>=1.2,<2" \
-      "gdown>=5.1"
+      "gdown>=5.1" \
+      "garminconnect==0.3.17"
 
 # App-Code (ändert sich häufig → nach dem Deps-Layer)
 COPY app ./app
