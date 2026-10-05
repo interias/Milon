@@ -1,21 +1,24 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { de, de0 } from "@/lib/format";
 import { finite, paceLabel } from "@/lib/garmin";
 import { routeDate } from "@/lib/run-routes";
-import { comparisonSegments, runInsightsApi, type ComparedRun, type ComparisonPoint, type RunComparisonData, type RunInsightCandidate } from "@/lib/run-insights";
+import { runInsightsApi, type RunCohortComparison, type RunDistribution } from "@/lib/run-insights";
 import styles from "./RunComparison.module.css";
-import { ComparisonWeather } from "./RunContext";
 
-function extent(values: number[], step: number, fallback: [number, number]): [number, number] {
-  if (!values.length) return fallback;
-  const low = Math.floor(Math.min(...values) / step) * step;
-  return [low, Math.max(low + 2 * step, Math.ceil(Math.max(...values) / step) * step)];
+type Metric = "pace_seconds" | "avg_hr";
+const dateLabel = (value: string) => routeDate(value.slice(0, 10));
+const metricLabel = (value: number | null, metric: Metric) => metric === "pace_seconds" ? paceLabel(value) : de(value, 1);
+
+function differenceLabel(value: number | null, metric: Metric) {
+  if (!finite(value)) return "–";
+  const rounded = metric === "pace_seconds" ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${de(Math.abs(rounded), metric === "pace_seconds" ? 0 : 1)}`;
 }
 
-function ComparisonChart({ data }: { data: RunComparisonData }) {
-  const ref = useRef<HTMLDivElement>(null), title = useId();
+function DistributionPlot({ data, metric, distribution }: { data: RunCohortComparison; metric: Metric; distribution: RunDistribution }) {
+  const ref = useRef<HTMLDivElement>(null), titleId = useId();
   const [width, setWidth] = useState(600);
   useEffect(() => {
     if (!ref.current) return;
@@ -23,78 +26,96 @@ function ComparisonChart({ data }: { data: RunComparisonData }) {
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
-  const points = useMemo(() => [...data.first.series, ...data.second.series], [data]);
-  const hr = extent(points.map(point => point.hr_bpm).filter(finite), 10, [100, 180]);
-  const paces = points.map(point => point.pace_seconds).filter(finite);
-  const pace = extent(paces.map(value => Math.min(value, 900)), 60, [240, 600]);
-  const end = Math.max(1, ...points.map(point => point.distance_m).filter(finite));
-  const left = 43, right = width - 12, hrTop = 26, hrBottom = 106, paceTop = 148, paceBottom = 228;
-  const x = (distance: number) => left + distance / end * (right - left);
-  const yHr = (value: number) => hrBottom - (value - hr[0]) / (hr[1] - hr[0]) * (hrBottom - hrTop);
-  const yPace = (value: number) => paceTop + (Math.min(value, 900) - pace[0]) / (pace[1] - pace[0]) * (paceBottom - paceTop);
-  function lines(run: ComparedRun, metric: (point: ComparisonPoint) => number | null, project: (value: number) => number, second: boolean) {
-    return comparisonSegments(run.series, metric).map((segment, index) => segment.length === 1
-      ? <circle key={`${run.activity_id}-${index}`} cx={x(segment[0].distance)} cy={project(segment[0].value)} r="1.5" fill={second ? "#9a5b00" : "var(--color-accent)"} />
-      : <path key={`${run.activity_id}-${index}`} d={segment.map((point, i) => `${i ? "L" : "M"}${x(point.distance).toFixed(2)},${project(point.value).toFixed(2)}`).join(" ")} fill="none" stroke={second ? "#9a5b00" : "var(--color-accent)"} strokeWidth="1.7" strokeDasharray={second ? "5 3" : undefined} strokeLinecap="round" strokeLinejoin="round" />);
-  }
+  const points = data.cohort.filter(run => finite(run[metric]));
+  const values = [...points.map(run => run[metric] as number), distribution.selected].filter(finite);
+  if (!values.length) return <p className={styles.note}>Für diese Kennzahl fehlen Messwerte.</p>;
+  const minimum = Math.min(...values), maximum = Math.max(...values);
+  const padding = Math.max((maximum - minimum) * .12, metric === "pace_seconds" ? 5 : 2);
+  const low = minimum - padding, high = maximum + padding;
+  const x = (value: number) => 16 + (value - low) / (high - low) * (width - 32);
+  const pointLanes = new Map<number, number[]>();
+  const dots = points.map(run => {
+    const position = x(run[metric] as number);
+    const bucket = Math.round(position / 11);
+    const neighbours = [bucket - 1, bucket, bucket + 1].flatMap(key => pointLanes.get(key) || []);
+    const lane = [0, -1, 1, -2, 2].find(candidate => !neighbours.includes(candidate)) ?? 0;
+    pointLanes.set(bucket, [...(pointLanes.get(bucket) || []), lane]);
+    return { run, position, lane };
+  });
+  const unit = metric === "pace_seconds" ? "min/km" : "bpm";
   return <div ref={ref} className={styles.chart}>
-    <div className={styles.legend}><span><i />{routeDate(data.first.started_at)} · ausgewählt</span><span><i />{routeDate(data.second.started_at)} · Vergleich</span></div>
-    <svg viewBox={`0 0 ${width} 261`} role="img" aria-labelledby={title}>
-      <title id={title}>Zwei Läufe über gelaufene Kilometer: oben Puls, unten Pace. Ausgewählter Lauf als durchgezogene Teal-Linie, Vergleich als gestrichelte Amber-Linie. Die gleiche Distanz bedeutet nicht automatisch denselben Ort.</title>
-      <text x={left} y="13" className={styles.metricLabel}>Puls · bpm</text><text x={left} y="135" className={styles.metricLabel}>Pace · min/km</text>
-      {[0, .5, 1].map(fraction => <g key={fraction}>
-        <line x1={left} x2={right} y1={hrTop + fraction * (hrBottom - hrTop)} y2={hrTop + fraction * (hrBottom - hrTop)} />
-        <text x={left - 8} y={hrTop + fraction * (hrBottom - hrTop) + 4} textAnchor="end">{de0(hr[1] - fraction * (hr[1] - hr[0]))}</text>
-        <line x1={left} x2={right} y1={paceTop + fraction * (paceBottom - paceTop)} y2={paceTop + fraction * (paceBottom - paceTop)} />
-        <text x={left - 8} y={paceTop + fraction * (paceBottom - paceTop) + 4} textAnchor="end">{paceLabel(pace[0] + fraction * (pace[1] - pace[0]))}</text>
-      </g>)}
-      {lines(data.first, point => point.hr_bpm, yHr, false)}{lines(data.second, point => point.hr_bpm, yHr, true)}
-      {lines(data.first, point => point.pace_seconds, yPace, false)}{lines(data.second, point => point.pace_seconds, yPace, true)}
-      {[0, .25, .5, .75, 1].map(fraction => <text key={fraction} x={x(end * fraction)} y="251" textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{de(end * fraction / 1000, 1)}{fraction === 1 ? " km" : ""}</text>)}
+    <svg viewBox={`0 0 ${width} 76`} aria-labelledby={titleId}>
+      <title id={titleId}>{metric === "pace_seconds" ? "Tempo" : "Durchschnittspuls"}: dieser Lauf {metricLabel(distribution.selected, metric)} {unit}; Median der {distribution.n} Vergleichsläufe {metricLabel(distribution.median, metric)} {unit}. Jeder Kreis ist ein anderer Lauf. Die Raute markiert diesen Lauf.</title>
+      <line x1="16" x2={width - 16} y1="38" y2="38" className={styles.axis} />
+      {distribution.n > 1 && finite(distribution.min) && finite(distribution.max) && <g className={styles.range}>
+        <line x1={x(distribution.min)} x2={x(distribution.max)} y1="38" y2="38" />
+        <line x1={x(distribution.min)} x2={x(distribution.min)} y1="33" y2="43" />
+        <line x1={x(distribution.max)} x2={x(distribution.max)} y1="33" y2="43" />
+      </g>}
+      {distribution.n >= 5 && finite(distribution.q1) && finite(distribution.q3) && <rect x={x(distribution.q1)} y="28" width={Math.max(1, x(distribution.q3) - x(distribution.q1))} height="20" rx="2" className={styles.quartiles}><title>Mittlere 50 %: {metricLabel(distribution.q1, metric)}–{metricLabel(distribution.q3, metric)} {unit}</title></rect>}
+      {finite(distribution.median) && <line x1={x(distribution.median)} x2={x(distribution.median)} y1="23" y2="53" className={styles.median}><title>Median: {metricLabel(distribution.median, metric)} {unit}</title></line>}
+      {dots.map(({ run, position, lane }) => <a key={run.activity_id} href={`/laufen/${run.activity_id}#vergleich`} aria-label={`Lauf vom ${dateLabel(run.started_at)} öffnen: ${metricLabel(run[metric], metric)} ${unit}; ${de(run.overlap_pct, 1)} % Streckenüberdeckung innerhalb ${de0(data.tolerance_m)} m.`} className={styles.runPoint}>
+        <title>{routeDate(run.started_at)} · {metricLabel(run[metric], metric)} {unit} · {de(run.overlap_pct, 1)} % Überdeckung innerhalb {de0(data.tolerance_m)} m</title>
+        <circle cx={position} cy={38 + lane * 7} r="8" fill="transparent" />
+        <circle cx={position} cy={38 + lane * 7} r="3.5" className={styles.dot} />
+      </a>)}
+      {finite(distribution.selected) && <g className={styles.selected}>
+        <line x1={x(distribution.selected)} x2={x(distribution.selected)} y1="16" y2="50" />
+        <path d={`M${x(distribution.selected)},5 l6,6 -6,6 -6,-6 Z`} />
+        <title>Dieser Lauf: {metricLabel(distribution.selected, metric)} {unit}</title>
+      </g>}
+      {[minimum, ...(minimum !== maximum ? [maximum] : [])].map((value, index, ticks) => <text key={value} x={x(value)} y="71" textAnchor={ticks.length === 1 ? "middle" : index === 0 ? "start" : "end"}>{metricLabel(value, metric)}</text>)}
     </svg>
-    <p className={styles.note}>Gleiche Kilometerposition, nicht zwingend derselbe Ort. Lücken und Pausen bleiben getrennt.{paces.some(value => value > 900) ? " Pace über 15:00 /km am unteren Rand begrenzt." : ""}</p>
   </div>;
 }
 
-export function RunComparison({ activityId, candidates }: { activityId: string; candidates: RunInsightCandidate[] }) {
-  const selectId = useId(), headingId = useId();
-  const [selected, setSelected] = useState("");
-  const [reference, setReference] = useState("");
-  useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get("compare") || "";
-    if (/^[0-9]{1,30}$/.test(value) && value !== activityId) { setReference(value); setSelected(value); }
-  }, [activityId]);
-  const selectedId = selected && (selected === reference || candidates.some(candidate => candidate.activity_id === selected)) ? selected : candidates[0]?.activity_id || "";
-  const [data, setData] = useState<RunComparisonData | null>(null), [error, setError] = useState("");
+function DistributionRow({ data, metric }: { data: RunCohortComparison; metric: Metric }) {
+  const distribution = data.metrics[metric];
+  return <div className={styles.metric}>
+    <div className={styles.metricHeader}>
+      <h3>{metric === "pace_seconds" ? "Tempo" : "Ø Puls"}<span>{metric === "pace_seconds" ? "min/km" : "bpm"}</span></h3>
+      <dl className={styles.values}>
+        <div><dt>Dieser Lauf</dt><dd className={styles.currentValue}>{metricLabel(distribution.selected, metric)}</dd></div>
+        <div><dt>Median{distribution.n !== data.cohort.length ? ` · ${distribution.n}` : ""}</dt><dd>{metricLabel(distribution.median, metric)}</dd></div>
+        <div><dt>Abstand <span>{metric === "pace_seconds" ? "s/km" : "bpm"}</span></dt><dd>{differenceLabel(distribution.delta, metric)}</dd></div>
+      </dl>
+    </div>
+    <DistributionPlot data={data} metric={metric} distribution={distribution} />
+  </div>;
+}
+
+export function RunComparison({ activityId }: { activityId: string }) {
+  const headingId = useId();
+  const [data, setData] = useState<RunCohortComparison | null>(null), [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
-    window.addEventListener("milon:data-refresh", refresh);
-    return () => window.removeEventListener("milon:data-refresh", refresh);
+    const events = ["milon:data-refresh", "run-analysis-updated"];
+    events.forEach(event => window.addEventListener(event, refresh));
+    return () => events.forEach(event => window.removeEventListener(event, refresh));
   }, []);
   useEffect(() => {
-    if (!selectedId) return;
     const controller = new AbortController();
     setData(null); setError("");
-    runInsightsApi.compare(activityId, selectedId, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Vergleich konnte nicht geladen werden."); });
+    runInsightsApi.cohort(activityId, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Vergleich konnte nicht geladen werden."); });
     return () => controller.abort();
-  }, [activityId, selectedId, revision]);
-  const current = data?.first.activity_id === activityId && data.second.activity_id === selectedId ? data : null;
-  const result = current?.comparison;
-  const referenceComparison = selectedId === reference;
-  const delta = finite(result?.hr_delta_bpm) ? result.hr_delta_bpm * (referenceComparison ? -1 : 1) : null;
+  }, [activityId, revision]);
+  const current = data?.activity_id === activityId ? data : null;
   return <section className={styles.section} aria-labelledby={headingId}>
-    <header className={styles.header}><div><h2 id={headingId}>Läufe vergleichen</h2><p>Puls & Tempo über die Distanz</p></div>
-      {selectedId && <div className={styles.picker}><label className={styles.label} htmlFor={selectId}>Vergleichslauf</label><select id={selectId} value={selectedId} onChange={event => setSelected(event.target.value)} className={styles.select}>{reference && !candidates.some(candidate => candidate.activity_id === reference) && <option value={reference}>Referenzlauf</option>}{candidates.map(candidate => <option key={candidate.activity_id} value={candidate.activity_id}>{routeDate(candidate.started_at)} · {de(candidate.distance_km, 2)} km · {candidate.similarity_label}</option>)}</select></div>}
+    <header className={styles.header}>
+      <div><h2 id={headingId}>Läufe vergleichen</h2><p>Alle anderen passenden Läufe auf dieser Strecke</p></div>
+      {current && <span className={styles.threshold}>≥ {de0(current.threshold_pct)} % Überdeckung · {de0(current.tolerance_m)} m GPS-Toleranz</span>}
     </header>
-    {!selectedId ? <p className={styles.note}>Noch kein weiterer geeigneter Lauf mit vollständiger Aufzeichnung vorhanden.</p> : <>
-      {error ? <p className={styles.note} role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !current ? <p className={styles.note} role="status">Vergleich wird geladen …</p> : <>
-        {result?.status === "observed" && <div className={styles.result}><div><span>Pulsdifferenz</span><strong>{finite(delta) ? `${delta > 0 ? "+" : ""}${de(delta, 1)}` : "–"} <small>bpm</small></strong></div><p>{referenceComparison ? "Dieser Lauf minus Referenz" : "Vergleich minus ausgewählter Lauf"} · {result.matched_pairs} passende Minutenpaare bei ähnlichem Tempo und Gefälle.{referenceComparison ? " Detailvergleich über den gesamten Lauf; die Referenzkarte begrenzt das Zeitfenster zusätzlich." : ""}</p></div>}
-        <p className={styles.note}>{result?.reason}</p>
-        <ComparisonChart data={current} />
-        <ComparisonWeather key={`${activityId}-${selectedId}-${revision}`} first={activityId} second={selectedId} />
-        <details className={styles.method}><summary>So wird verglichen</summary><p className={styles.note}>{result?.method}</p></details>
-      </>}
+    {error ? <p className={styles.note} role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !current ? <p className={styles.note} role="status">Passende Strecken werden verglichen …</p> : <>
+      {current.status === "ready" ? <>
+        <p className={styles.scope}><strong>{de0(current.cohort.length)} {current.cohort.length === 1 ? "Vergleichslauf" : "Vergleichsläufe"}</strong>{current.period_start && current.period_end && <span>{dateLabel(current.period_start)}{current.period_start.slice(0, 10) !== current.period_end.slice(0, 10) ? `–${dateLabel(current.period_end)}` : ""}</span>}<span>{current.sensor_label}</span></p>
+        <div className={styles.legend} aria-hidden="true"><span><i className={styles.selectedKey} />Dieser Lauf</span><span><i className={styles.dotKey} />Andere Läufe</span><span><i className={styles.medianKey} />Median</span>{Math.max(current.metrics.pace_seconds.n, current.metrics.avg_hr.n) >= 5 && <span><i className={styles.quartileKey} />Mittlere 50 %</span>}</div>
+        <DistributionRow data={current} metric="pace_seconds" />
+        <DistributionRow data={current} metric="avg_hr" />
+        {current.cohort.length < 5 && <p className={styles.note}>{current.cohort.length === 1 ? "Erst ein Vergleichslauf: noch keine Streuung ablesbar." : "Noch wenige Wiederholungen: Einzelwerte und gesamte Spanne, kein Quartilband."}</p>}
+        <p className={styles.note}>Abstand = dieser Lauf minus Median. Tempo und Puls gemeinsam lesen; Wetter und Trainingsziel wirken mit.</p>
+      </> : <p className={styles.empty}>{current.reason || "Noch kein anderer Lauf erfüllt die Streckenübereinstimmung."}</p>}
+      <details className={styles.method}><summary>So wird verglichen</summary><p>{current.method}</p><p>{de0(current.tolerance_m)} m GPS-Toleranz · {current.sensor_label}{current.sensor_since ? ` seit ${dateLabel(current.sensor_since)}` : ""}. Alle gespeicherten passenden Läufe, auch nach dem ausgewählten Datum; dieser Lauf selbst bleibt aus der Verteilung ausgeschlossen.</p></details>
     </>}
   </section>;
 }

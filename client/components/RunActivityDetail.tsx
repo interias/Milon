@@ -156,7 +156,7 @@ function ActivityContent({ data, route, insights, insightsError }: { data: Garmi
     {visibleDynamics.length > 0 ? <dl className={styles.dynamics}>{visibleDynamics.map(([label, value, unit, decimals]) => <div key={label}><dt>{label}</dt><dd>{de(value, decimals)} <span>{unit}</span></dd></div>)}</dl> : <p className={styles.note}>Für diesen Lauf sind keine Laufdynamik-Werte verfügbar.</p>}
     </section>
     </div>
-    <div id="vergleich">{insights?.available && <RunComparison key={data.activity_id} activityId={data.activity_id} candidates={insights.candidates} />}</div>
+    <div id="vergleich">{insights?.available && <RunComparison key={data.activity_id} activityId={data.activity_id} />}</div>
     <details className={styles.details}><summary>Datenbasis <span>{de0(data.quality.points)} Messpunkte</span></summary>
       <p className={styles.note}>Zeitabdeckung: Puls {de0(data.quality.hr_coverage * 100)} % · Tempo {de0(data.quality.speed_coverage * 100)} % der aktiven Dauer. Das Diagramm zeigt eine ausgedünnte Darstellung; für die Analyse bleibt die vollständige Aufzeichnung gespeichert.</p>
       {!data.quality.complete && <p className={styles.note}>Die Aufzeichnung ist unvollständig. Fehlende Werte bleiben als Lücken sichtbar.</p>}
