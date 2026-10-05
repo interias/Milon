@@ -5,8 +5,8 @@
 <h1 align="center">Milon</h1>
 
 <p align="center">
-  <strong>Local-first personal fitness dashboard with an LLM coach.</strong><br>
-  Eine Frage im Zentrum: <em>„Wo werde ich besser, wo schlechter?"</em>
+  <strong>Lokales Fitness-Dashboard mit optionalem LLM-Coach.</strong><br>
+  Eine Frage im Zentrum: <em>„Wo werde ich besser, wo schlechter?“</em>
 </p>
 
 <p align="center">
@@ -15,253 +15,255 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/Backend-FastAPI-0a6e66">
   <img alt="Next.js 16" src="https://img.shields.io/badge/Frontend-Next.js%2016-0a6e66">
   <img alt="SQLite" src="https://img.shields.io/badge/DB-SQLite-0a6e66">
-  <img alt="MCP" src="https://img.shields.io/badge/MCP-20%20Tools-0a6e66">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-verfügbar-0a6e66">
 </p>
 
----
+## Was ist Milon?
 
-## Was macht das Projekt?
+Milon verbindet **Garmin Connect**, **Health Connect**, **Hevy** und **FDDB** in einer
+lokalen SQLite-Datenbank. Körperentwicklung, Lauffitness und Kraftfortschritt stehen
+im Mittelpunkt; Ernährung, Erholung und ein freiwilliger Check-in liefern Kontext.
+UI und Dokumentation sind deutsch, Code und Identifier englisch.
 
-**Milon** zieht deine über viele Apps verstreuten Fitnessdaten an **einem** Ort zusammen —
-Körperdaten, Schritte, Laufen & Radfahren (Health Connect), Krafttraining (**Hevy**) und
-Ernährung (**FDDB**) — und beantwortet die eine Frage, die zählt: *werde ich besser oder
-schlechter?* Vier Bereiche (**Körper · Laufen · Kraft** + ein **LLM-Coach**) zeigen Trends,
-Prognosen und ehrliche Auswertungen.
+Die Anwendung und ihre Auswertungen laufen lokal. Eingerichtete Datenquellen werden
+über das Internet synchronisiert. Der **optionale Cloud-Coach** übermittelt Fragen,
+persönlichen Kontext und ausgewählte Kennzahlen an OpenRouter und den Modellanbieter.
+Details stehen unter [Datenschutz und Betrieb](#datenschutz-und-betrieb).
 
-Alles läuft **lokal** auf dem eigenen Rechner — die Gesundheitsdaten verlassen die Maschine nie.
-UI deutsch, Code englisch. Bewusst schlank.
+## Funktionen
 
-<p align="center">
-  <img src="docs/domains.png" alt="Körper · Laufen · Kraft" width="560">
-</p>
-
-## Screenshots
-
-<p align="center">
-  <img src="docs/screenshot-kraft.png" alt="Kraft-Analyse: Gesamtstärke-Index und Stärke ↔ Energiebilanz" width="780"><br>
-  <sub><b>Kraft-Analyse</b> — drift-freier Gesamtstärke-Index, Stärke ↔ Energiebilanz, Tonnage & RPE.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshot-overview.png" alt="Trainings-Konsistenz-Heatmap mit Streak" width="780"><br>
-  <sub><b>Trainings-Konsistenz</b> (Übersicht) — GitHub-Style-Heatmap über 365 Tage + aktueller Streak.</sub>
-</p>
-
-## Welche Funktionen bietet es?
-
-| Bereich | Highlights |
+| Bereich | Aktueller Funktionsumfang |
 |---|---|
-| **Übersicht** | Wochenvergleich (rollierende 7 Tage), Konsistenz-Heatmap + Streak, PR-Trophäen, letzte Aktivitäten |
-| **Körper** | Gewichts-/KFA-Trends (roh · 7-Tage · EWMA), **adaptives TDEE**, Magermasse/Recomp, Komposition-Prognose |
-| **Ernährung** | kcal **+ Makros** (Protein/KH/Fett), Protein Ø/Tag vs. Ziel, Defizit vs. TDEE |
-| **Gesundheit** | Schritte (Galaxy-Watch-genau), Radfahren |
-| **Laufen** | Wochenvolumen, Pace-Trend, VO₂max |
-| **Kraft** | alle Übungen nach Muskelgruppe, e1RM/Tonnage/RPE, Übungs-Detailseiten, **drift-freier Gesamtstärke-Index**, **Stärke ↔ Energiebilanz** |
-| **Fortschritt** | Foto-Timeline mit Browser-Crop (3:4) + Silhouetten-/Pose-Schablonen |
-| **Coach** | LLM-Coach mit **Tool-Calling** (ruft die echten Kennzahlen selbst ab) + Kosten/Token-Statistik |
-| **Einstellungen** | Keys maskiert, Modellwahl, Scheduler-Toggle |
+| **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, Wochenbilanz, Konsistenz, freiwilliger kurzer Check-in |
+| **Körper** | Gewichtstrends, TDEE und Energiebilanz, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, konfigurierbare Einzeltrends und Messjournal |
+| **Laufen** | Wochenvolumen, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
+| **Einzelne Läufe** | Eigene Detailseite: Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und Vergleich zweier Läufe |
+| **Gesundheit** | Schritte, Radfahren, Schlaf, HRV, Garmin-Erholungswerte, Zusammenhänge zwischen Erholung und Leistung sowie Quellen- und Importstatus |
+| **Kraft** | Übungen nach Muskelgruppe, Detailseiten, e1RM, Tonnage, RPE, Gesamtstärke-Index und Zusammenhang mit der Energiebilanz |
+| **Ernährung** | Kalorien, Makros, Proteinziel und Defizit gegenüber dem geschätzten TDEE |
+| **Fortschritt** | Foto-Timeline, Zuschnitt, mehrere Ansichten und Silhouetten als Aufnahmehilfe |
+| **Coach** | Kurze Antworten mit echten Kennzahlen, persönliche Ziele, lokale Diagramme, Berichte, Kostenübersicht und ausdrücklich angeforderte Bildgenerierung |
 
-Zwei analytische Schmuckstücke:
+Die Laufdetails öffnen über **Laufen → Gelaufene Strecken → Laufdetails** eine eigene
+Adresse `/laufen/<Garmin-Aktivitäts-ID>`. Die wichtigsten Einordnungen stehen oben;
+die Analysen darunter sind direkt sichtbar. Methodik und Datenbasis bleiben einklappbar.
 
-- **Gesamtstärke-Index** — *ein* Wert für „werde ich insgesamt stärker?". Wöchentlich aufgelöst und
-  **drift-frei**: ein monatlicher, muskel-balancierter, verketteter e1RM-Index als Rückgrat plus eine
-  monatsverankerte Wochenspur (Methodik per Design-Panel validiert & adversarial reviewed).
-- **Stärke ↔ Energiebilanz** — korreliert den Index mit TDEE/Defizit und sagt *ehrlich*, was belastbar
-  ist (Woche-zu-Woche ≈ 0) und was nur Schein-Trend (Niveau-Korrelation), plus ein Phasen-Read (Cut/Recomp).
+Auswertungen kennzeichnen fehlende Daten und Unsicherheit. Sensorwechsel werden
+berücksichtigt; ältere Werte werden nicht als aktuelle Fitness ausgegeben. Ein
+niedriger Trainingsreiz ist nicht automatisch schlecht, eine Korrelation kein
+Kausalnachweis. Körperumfänge werden nicht in einen vermeintlich exakten KFA umgerechnet.
 
-## Wie ist die Architektur aufgebaut?
+### Design
 
-„Eine Abfrageschicht, drei Gesichter": die `metrics/`-Funktionen sind die einzige Wahrheit und
-speisen REST, den Coach **und** den MCP-Server — alle lesen dieselbe lokale SQLite-DB.
+„Klar & Klinisch“: Teal, ruhige Karten, Inter / Inter Tight und abstrakte Sportler-Silhouetten.
+Die folgenden Bilder zeigen frühere Ansichten; der heutige Funktionsumfang ist größer.
+
+<p align="center">
+  <img src="docs/screenshot-kraft.png" alt="Frühere Kraft-Ansicht mit Gesamtstärke-Index und Energiebilanz" width="780"><br>
+  <img src="docs/screenshot-overview.png" alt="Frühere Übersicht mit Konsistenz-Heatmap" width="780">
+</p>
+
+## Datenquellen und ihre Aufgaben
+
+| Quelle | Verwendung | Anbindung |
+|---|---|---|
+| **Garmin Connect** | Laufstrecken, Puls-/Temporeihen, Runden, Laufdynamik und Trainingswirkung; Schritte, Schlaf, HRV, VO₂max und verfügbare Erholungswerte | Direkter Import über die **inoffizielle** Bibliothek `garminconnect`, lokale Sitzung erforderlich |
+| **Health Connect** | Arboleaf-Gewicht und Waagen-KFA, historische Samsung-Daten und weitere unterstützte Exportdaten | Entpackte SQLite-Exportdatei oder optional täglicher Drive-Pull |
+| **Hevy** | Gym-Workouts mit Sätzen, Gewichten, Wiederholungen und RPE | [Hevy-API](https://api.hevyapp.com/docs/), `HEVY_API_KEY` |
+| **FDDB** | Kalorien und Makros | Zugangsdaten für Auto-Login oder vorhandener `fddb`-Cookie |
+| **Manuelle Eingaben** | Körperumfänge, Fortschrittsfotos, Check-ins und persönliche Ziele | Direkt in Milon |
+
+Die Quellen sind optional. Bei eingerichteter Garmin-Quellenumschaltung haben
+vollständige Garmin-Läufe sowie geeignete Schritte-, Schlaf- und VO₂max-Daten ab
+dem Stichtag Vorrang. Gespiegelte HC-Aktivitäten werden abgeglichen; historische
+Daten bleiben erhalten. **Garmin-Ruhepuls bleibt getrennt** vom bisherigen HC-Wert,
+da Definition und zeitliche Zuordnung noch nicht abschließend übereinstimmen.
+Arboleaf bleibt über Health Connect angebunden, Kraft über Hevy und Ernährung über FDDB.
+
+## Schnellstart mit Docker
+
+Voraussetzung: Docker mit Compose, unter Windows beispielsweise Docker Desktop.
+Im Hauptverzeichnis eine `server/.env` aus der Vorlage anlegen, falls noch keine existiert:
+
+```powershell
+if (-not (Test-Path server/.env)) { Copy-Item server/.env.example server/.env }
+docker compose up -d --build
+```
+
+Anschließend **http://localhost** öffnen, im vertrauten Heimnetz `http://<PC-IP>`.
+Die API ist über `/api` erreichbar, ihr Schema unter `/api/openapi.json`.
+
+- Nur das Frontend veröffentlicht einen Port: **80**, über `WEB_PORT` in der Root-`.env` änderbar.
+- Das Backend ist ausschließlich im Compose-Netz auf Port 8000 erreichbar.
+- `data/` und `server/.env` liegen als Volumes auf dem Host. DB, Fotos, Coach-Bilder
+  und Garmin-Sitzung bleiben bei einem Rebuild erhalten.
+- Nach Änderungen: `docker compose up -d --build`. Ein vorheriges `down` ist unnötig.
+- Status: `docker compose ps`; Logs: `docker compose logs --tail 50`.
+
+Das Proxy-Ziel wird beim Frontend-Build eingebaut (`API_PROXY_TARGET=http://server:8000`).
+Bei Änderungen an Code oder Zieladresse ist ein Rebuild erforderlich.
+
+### Konfiguration
+
+| Datei | Wichtige Einstellungen |
+|---|---|
+| `server/.env` | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `HEVY_API_KEY`, `FDDB_USER` / `FDDB_PW` oder `FDDB_COOKIE`, optional `HC_DRIVE_FILE_ID` |
+| `server/.env` | `WATCH_SOURCE_SWITCH_DATE`, `WATCH_SOURCE_PACKAGE` und historische `STEPS_SOURCE_PACKAGE`; `BODY_SOURCE_PACKAGE` für die Waagenquelle; `RUN_HR_MAX` für Milons Zonen |
+| `server/.env` | Optional `DATABASE_URL`, `SCHEDULER_ENABLED`, `TIMEZONE` (Default `Europe/Berlin`) |
+| `data/garmin/.env` | `GARMIN_SESSION_B64` mit der lokal erzeugten Garmin-Sitzung |
+| `.env` im Hauptverzeichnis | Optional `WEB_PORT`; `OPENAI_API_KEY` nur für separate Design-Asset-Werkzeuge |
+| `client/.env` | Nur lokale Entwicklung: optional `NEXT_PUBLIC_API_URL`; normalerweise bleibt der relative `/api`-Proxy aktiv. Docker übernimmt diese Datei nicht. |
+
+Die Vorlage verwendet derzeit `openai/gpt-6-luna` als Coach-Modell. Modell, API-Key
+und persönliche Coach-Ziele lassen sich in den Einstellungen ändern. Ein OpenRouter-Key
+ist nur für Coach-Funktionen nötig, nicht für die lokalen Kennzahlen.
+Die vollständigen Defaults stehen in [config.py](server/app/config.py).
+
+### Garmin verbinden und aktualisieren
+
+Der Importer verwendet eine bereits authentifizierte Sitzung in `data/garmin/.env`.
+`GARMIN_SESSION_B64` enthält Base64-kodiertes JSON mit `di_token`, `di_refresh_token`
+und `di_client_id`. Das ist **keine Verschlüsselung**; die Datei ist ein Zugangsschlüssel.
+Erneuerte Tokens werden atomar gespeichert, ein Garmin-Passwort speichert Milon nicht.
+
+**Einrichtungsstand:** Das Repository enthält derzeit keinen Erstlogin-Assistenten
+und keinen Login-CLI-Befehl. Die Sitzung muss außerhalb der App erzeugt werden.
+Die technische Grundlage und Grenzen beschreibt die
+[Garmin-Recherche](docs/research/garmin-direct-data.md); das erwartete Format steht im
+[Importer](server/app/ingest/garmin.py). Die Anbindung nutzt Garmin-Consumer-Dienste,
+nicht das offizielle Garmin-Entwicklerprogramm.
+
+Mit vorhandener Sitzung: **Garmin aktualisieren** auf der Laufseite oder **Daten
+aktualisieren** im Menü. Per API im Docker-Betrieb:
+
+```powershell
+curl.exe -X POST http://localhost/api/ingest/garmin
+```
+
+Die Uhr muss zuvor mit Garmin Connect synchronisiert haben. Der Erst-/Vollabruf
+prüft höchstens 1.000 Laufaktivitäten, Folgeabrufe die letzten 30. Neue Tagesdaten
+werden ab dem konfigurierten Uhrenwechsel zunächst über maximal 90 Tage eingelesen.
+Verfügbarkeit einzelner Werte hängt von Aufzeichnung, Gerät und Garmin ab.
+Für die Garmin-Quellenumschaltung `WATCH_SOURCE_PACKAGE` auf
+`com.garmin.android.apps.connectmobile` setzen und unter `WATCH_SOURCE_SWITCH_DATE`
+das tatsächliche Wechseldatum im Format `YYYY-MM-DD` eintragen.
+
+### Health Connect importieren
+
+Beim manuellen Weg die Export-ZIP **entpacken** und die Datei als
+`data/incoming/health_connect_export.db` ablegen. Eine unbearbeitete ZIP in diesem
+Ordner reicht nicht aus. Danach im Menü aktualisieren oder:
+
+```powershell
+curl.exe -X POST http://localhost/api/ingest/health-connect
+```
+
+Der optionale Drive-Pull lädt eine freigegebene Export-ZIP über `HC_DRIVE_FILE_ID`,
+entpackt und importiert sie. Die Freigabe macht Gesundheitsdaten für Personen mit
+dem Link zugänglich. Die Datei-ID muss stabil bleiben; ein täglich neu angelegtes
+Drive-Dokument wird nicht automatisch anhand seines Namens gefunden.
+Milon liest Health Connect weiterhin über diesen Export, nicht direkt vom Android-Gerät.
+
+### Automatische Aktualisierung
+
+Bei aktiviertem Scheduler gelten folgende Intervalle in der konfigurierten Zeitzone:
+
+| Quelle | Zeitplan |
+|---|---|
+| Garmin | Prüfung alle 15 Minuten; Tageswerte höchstens stündlich, manueller Refresh sofort |
+| Hevy | Alle 6 Stunden |
+| FDDB | Täglich 04:30 |
+| Health Connect, lokale Datei | Prüfung alle 10 Minuten bei neuer Datei |
+| Health Connect, Drive | Täglich 05:00, wenn eingerichtet |
+
+`POST /api/ingest/refresh` aktualisiert alle eingerichteten Quellen. Importe gleichen
+vorhandene Datensätze ab; `?full=true` erzwingt eine weitergehende Reconciliation im
+jeweiligen Importumfang. Die Quellenübersicht auf **Gesundheit** trennt letzten
+Abrufversuch, erfolgreichen Abruf und neuestes Messdatum.
+
+## Lokal entwickeln
+
+Voraussetzungen: Python 3.12 oder neuer und Node.js 22. `server/.env` wie oben anlegen.
+Unter Windows in zwei Terminals:
+
+```powershell
+cd server
+python -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+```powershell
+cd client
+npm ci
+npm run dev
+```
+
+Unter Linux/macOS heißen die Python-Pfade `.venv/bin/python`. Das Dashboard läuft im
+Dev-Modus unter http://localhost:3000 und leitet `/api` an Port 8000 weiter.
+Die interaktive API-Dokumentation läuft dann direkt unter http://localhost:8000/docs.
+VS Code bietet dafür den Task **Start: Server + Client**.
+
+Prüfungen: im Serververzeichnis `.venv/Scripts/python -m pytest`, im Clientverzeichnis
+`npm test`, `npx tsc --noEmit` und `npm run build`.
+
+## Architektur und MCP
 
 ```mermaid
 flowchart LR
-  HC["Health Connect"] --> ING
+  GC["Garmin Connect"] --> ING
+  HC["Health Connect Export"] --> ING
   HV["Hevy API"] --> ING
   FD["FDDB"] --> ING
-  ING["ingest/ (inkrementell)"] --> DB[("SQLite · data/tracker.db")]
-  DB --> M["metrics/ Schicht"]
-  M --> REST["REST /metrics/*"]
-  M --> CO["LLM-Coach (Tool-Calling)"]
-  M --> MCP["MCP-Server (20 Tools)"]
+  ING["Import und Quellenabgleich"] --> DB[("Lokale SQLite-DB")]
+  MAN["Körpermaße und Check-ins"] --> DB
+  DB --> M["Gemeinsame metrics-Schicht"]
+  M --> REST["REST API"]
   REST --> UI["Next.js Dashboard"]
+  M --> CO["Optionaler Coach / OpenRouter"]
+  M --> MCP["MCP-Server"]
 ```
 
-- **Backend** `server/` — FastAPI · SQLModel/SQLite · pandas/numpy · APScheduler · FastMCP · OpenAI-SDK (OpenRouter)
-- **Frontend** `client/` — Next.js 16 (App Router, TS) · Tailwind v4 · Inline-SVG-Charts (keine Chart-Lib)
-- **Coach** — OpenRouter (OpenAI-kompatibel), Context-Injection **und** Tool-Calling
-- **Design** `design/` — Studie „Klar & Klinisch" + gpt-image-2-Asset-Tooling
+FastAPI, SQLModel, pandas/numpy und APScheduler bilden das Backend. Das Frontend
+verwendet Next.js mit App Router, TypeScript, Tailwind v4 und lokalen SVG-Diagrammen.
+REST, Coach und MCP greifen auf dieselben Metrikfunktionen zu.
 
-## Welche Datenquellen können angebunden werden?
+Der MCP-Server startet im Serververzeichnis mit `.venv/Scripts/python -m app.mcp.server`
+über stdio (Linux/macOS: `.venv/bin/python -m app.mcp.server`).
+Er läuft außerhalb von Docker und liest dieselbe lokale Datenbank. Die
+[.mcp.json](.mcp.json) und das [Desktop-Beispiel](server/app/mcp/claude_desktop_config.example.json)
+enthalten installationsspezifische absolute Pfade; vor Verwendung anpassen.
 
-| Quelle | Was | Wie / benötigte API |
-|---|---|---|
-| **Health Connect** (Android) | Gewicht, KFA, Schritte, Laufen, Radfahren, VO₂max | **automatischer Drive-Pull** der täglichen Export-Zip (öffentlicher Datei-Link → `HC_DRIVE_FILE_ID`, keylos via `gdown`) **oder** Zip manuell nach `data/incoming/` legen |
-| **Hevy** | Krafttraining (Sätze, Gewicht, Reps, RPE) | offizielle [Hevy-API](https://api.hevyapp.com/docs/) (`HEVY_API_KEY`), echter Inkrement-Sync via `/v1/workouts/events` |
-| **FDDB** | Ernährung (kcal + Makros) | Login-Cookie **`fddb`** (oder Auto-Login mit `FDDB_USER`/`FDDB_PW`), CSV-Export |
-| **OpenRouter** | LLM-Coach | OpenAI-kompatibler Endpunkt (`OPENROUTER_API_KEY`, Modell frei wählbar) |
-
-Alle Quellen sind **optional** — Milon läuft auch nur mit einer davon. Importe sind idempotent
-(`?full=true` erzwingt eine Voll-Reconciliation).
-
-## Wie erfolgt die Einrichtung?
-
-### 1) Secrets anlegen
-
-Vorlagen kopieren und echte Werte eintragen — die echten `.env` werden **nie** committet (gitignored):
-
-```bash
-cp .env.example .env                 # OPENAI_API_KEY (nur Design-Asset-Generierung)
-cp server/.env.example server/.env   # App-Secrets (siehe Tabelle)
+```text
+server/   API, Importe, Metriken, Coach, MCP und Scheduler
+client/   Dashboard, Detailseiten und gemeinsame UI-Komponenten
+design/   Design-Referenzen, Silhouetten und Asset-Werkzeuge
+data/     DB, Exporte, Fotos, Coach-Bilder und Garmin-Sitzung; gitignored
+docs/     Dokumentation, Recherche und README-Bilder
 ```
 
-| Datei | Variable | Zweck |
-|---|---|---|
-| `server/.env` | `OPENROUTER_API_KEY` | LLM-Coach (OpenRouter) |
-| | `OPENROUTER_MODEL` | Modell-ID, z. B. `deepseek/deepseek-v4-flash` |
-| | `HEVY_API_KEY` | Hevy-Krafttraining-Sync |
-| | `FDDB_USER` / `FDDB_PW` | FDDB-Auto-Login (Ernährung) |
-| | `FDDB_COOKIE` | alternativ: `fddb`-Cookie (`userid,token`) |
-| | `HC_DRIVE_FILE_ID` | Health-Connect-Auto-Pull: Datei-ID aus dem Drive-Freigabelink der Export-Zip |
-| | `DATABASE_URL` | optional, Default `sqlite:///./data/tracker.db` |
-| `.env` (Root) | `OPENAI_API_KEY` | nur für gpt-image-2-Design-Assets |
-| `client/.env` | `NEXT_PUBLIC_API_URL` | optional (Default: `/api`-Proxy) |
+## Datenschutz und Betrieb
 
-### 2) Backend (FastAPI)
+- Gesundheitsdaten und Zugangsdaten unter `data/` sowie `.env`-Dateien werden nicht committet.
+  Ein lokales Backup sollte neben der DB auch Fotos und Konfiguration umfassen und geschützt sein.
+- Eingerichtete Syncs kontaktieren Garmin, Hevy, FDDB und gegebenenfalls Google Drive.
+- Der optionale Coach sendet Fragen, Kontext und ausgewählte Metriken/Tool-Ergebnisse
+  an OpenRouter und den gewählten Modellanbieter. Prompts und Antworten werden lokal gespeichert.
+- Coach-Diagramme werden aus validierten lokalen Daten gerendert, nicht aus beliebigem
+  Modell-HTML. Explizit angeforderte Bilder verwenden OpenRouter und den Motivprompt.
+- GPS-Strecken werden lokal ohne externe Kartenkacheln dargestellt; Coach-Tools geben
+  keine GPS-Koordinaten aus. Ein angeschlossener MCP-Client erhält die angefragten Metriken.
+- Milon hat keine Nutzeranmeldung. Das Setup ist für den eigenen Rechner und ein
+  vertrautes Heimnetz gedacht; öffentlicher Betrieb braucht zusätzlichen Zugriffsschutz.
 
-```bash
-cd server
-python -m venv .venv && .venv/Scripts/pip install -e .   # Linux/Mac: .venv/bin/pip
-.venv/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000   # Docs: /docs
-```
+## Weiterführendes
 
-### 3) Frontend (Next.js)
-
-```bash
-cd client
-npm install && npm run dev          # http://localhost:3000
-```
-
-In VS Code gibt es fertige Tasks (`Start: Server + Client`, `Design: HTML-Server`). Das Handy
-erreicht das Dashboard im Heim-WLAN über `http://<PC-IP>:3000` — das Frontend proxyt `/api/*`
-serverseitig ans Backend (kein CORS, keine Firewall-Freigabe für `:8000` nötig).
-
-### 4) Daten importieren
-
-```bash
-curl -X POST http://localhost:8000/ingest/hevy            # Hevy
-curl -X POST http://localhost:8000/ingest/fddb            # FDDB
-# Health Connect aus Google Drive ziehen (HC_DRIVE_FILE_ID gesetzt):
-curl -X POST http://localhost:8000/ingest/health-connect-pull
-# ...oder die Export-Zip manuell nach data/incoming/ legen und:
-curl -X POST http://localhost:8000/ingest/health-connect
-curl -X POST "http://localhost:8000/ingest/refresh"       # alle Quellen + Status
-```
-
-Ab Phase 2 erledigt das ein **Scheduler** automatisch (Hevy alle 6 h, FDDB täglich, HC-Drive-Pull
-täglich 05:00 + Ordner-Scan). Für den **Drive-Pull**: die Export-Zip in Drive auf „Jeder mit dem
-Link" freigeben, den Datei-Link kopieren und die ID daraus als `HC_DRIVE_FILE_ID` in `server/.env`.
-
-### 5) Alternativ: Docker (docker-compose)
-
-Statt Backend und Frontend einzeln zu starten, gibt es ein schlankes Zwei-Container-Setup für
-**Docker Desktop**. Voraussetzung: `server/.env` existiert (siehe Schritt 1).
-
-```bash
-docker compose up -d --build      # baut & startet server + client
-docker compose logs -f            # Logs verfolgen
-docker compose down               # stoppen
-```
-
-Aufruf danach: **`http://localhost`** (Port 80). Im Heim-WLAN erreicht das Handy das Dashboard über
-`http://<PC-IP>` — z. B. `http://192.168.0.26`.
-
-- **Nur das Frontend ist von außen erreichbar.** Der FastAPI-Server hat **keinen** Host-Port; er lebt
-  nur im internen Compose-Netz (Servicename `server`) und wird vom Frontend serverseitig unter `/api/*`
-  angesprochen. Die Host-Ports **3000 und 8000 bleiben frei** für andere Projekte.
-- **Frontend-Port** ist per `WEB_PORT` überschreibbar (z. B. `WEB_PORT=8080` in einer `.env` im
-  Repo-Root, falls Port 80 belegt ist).
-- **Persistenz:** `data/` (SQLite-DB, `incoming/`, Fortschritts-Fotos) und `server/.env` sind als
-  Volumes gemountet — Daten und Secrets überleben Rebuilds; die Settings-Seite schreibt nach `server/.env` zurück.
-- **RAM:** ~150 MB im Leerlauf (Server ~110 MB, Client ~35 MB), kurze Spitzen beim großen
-  Health-Connect-Import. Das Grundrauschen von Docker Desktop selbst (WSL2-VM, ~1–2 GB) kommt hinzu.
-- Der **MCP-Server** läuft nicht im Container — er liest `data/tracker.db` direkt und wird über
-  `.mcp.json` gestartet (siehe Beispiel-Workflows).
-
-> Der Next-Rewrite-Proxy backt sein Backend-Ziel zur **Build-Zeit** ein; das Compose reicht es daher
-> als Build-Arg `API_PROXY_TARGET=http://server:8000` durch. Wer den Server unter anderem Namen/Port
-> fährt, baut den Client neu (`docker compose up -d --build client`).
-
-### Update: laufende Container auf den neuesten Code bringen
-
-Nach Code-Änderungen (z. B. `git pull`) genügt **ein** Befehl im Repo-Root:
-
-```bash
-docker compose up -d --build      # Images neu bauen + nur geänderte Container ersetzen
-```
-
-Das baut beide Images aus dem aktuellen Code und tauscht danach **nur die Container aus, deren
-Image sich geändert hat** — ein `docker compose down` vorher ist unnötig (kostet nur Downtime).
-Danach kurz prüfen:
-
-```bash
-docker compose ps                        # beide "Up", server "(healthy)"?
-docker compose logs -f --tail 50         # frische Logs ansehen (Strg+C beendet nur die Anzeige)
-```
-
-Gut zu wissen:
-
-- **Daten & Secrets überleben jedes Update** — `data/` (DB, Fotos, incoming) und `server/.env`
-  liegen als Volumes auf dem Host, nicht im Image.
-- **Frontend-Änderungen brauchen immer den Rebuild** (`--build`): Next.js backt zur Build-Zeit
-  alles ein. Ein bloßer Neustart des Containers zeigt weiterhin den alten Stand.
-- Nach dem Update im Browser ggf. **hart neu laden** (Strg+F5), falls noch der alte Build im
-  Cache hängt.
-- Nur einen Dienst aktualisieren: `docker compose up -d --build server` bzw. `... client`.
-- Bei verdächtigem Build-Cache: `docker compose build --no-cache && docker compose up -d`.
-- Alte, ersetzte Image-Schichten gelegentlich aufräumen: `docker image prune -f`.
-
-## Beispiel-Workflows
-
-- **Frag deine Daten:** Reiter *Coach* → „Wie ist mein Kraft-Trend diese Woche?" — der Coach ruft
-  per Tool-Calling die echten Kennzahlen ab und antwortet ehrlich-motivierend (Markdown).
-- **Täglicher/Wöchentlicher Report:** ein Klick erzeugt einen kompakten Lagebericht; Kosten/Token
-  werden je Report mitgeschrieben.
-- **Stärke über Zeit:** Reiter *Kraft* → Gesamtstärke-Index mit Umschalter 1M/3M/6M/12M, dazu die
-  Treiber-/Bremse-Übungen und die Stärke-↔-Energiebilanz-Karte.
-- **Aus Claude/Cursor heraus (MCP):** der MCP-Server (`python -m app.mcp.server`, registriert über
-  `.mcp.json`) exponiert 20 Tools über dieselbe Datenschicht — die Fitnessdaten lassen sich so direkt
-  im Editor/Chat befragen.
-
-## Projektstruktur
-
-```
-server/   FastAPI: ingest/ · metrics/ · coach/ · mcp/ · sync/ · api/
-client/   Next.js: app/ (9 Seiten) · components/ · lib/
-design/   „Klar & Klinisch"-Studie + Foto-Schablonen + Asset-Tooling
-data/     tracker.db + incoming/ (lokal, gitignored)
-docs/     README-Bilder
-docker-compose.yml · server/Dockerfile · client/Dockerfile   schlankes Container-Setup
-```
-
-## Sicherheit & Privatsphäre
-
-- **Secrets** liegen ausschließlich in `.env` (jede Ebene gitignored); committet werden nur die
-  `*.env.example`-Vorlagen mit **leeren** Platzhaltern.
-- **Gesundheitsdaten** (`data/`, `*.db`, Fortschritts-Fotos) sind gitignored und werden **nie** committet.
-- Local-first: keine Cloud, keine Telemetrie. Der einzige ausgehende Aufruf ist der LLM-Coach
-  (OpenRouter) — und nur, wenn du ihn nutzt.
+[ARCHITECTURE.md](ARCHITECTURE.md) beschreibt Methoden, Datenmodell und Quellenregeln.
+[AGENTS.md](AGENTS.md) hält die Arbeitskonventionen fest. Ideen für weitere Schritte:
+[Laufen](docs/research/running-next-steps.md) und
+[Körperentwicklung, Erholung und Coach](docs/research/fitness-next-steps.md).
+Diese Recherchevorschläge sind noch keine implementierten Funktionen.
 
 ## Lizenz
 
-Veröffentlicht unter der **[CC0 1.0 Universal](LICENSE)** Public-Domain-Dedication — gemeinfrei,
-ohne Gewährleistung. Du darfst alles damit machen: nutzen, ändern, weitergeben, auch kommerziell,
-ohne Namensnennung. (Marken-/Patentrechte sind davon nicht berührt.)
-
-## Status
-
-Phasen **1–3** umgesetzt: Ingest (inkl. Health-Connect-Auto-Pull aus Google Drive) + Metriken +
-Dashboards · Auto-Syncs (Scheduler) · MCP-Server. **Phase 4** (Hosting) angefangen: schlankes
-`docker-compose`-Setup für Docker Desktop (nur das Frontend nach außen, Server intern).
-
-<sub>Source of Truth für Architektur & Plan: <code>ARCHITECTURE.md</code>. Projekt-Memory: <code>CLAUDE.md</code>.</sub>
+[CC0 1.0 Universal](LICENSE): frei nutzbar, veränderbar und weitergebbar, ohne Gewährleistung.
