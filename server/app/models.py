@@ -223,6 +223,7 @@ class SyncState(SQLModel, table=True):
 
     source: str = Field(primary_key=True)
     last_sync: Optional[datetime] = None
+    last_success_at: Optional[datetime] = None
     cursor: Optional[str] = None
     status: Optional[str] = None  # 'ok' | 'error'
     detail: Optional[str] = None  # kurze Zusammenfassung / Fehlertext

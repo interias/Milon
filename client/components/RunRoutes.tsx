@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui";
 import { RunActivityDetail } from "@/components/RunActivityDetail";
+import { RunWeeklyZones } from "@/components/RunIntensityZones";
 import { de, de0, dur } from "@/lib/format";
 import { projectRunRoute, routeDate, runRoutesApi, type RunRouteDetail, type RunRouteList } from "@/lib/run-routes";
 import styles from "./RunRoutes.module.css";
@@ -153,6 +154,7 @@ export function RunRoutes() {
       {current && <div className={styles.detailRow}><p className={styles.matchNote}>{current.matched_external_id ? "Mit deinem vorhandenen Lauf verknüpft." : "Direkt aus Garmin Connect."}</p><button type="button" className={styles.detailButton} onClick={() => setActivityId(current.activity_id)}>Laufdetails <span aria-hidden="true">↗</span></button></div>}
       {nextOffset < list.total && <p className={styles.count}>{list.items.length} von {list.total} Läufen geladen</p>}
     </>}
+    <RunWeeklyZones />
     {list?.sync?.last_sync && <p className={`${styles.syncNote} ${previousSyncFailed ? styles.failedSync : ""}`}>{previousSyncFailed ? "Letzter Import fehlgeschlagen" : "Letzter Import"} · {routeDate(list.sync.last_sync)}{previousSyncFailed && <span>Bitte Garmin erneut aktualisieren.</span>}</p>}
     {activityId && <RunActivityDetail activityId={activityId} onClose={() => setActivityId(null)} />}
   </Card>;

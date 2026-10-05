@@ -2,8 +2,12 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type PointerEvent } from "react";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
+import { RunRouteCursor } from "@/components/RunRouteCursor";
+import { RunComparison } from "@/components/RunComparison";
+import { RunIntensityZones } from "@/components/RunIntensityZones";
 import { activitySegments, finite, garminApi, nearestActivityPoint, paceLabel, paceSeconds, type GarminActivity, type GarminActivityPoint } from "@/lib/garmin";
-import { routeDate } from "@/lib/run-routes";
+import { routeDate, runRoutesApi, type RunRouteDetail } from "@/lib/run-routes";
+import { runInsightsApi, type RunInsights } from "@/lib/run-insights";
 import { de, de0, dur } from "@/lib/format";
 import styles from "./RunActivityDetail.module.css";
 
@@ -13,10 +17,11 @@ function bounds(values: number[], step: number, fallback: [number, number]) {
   return [low, Math.max(low + step * 2, Math.ceil(Math.max(...values) / step) * step)] as [number, number];
 }
 
-function ActivityChart({ points }: { points: GarminActivityPoint[] }) {
+function ActivityChart({ points, route, startedAtUtc }: { points: GarminActivityPoint[]; route: RunRouteDetail | null; startedAtUtc: string | null | undefined }) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(620), [selected, setSelected] = useState<number | null>(null);
   const [showHeight, setShowHeight] = useState(false);
+  const [showRoute, setShowRoute] = useState(true);
   const chartId = useId();
   useEffect(() => {
     if (!container.current) return;
@@ -55,11 +60,11 @@ function ActivityChart({ points }: { points: GarminActivityPoint[] }) {
       ? <circle key={`${className}-${index}`} cx={x(segment[0].time)} cy={project(segment[0].value)} r="1.7" fill="white" className={className} />
       : <path key={`${className}-${index}`} d={segment.map((point, i) => `${i ? "L" : "M"}${x(point.time).toFixed(2)},${project(point.value).toFixed(2)}`).join(" ")} className={className} fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />);
   }
-  return <div ref={container} className={styles.chart}>
-    <div className={styles.chartHeader}><h3>Puls & Tempo</h3>{hasHeight && <label><input type="checkbox" checked={showHeight} onChange={event => setShowHeight(event.target.checked)} />Höhenprofil</label>}</div>
+  return <div className={styles.chart}>
+    <div className={styles.chartHeader}><h3>Puls & Tempo</h3><div className={styles.chartControls}>{route && <label><input type="checkbox" checked={showRoute} onChange={event => setShowRoute(event.target.checked)} />Strecke</label>}{hasHeight && <label><input type="checkbox" checked={showHeight} onChange={event => setShowHeight(event.target.checked)} />Höhenprofil</label>}</div></div>
     <div className={styles.legend}><span className={styles.hrKey}>Herzfrequenz · links</span><span className={styles.paceKey}>Pace · rechts</span><span>Zeit ab Start · inkl. Pausen</span></div>
     {!series.length || (!hasHr && !hasPace) ? <p className={styles.empty}>Für diesen Lauf sind noch keine Puls- oder Tempowerte verfügbar.</p> : <>
-      <svg viewBox={`0 0 ${width} ${svgHeight}`} height={svgHeight} role="group" tabIndex={0} aria-labelledby={chartId} className={styles.plot}
+      <div className={`${styles.chartBody} ${route && showRoute ? styles.withRoute : ""}`}><div ref={container} className={styles.plotContainer}><svg viewBox={`0 0 ${width} ${svgHeight}`} height={svgHeight} role="group" tabIndex={0} aria-labelledby={chartId} className={styles.plot}
         onPointerMove={selectPoint} onPointerDown={event => { event.currentTarget.focus(); selectPoint(event); }}
         onKeyDown={event => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)) return;
@@ -96,12 +101,13 @@ function ActivityChart({ points }: { points: GarminActivityPoint[] }) {
         <strong>{dur(active.elapsed_seconds)}</strong><span className={styles.hrText}>{de0(active.hr_bpm)} bpm</span><span className={styles.paceText}>{active.speed_m_s === 0 ? "Stillstand" : `${paceLabel(paceSeconds(active.speed_m_s))} /km`}</span>
         {finite(active.distance_m) && <span>{de(active.distance_m / 1000, 2)} km</span>}{withHeight && <span>{de0(active.altitude_m)} m Höhe</span>}
       </> : <span>Berühren oder mit ← → erkunden · beide Werte am selben Zeitpunkt</span>}</div>
+      </div>{route && showRoute && <RunRouteCursor route={route} startedAtUtc={startedAtUtc} elapsed={active?.elapsed_seconds ?? null} />}</div>
       <p className={styles.note}>Zwei getrennte Werteskalen. Lücken und Stillstand unterbrechen die Tempokurve.{clippedPace ? " Pace über 15:00 /km liegt am unteren Rand; die Auswahl zeigt den genauen Wert." : ""}</p>
     </>}
   </div>;
 }
 
-function ActivityContent({ data }: { data: GarminActivity }) {
+function ActivityContent({ data, route, insights, insightsError }: { data: GarminActivity; route: RunRouteDetail | null; insights: RunInsights | null; insightsError: string }) {
   const summary = data.summary;
   const averagePace = finite(summary.distance_km) && summary.distance_km > 0 && finite(summary.duration_seconds) ? summary.duration_seconds / summary.distance_km : null;
   const dynamics = [
@@ -118,7 +124,15 @@ function ActivityContent({ data }: { data: GarminActivity }) {
       <div><span>Ø Puls</span><strong>{de0(summary.avg_hr)} <small>bpm</small></strong></div>
       <div><span>Aktive Dauer</span><strong>{dur(summary.duration_seconds)}</strong></div>
     </div>
-    <ActivityChart key={data.activity_id} points={data.series} />
+    <ActivityChart key={data.activity_id} points={data.series} route={route} startedAtUtc={summary.started_at_utc} />
+    {insightsError ? <p className={styles.note} role="alert">{insightsError}</p> : !insights ? <p className={styles.note} role="status">Weitere Laufanalysen werden geladen …</p> : insights.available && <>
+      <details className={styles.details}><summary>Pulsdrift <span>Bei ähnlichem Tempo & Gefälle</span></summary>
+        {insights.drift.status === "observed" && <div className={styles.driftValue}><strong>{finite(insights.drift.value_pct) ? `${insights.drift.value_pct > 0 ? "+" : ""}${de(insights.drift.value_pct, 1)}` : "–"}<small> %</small></strong><span>{de0(insights.drift.early_hr)} → {de0(insights.drift.late_hr)} bpm<br />{insights.drift.matched_pairs} passende Minutenpaare</span></div>}
+        <p className={styles.note}>{insights.drift.reason}</p><details className={styles.method}><summary>So wird gerechnet</summary><p className={styles.note}>{insights.drift.method}</p></details>
+      </details>
+      <details className={styles.details}><summary>Intensität · Pulszonen <span>{de(insights.zones.known_seconds / 60, 0)} min mit Puls</span></summary><RunIntensityZones data={insights.zones} /></details>
+      <RunComparison key={data.activity_id} activityId={data.activity_id} candidates={insights.candidates} />
+    </>}
     {data.laps.length > 0 && <details className={styles.details}><summary>Runden <span>{data.laps.length} · Distanz, Tempo & Puls</span></summary>
       <div className={styles.tableWrap}><table><caption className="sr-only">Von Garmin aufgezeichnete Runden</caption><thead><tr><th>Runde</th><th>km</th><th>Dauer</th><th>Pace /km</th><th>Ø bpm</th></tr></thead><tbody>
         {data.laps.map((lap, index) => <tr key={`${lap.index}-${index}`}><th>{lap.index}</th><td>{finite(lap.distance_m) ? de(lap.distance_m / 1000, 2) : "–"}</td><td>{dur(lap.duration_seconds)}</td><td>{paceLabel(finite(lap.distance_m) && lap.distance_m > 0 && finite(lap.duration_seconds) ? lap.duration_seconds * 1000 / lap.distance_m : null)}</td><td>{de0(lap.avg_hr)}</td></tr>)}
@@ -137,6 +151,7 @@ function ActivityContent({ data }: { data: GarminActivity }) {
 
 export function RunActivityDetail({ activityId, onClose }: { activityId: string; onClose: () => void }) {
   const [data, setData] = useState<GarminActivity | null>(null), [error, setError] = useState("");
+  const [route, setRoute] = useState<RunRouteDetail | null>(null), [insights, setInsights] = useState<RunInsights | null>(null), [insightsError, setInsightsError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
@@ -145,15 +160,17 @@ export function RunActivityDetail({ activityId, onClose }: { activityId: string;
   }, []);
   useEffect(() => {
     const controller = new AbortController();
-    setData(null); setError("");
+    setData(null); setError(""); setRoute(null); setInsights(null); setInsightsError("");
     garminApi.activity(activityId, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Laufdetails konnten nicht geladen werden."); });
+    runRoutesApi.detail(activityId, controller.signal).then(value => { if (!controller.signal.aborted) setRoute(value); }).catch(() => { /* Indoor activities can have no GPS route. */ });
+    runInsightsApi.activity(activityId, controller.signal).then(value => { if (!controller.signal.aborted) setInsights(value); }).catch(reason => { if (!controller.signal.aborted) setInsightsError(reason instanceof Error ? reason.message : "Laufanalyse konnte nicht geladen werden."); });
     return () => controller.abort();
   }, [activityId, revision]);
   return <RunAnalysisDialog title="Laufdetails" onClose={onClose}><div className={styles.content}>
     {error ? <div className={styles.empty} role="alert"><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></div>
       : !data || data.activity_id !== activityId ? <p className={styles.empty} role="status">Laufdetails werden geladen …</p>
         : !data.available ? <div className={styles.empty}><p>Für diesen Lauf wurden noch keine Detaildaten importiert.</p><p>Schließe dieses Fenster und wähle „Garmin aktualisieren“.</p></div>
-          : <ActivityContent data={data} />}
+          : <ActivityContent data={data} route={route?.activity_id === activityId ? route : null} insights={insights?.activity_id === activityId ? insights : null} insightsError={insightsError} />}
   </div></RunAnalysisDialog>;
 }

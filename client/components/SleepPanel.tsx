@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { api, type SleepOverview, type SleepPerformance, type SleepPerformancePoint } from "@/lib/api";
+import { api, type SleepOverview } from "@/lib/api";
+import { recoveryPerformance, type RecoveryMetric, type RecoveryPerformance, type RecoveryPoint } from "@/lib/recovery-analysis";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { Card } from "@/components/ui";
-import { de, dm } from "@/lib/format";
+import { de } from "@/lib/format";
 
 const dateLabel = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("de-DE");
 
@@ -33,7 +34,9 @@ function axis(values: number[]) {
   return { low, high, ticks: Array.from({ length: 5 }, (_, index) => low + index * (high - low) / 4) };
 }
 
-function SleepScatter({ points, unit, label }: { points: SleepPerformancePoint[]; unit: string; label: string }) {
+function RecoveryScatter({ points, unit, label, predictor, predictorUnit }: {
+  points: RecoveryPoint[]; unit: string; label: string; predictor: string; predictorUnit: string;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(300);
   const [selected, setSelected] = useState<number | null>(null);
@@ -43,10 +46,10 @@ function SleepScatter({ points, unit, label }: { points: SleepPerformancePoint[]
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  const sorted = [...points].filter((point) => Number.isFinite(point.sleep_hours) && Number.isFinite(point.value))
+  const sorted = [...points].filter((point) => Number.isFinite(point.predictor) && Number.isFinite(point.value))
     .sort((a, b) => a.date.localeCompare(b.date));
-  if (!sorted.length) return <div ref={container} className="py-6 text-sm text-muted">Noch keine Nacht mit passendem Training und bekannter Schlafdauer.</div>;
-  const horizontal = axis(sorted.map((point) => point.sleep_hours));
+  if (!sorted.length) return <div ref={container} className="py-4 text-sm text-muted">Noch keine passenden Messwert-Training-Paare. Fehlende Werte werden nicht geschätzt.</div>;
+  const horizontal = predictorUnit === "1–5" ? { low: 0.7, high: 5.3, ticks: [1, 2, 3, 4, 5] } : axis(sorted.map((point) => point.predictor));
   const vertical = axis(sorted.map((point) => point.value));
   const left = 62, right = Math.max(left + 20, width - 16), top = 26, bottom = 234;
   const x = (value: number) => left + (value - horizontal.low) / (horizontal.high - horizontal.low) * (right - left);
@@ -59,14 +62,14 @@ function SleepScatter({ points, unit, label }: { points: SleepPerformancePoint[]
     const py = (event.clientY - bounds.top) / bounds.height * 292;
     let nearest = 0, distance = Infinity;
     sorted.forEach((point, index) => {
-      const next = Math.hypot(x(point.sleep_hours) - px, y(point.value) - py);
+      const next = Math.hypot(x(point.predictor) - px, y(point.value) - py);
       if (next < distance) { nearest = index; distance = next; }
     });
     setSelected(nearest);
   }
   return <div ref={container} className="mt-3 min-w-0">
     <svg viewBox={`0 0 ${width} 292`} height="292" className="w-full rounded outline-accent" role="group" tabIndex={0}
-      aria-label={`${label}. X-Achse Schlafdauer in Stunden, Y-Achse ${unit}. Pfeiltasten wählen Nächte nach Datum.`}
+      aria-label={`${label}. X-Achse ${predictor} in ${predictorUnit}, Y-Achse ${unit}. Pfeiltasten wählen Trainingstage nach Datum.`}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "Escape"].includes(event.key)) return;
         event.preventDefault();
@@ -83,16 +86,16 @@ function SleepScatter({ points, unit, label }: { points: SleepPerformancePoint[]
         <text x={left - 9} y={y(tick) + 4} textAnchor="end" fontSize="12" fill="var(--color-muted)">{de(tick, unit === "%" ? 1 : 2)}</text>
       </g>)}
       {vertical.low < 0 && vertical.high > 0 && <line x1={left} x2={right} y1={y(0)} y2={y(0)} stroke="var(--color-muted)" strokeDasharray="4 4" />}
-      {xTicks.map((tick, index) => <text key={index} x={x(tick)} y="255" textAnchor="middle" fontSize="12" fill="var(--color-muted)">{de(tick, 1)}</text>)}
-      <text x={(left + right) / 2} y="282" textAnchor="middle" fontSize="12" fill="var(--color-muted)">Schlafdauer · Stunden</text>
-      {sorted.map((point, index) => <circle key={`${point.date}-${point.session_id}`} cx={x(point.sleep_hours)} cy={y(point.value)} r={selected === index ? 6 : 4}
+      {xTicks.map((tick, index) => <text key={index} x={x(tick)} y="255" textAnchor="middle" fontSize="12" fill="var(--color-muted)">{de(tick, predictorUnit === "h" ? 1 : 0)}</text>)}
+      <text x={(left + right) / 2} y="282" textAnchor="middle" fontSize="12" fill="var(--color-muted)">{predictor} · {predictorUnit}</text>
+      {sorted.map((point, index) => <circle key={`${point.date}-${point.session_id}`} cx={x(point.predictor)} cy={y(point.value)} r={selected === index ? 6 : 4}
         fill={selected === index ? "var(--color-surface)" : "var(--color-accent)"} stroke="var(--color-accent)" strokeWidth={selected === index ? 2 : 1}>
-        <title>{dateLabel(point.date)} · {de(point.sleep_hours, 2)} h · {de(point.value, 2)} {unit} · {point.title}</title>
+        <title>{dateLabel(point.date)} · {de(point.predictor, predictorUnit === "h" ? 2 : 0)} {predictorUnit} · {de(point.value, 2)} {unit} · {point.title}</title>
       </circle>)}
     </svg>
     <div className="min-h-12 rounded border border-line bg-surface-alt px-3 py-2 text-xs" role="status" aria-live="polite">
-      {active ? <><p className="font-semibold">{dateLabel(active.date)} · {de(active.sleep_hours, 2)} h Schlaf · {de(active.value, 2)} {unit}</p>
-        <p className="mt-1 break-words text-muted">{active.title}</p></> : <p className="text-muted">Punkt berühren oder Diagramm mit den Pfeiltasten erkunden.</p>}
+      {active ? <><p className="font-semibold">{dateLabel(active.date)} · {de(active.predictor, predictorUnit === "h" ? 2 : 0)} {predictorUnit} · {de(active.value, 2)} {unit}</p>
+        <p className="mt-1 break-words text-muted">{active.title}{active.session_count > 1 ? ` · Median aus ${active.session_count} Einheiten` : ""}</p></> : <p className="text-muted">Punkt berühren oder Diagramm mit den Pfeiltasten erkunden.</p>}
     </div>
   </div>;
 }
@@ -102,8 +105,9 @@ export function SleepPanel() {
   const [overviewError, setOverviewError] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [kind, setKind] = useState<"run" | "strength">("run");
+  const [metric, setMetric] = useState<RecoveryMetric>("sleep");
   const [source, setSource] = useState("current");
-  const [performance, setPerformance] = useState<SleepPerformance | null>(null);
+  const [performance, setPerformance] = useState<RecoveryPerformance | null>(null);
   const [performanceError, setPerformanceError] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -120,12 +124,13 @@ export function SleepPanel() {
   useEffect(() => {
     if (!expanded) return;
     let active = true;
+    const controller = new AbortController();
     setPerformance(null);
     setPerformanceError(false);
-    api.sleepPerformance(kind, source, 180).then((data) => { if (active) setPerformance(data); }).catch(() => { if (active) setPerformanceError(true); });
-    return () => { active = false; };
-  }, [expanded, kind, source, revision]);
-  const result = performance?.kind === kind && performance.source === source ? performance : null;
+    recoveryPerformance(metric, kind, source, controller.signal).then((data) => { if (active) setPerformance(data); }).catch(() => { if (active) setPerformanceError(true); });
+    return () => { active = false; controller.abort(); };
+  }, [expanded, metric, kind, source, revision]);
+  const result = performance?.kind === kind && performance.source === source && performance.metric === metric ? performance : null;
   const summary = overview?.summary;
   const unknown = overview?.series.filter((point) => point.main_sleep && point.asleep_hours == null) ?? [];
   return <Card className="mt-4">
@@ -149,26 +154,28 @@ export function SleepPanel() {
         <ul className="mt-2 space-y-1">{unknown.slice(-5).reverse().map((night) => <li key={night.external_id}>{dateLabel(night.date)} · {de(night.window_hours, 2)} h Schlaffenster</li>)}</ul>
       </details>}
     </> : <p className="mt-3 text-xs text-muted" role="status">{overviewError ? "Schlafdaten konnten nicht geladen werden." : "Schlafdaten werden geladen …"}</p>}
-    <button type="button" aria-expanded={expanded} aria-controls="sleep-performance" onClick={() => setExpanded((value) => !value)} className="mt-4 rounded border border-line px-3 py-2 text-sm outline-accent">Schlaf ↔ Leistung {expanded ? "schließen" : "erkunden"}</button>
+    <button type="button" aria-expanded={expanded} aria-controls="sleep-performance" onClick={() => setExpanded((value) => !value)} className="mt-4 rounded border border-line px-3 py-2 text-sm outline-accent">Erholung ↔ Leistung {expanded ? "schließen" : "erkunden"}</button>
     {expanded && <section id="sleep-performance" className="mt-4 border-t border-line pt-4">
-      <h3 className="text-sm font-semibold">Wie hängt die vorige Nacht mit deinem Training zusammen?</h3>
+      <h3 className="text-sm font-semibold">Was hängt bei dir mit der Trainingsleistung zusammen?</h3>
       <div className="mt-3 flex flex-wrap gap-3">
+        <label className="text-xs text-muted">Messwert<select value={metric} onChange={(event) => setMetric(event.target.value as RecoveryMetric)} className="mt-1 block rounded border border-line bg-surface px-3 py-2 text-base text-ink outline-accent sm:text-sm"><option value="sleep">Schlafdauer</option><option value="hrv">Nächtliche HRV</option><option value="energy">Energie-Check-in</option></select></label>
         <label className="text-xs text-muted">Training<select value={kind} onChange={(event) => setKind(event.target.value as "run" | "strength")} className="mt-1 block rounded border border-line bg-surface px-3 py-2 text-base text-ink outline-accent sm:text-sm"><option value="run">Laufen</option><option value="strength">Kraft</option></select></label>
         <label className="text-xs text-muted">Uhr<select value={source} onChange={(event) => setSource(event.target.value)} className="mt-1 block rounded border border-line bg-surface px-3 py-2 text-base text-ink outline-accent sm:text-sm"><option value="current">Aktuelle Uhr</option><option value="legacy">Vorherige Uhr</option><option value="all">Beide, getrennt</option></select></label>
       </div>
       {result ? <>
-        <p className="mt-3 text-xs text-muted">{result.outcome_label} · höhere Werte bedeuten bessere gemessene Leistung · letzte 180 Kalendertage</p>
+        <p className="mt-3 text-xs text-muted">{result.timing === "same_day_self_report" ? "Subjektive Energie und Training am selben Tag · keine Vorhersage." : "Vorige Nacht → anschließendes Training am selben Tag."} {result.outcome_label} · letzte {result.days} Tage.</p>
         <div className="mt-4 space-y-5">{result.groups.map((group) => {
           const missing = Object.values(group.missing).reduce((total, count) => total + count, 0);
-          return <div key={`${kind}-${group.package}`} className="rounded border border-line p-3 sm:p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2"><h4 className="text-sm font-semibold">{group.label} · {group.n} Nacht-Training-Paare</h4>
-              <p className="text-sm font-semibold">r = {de(group.correlation, 2)}</p></div>
+          return <div key={`${metric}-${kind}-${group.package}`} className="rounded border border-line p-3 sm:p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2"><h4 className="text-sm font-semibold">{group.label} · {group.n} {group.n === 1 ? "Trainingstag" : "Trainingstage"}{group.n > 1 ? ` über ${group.span_days + 1} Tage` : ""}</h4>
+              {group.correlation != null && <p className="text-sm font-semibold">{group.statistic} = {de(group.correlation, 2)} <span className="font-normal text-muted">· roh</span></p>}</div>
             <p className="mt-2 text-xs text-muted">{group.status_label}</p>
-            {group.ci95 && <p className="mt-1 text-xs text-muted">95%-Näherungsintervall für r: {de(group.ci95[0], 2)} bis {de(group.ci95[1], 2)}</p>}
-            <SleepScatter points={group.points} label={`Schlaf und ${kind === "run" ? "Laufeffizienz" : "Kraftentwicklung"} · ${group.label}`} unit={result.outcome_unit} />
-            <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer py-1">Datenabdeckung · {missing} Einheiten ohne verwendbares Paar</summary>
-              <p className="mt-1">{group.missing.no_sleep} ohne vorherigen Hauptschlaf · {group.missing.unknown_sleep} mit unbekannter Schlafdauer · {group.missing.no_outcome} ohne geeigneten Leistungswert · {group.missing.excluded} ausgeschlossen</p>
-              <p className="mt-1">Mehrere Trainings am selben Tag zählen zusammen als ein Nacht-Paar.</p>
+            {group.detrended_correlation != null && <p className="mt-1 text-xs font-semibold">Zeitbereinigt: {group.statistic} = {de(group.detrended_correlation, 2)}</p>}
+            <RecoveryScatter points={group.points} label={`${result.predictor_label} und ${kind === "run" ? "Laufeffizienz" : "Kraftentwicklung"} · ${group.label}`} unit={result.outcome_unit} predictor={result.predictor_label} predictorUnit={result.predictor_unit} />
+            <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer py-1">Datenabdeckung · {missing} {missing === 1 ? "Einheit" : "Einheiten"} ohne verwendbares Paar</summary>
+              <p className="mt-1">{Object.entries(group.missing).filter(([, count]) => count > 0).map(([key, count]) => `${count} ${result.missing_labels[key]}`).join(" · ") || "Alle geeigneten Einheiten haben einen passenden Messwert."}</p>
+              <p className="mt-1">Mehrere passende Trainings am selben Tag zählen zusammen als ein Punkt. Das Diagramm zeigt Rohwerte.</p>
+              <p className="mt-1">{group.detrended_label}</p>
             </details>
           </div>;
         })}</div>

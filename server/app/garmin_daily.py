@@ -410,7 +410,7 @@ def recovery(days: int = 30, *, now: datetime | None = None) -> dict:
                          "sleep_nights": sum(p["sleep_hours"] is not None for p in series)},
             "availability": availability,
             "notes": ["Garmin-Schätzwerte; Readiness und Body Battery verwenden teilweise dieselben Eingangsdaten.",
-                      "Garmin-Ruhepuls bleibt getrennt vom bisherigen HC-Tagesminimum.",
+                      "Garmin-Ruhepuls bleibt getrennt von den bisherigen HC-Ruhepuls-Einträgen.",
                       "Ohne persönliche HRV-Baseline wird kein Erholungsurteil abgeleitet.",
                       "Heute ist vorläufig; fehlende Werte werden nicht als null Messwert ergänzt."]}
 

@@ -98,3 +98,32 @@ def test_optional_checkin_tool_preserves_missing_values(monkeypatch):
     assert result == {"count": 0, "energy_avg": None, "caveat": "Voluntary"}
     names = {item["function"]["name"] for item in tools.TOOLS}
     assert {"get_sleep_overview", "get_sleep_performance", "get_checkin_summary"} <= names
+
+
+def test_recovery_tool_preserves_collection_state_without_raw_points(monkeypatch):
+    from app.metrics import recovery_analysis
+    called = []
+
+    def performance(metric, kind, **kwargs):
+        called.append((metric, kind, kwargs))
+        return {"timing": "same_day_self_report", "groups": [{"n": 3, "correlation": None,
+                "status": "collecting", "points": [{"date": "2026-10-01"}]}]}
+
+    monkeypatch.setattr(recovery_analysis, "performance", performance)
+    result = tools.dispatch("get_recovery_performance", {"metric": "energy", "days": 9999})
+    assert called == [("energy", "run", {"days": 365})]
+    assert result["timing"] == "same_day_self_report"
+    assert result["groups"] == [{"n": 3, "correlation": None, "status": "collecting"}]
+    with pytest.raises(ValueError):
+        tools.dispatch("get_recovery_performance", {"metric": "readiness"})
+
+
+def test_intensity_tool_bounds_weeks_and_retains_missing_coverage(monkeypatch):
+    from app.metrics import run_insights
+    called = []
+    def weekly(weeks):
+        called.append(weeks)
+        return {"weeks": [{"runs": 0, "unknown_seconds": 0}], "note": "Not zero training"}
+    monkeypatch.setattr(run_insights, "weekly_zones", weekly)
+    assert tools.dispatch("get_running_intensity", {"weeks": 500})["note"] == "Not zero training"
+    assert called == [26]
