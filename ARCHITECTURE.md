@@ -47,11 +47,18 @@ Nur Methodik und Datenbasis bleiben eingeklappt. Abschnittslinks verkürzen die
 Navigation; der Rückweg zur Laufübersicht stellt den gewählten Lauf wieder her.
 
 Die vorhandenen Laufdetails koppeln den Zeitcursor an einen GPS-Punkt derselben
-UTC-Aufzeichnung. Unterbrechungen und fehlende Zeitstempel bleiben Lücken. Der
-Laufvergleich legt Puls und Pace zweier Aufzeichnungen über die gelaufene Distanz;
-gleiche Kilometerposition bedeutet nicht denselben Ort. Kandidaten werden anhand
-ähnlicher Distanz und eines konservativen, richtungsabhängigen GPS-Vergleichs sortiert.
-GPS-Koordinaten bleiben lokal und werden nicht in Coach-Tools ausgegeben.
+UTC-Aufzeichnung. Unterbrechungen und fehlende Zeitstempel bleiben Lücken.
+`metrics/run_cohort.py` vergleicht den ausgewählten Lauf automatisch mit allen anderen
+passenden Garmin-Läufen derselben Sensorperiode, auch späteren Aufzeichnungen.
+`/metrics/running/insights/cohort/{id}` liefert Pace und Durchschnittspuls je Lauf,
+Median, Minimum/Maximum sowie ab fünf Vergleichswerten die mittleren 50 %.
+Der ausgewählte Lauf ist aus dieser Verteilung ausgeschlossen. Es gibt keine
+Signifikanz- oder Fitnessbehauptung; die Anzahl der Läufe ist die Beobachtungszahl.
+`metrics/route_overlap.py` prüft mindestens 97 % beidseitige längengewichtete
+Streckenüberdeckung mit 30 m GPS-Toleranz, gleicher Richtung und Längenverhältnis
+mindestens 97 %. GPS-Koordinaten bleiben lokal und fehlen in Vergleichsantworten
+und Coach-Tools. Der bisherige Zwei-Lauf-API-Vergleich bleibt kompatibel erhalten;
+die Oberfläche benötigt keine manuelle Auswahl mehr.
 
 `metrics/run_insights.py` berechnet eine zusätzliche beschreibende Pulsdrift und
 Pulsdifferenzen aus einmalig gepaarten gleichmäßigen Minuten mit ähnlichem Tempo

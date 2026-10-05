@@ -37,7 +37,7 @@ Details stehen unter [Datenschutz und Betrieb](#datenschutz-und-betrieb).
 | **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, Wochenbilanz, Konsistenz, freiwilliger kurzer Check-in |
 | **Körper** | Gemeinsamer Vergleich von Bauch/Taille, Gewicht und Kraftleistung; Gewichtstrends, TDEE, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, Einzeltrends und Messjournal |
 | **Laufen** | Persönliche Referenzrunde mit passenden Wiederholungen, Wochenvolumen, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
-| **Einzelne Läufe** | Eigene Detailseite: freiwilliges Laufziel und Anstrengung, Garmin-Stationswetter, Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und Vergleich zweier Läufe |
+| **Einzelne Läufe** | Eigene Detailseite: freiwilliges Laufziel und Anstrengung, Garmin-Stationswetter, Trainingsreiz, Pulsstabilität, aktuelle Entwicklung, gekoppelte Strecke und Puls-/Tempokurve, Höhenprofil, Zonen, Runden, Laufdynamik und automatischer statistischer Streckenvergleich |
 | **Gesundheit** | Schritte, Radfahren, Schlaf, HRV, Garmin-Erholungswerte, Zusammenhänge zwischen Erholung und Leistung sowie Quellen- und Importstatus |
 | **Kraft** | Übungen nach Muskelgruppe, Detailseiten, e1RM, Tonnage, RPE, Gesamtstärke-Index und Zusammenhang mit der Energiebilanz |
 | **Ernährung** | Kalorien, Makros, Proteinziel und Defizit gegenüber dem geschätzten TDEE |
@@ -51,13 +51,18 @@ die Analysen darunter sind direkt sichtbar. Methodik und Datenbasis bleiben eink
 - **Referenzrunde:** In den Laufdetails eine Runde auswählen. Die Laufübersicht sammelt
   passende Wiederholungen derselben Sensorperiode und Richtung. Einzelne Pulsunterschiede
   beschreiben Beobachtungen; sie beweisen keine Fitnessveränderung.
+- **Läufe vergleichen:** Automatisch alle anderen passenden Läufe derselben Sensorperiode
+  mit mindestens 97 % Streckenüberdeckung (30 m GPS-Toleranz, gleiche Richtung und ähnliche
+  Länge). Pace und Puls zeigen Einzelwerte, Median und Spanne; ab fünf Vergleichswerten
+  zusätzlich die mittleren 50 %. Der ausgewählte Lauf bleibt außerhalb der Verteilung.
+  [Methodik und Grenzen](docs/research/run-cohort-comparison.md).
 - **Körperfortschritt:** 4, 8 oder 12 Wochen auswählen. Die ersten und letzten 14 Tage
   bilden gemeinsame Vergleichsfenster für Bauch/Taille, Gewichtsmittel und gleiche Übungen.
 - **Wochenmaßnahme:** Unter Coach eine konkrete Handlung ausdrücklich übernehmen,
   optional einen Messwert auswählen und später kurz rückmelden. Der Coach kann bestehende
   Maßnahmen lesen; anlegen oder ändern kann sie nur der Nutzer.
 
-Garmin-Stationswetter ergänzt Laufdetails und Vergleiche mit Temperatur, Feuchte,
+Garmin-Stationswetter ergänzt Laufdetails mit Temperatur, Feuchte,
 Windrichtung und Messzeit. Die Windgeschwindigkeit bleibt wegen fehlender belegter
 API-Einheit ausgenommen. Wetter verändert keine berechnete Pace oder Pulsdifferenz.
 

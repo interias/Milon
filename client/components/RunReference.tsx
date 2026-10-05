@@ -71,7 +71,7 @@ function ReferenceChart({ data }: { data: RunReference }) {
       {[high, 0, low].map(value => <g key={value}><line x1="40" x2={width - 14} y1={y(value)} y2={y(value)} stroke="var(--color-line)" strokeDasharray={value === 0 ? undefined : "3 4"} /><text x="31" y={y(value) + 4} textAnchor="end" fontSize="11" fill="var(--color-muted)">{value > 0 ? "+" : ""}{de(value, 0)}</text></g>)}
       <text x="40" y="11" fontSize="10" fill="var(--color-muted)">Δ Puls · bpm</text>
       {anchorTime >= first && anchorTime <= last && <circle cx={x(data.reference!.started_at)} cy={y(0)} r="4" fill="var(--color-surface)" stroke="var(--color-muted)" strokeWidth="1.5"><title>Referenz · {dateLabel(data.reference!.started_at)}</title></circle>}
-      {data.observations.map(item => <a key={item.activity_id} href={`/laufen/${item.activity_id}?compare=${data.reference!.activity_id}#vergleich`} aria-label={`Lauf vom ${dateLabel(item.started_at)}: ${de(item.hr_delta_bpm, 1)} bpm zur Referenz. Vergleich öffnen.`}>
+      {data.observations.map(item => <a key={item.activity_id} href={`/laufen/${item.activity_id}#vergleich`} aria-label={`Lauf vom ${dateLabel(item.started_at)}: ${de(item.hr_delta_bpm, 1)} bpm zur Referenz. Statistischen Streckenvergleich öffnen.`}>
         <circle cx={x(item.started_at)} cy={y(item.hr_delta_bpm)} r="10" fill="transparent" />
         <circle cx={x(item.started_at)} cy={y(item.hr_delta_bpm)} r="4" fill="var(--color-accent)"><title>{dateLabel(item.started_at)} · {item.hr_delta_bpm > 0 ? "+" : ""}{de(item.hr_delta_bpm, 1)} bpm · {item.matched_pairs} Minutenpaare · Pace {item.pace_delta_seconds > 0 ? "+" : ""}{de(item.pace_delta_seconds, 1)} s/km</title></circle>
       </a>)}

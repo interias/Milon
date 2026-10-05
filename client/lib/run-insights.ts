@@ -28,6 +28,40 @@ export type RunComparisonData = {
   comparison: { status: "observed" | "insufficient" | "excluded"; matched_pairs: number; hr_delta_bpm: number | null; pace_delta_seconds: number | null; first_hr: number | null; second_hr: number | null; reason: string; method: string; similar_route: boolean };
 };
 
+export type CohortRun = {
+  activity_id: string;
+  title: string;
+  started_at: string;
+  distance_km: number | null;
+  pace_seconds: number | null;
+  avg_hr: number | null;
+};
+export type RunDistribution = {
+  n: number;
+  selected: number | null;
+  median: number | null;
+  min: number | null;
+  max: number | null;
+  q1: number | null;
+  q3: number | null;
+  delta: number | null;
+};
+export type RunCohortComparison = {
+  activity_id: string;
+  status: "ready" | "empty" | "unavailable";
+  reason: string | null;
+  selected: CohortRun;
+  cohort: (CohortRun & { overlap_pct: number })[];
+  threshold_pct: number;
+  tolerance_m: number;
+  sensor_since: string | null;
+  sensor_label: string;
+  period_start: string | null;
+  period_end: string | null;
+  metrics: { pace_seconds: RunDistribution; avg_hr: RunDistribution };
+  method: string;
+};
+
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
 async function request<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(`${BASE}/metrics/running/insights${path}`, { signal, cache: "no-store" });
@@ -38,6 +72,7 @@ export const runInsightsApi = {
   activity: (id: string, signal: AbortSignal) => request<RunInsights>(`/${encodeURIComponent(id)}`, signal),
   zones: (signal: AbortSignal) => request<WeeklyRunZones>("/zones?weeks=8", signal),
   compare: (first: string, second: string, signal: AbortSignal) => request<RunComparisonData>(`/compare?first=${encodeURIComponent(first)}&second=${encodeURIComponent(second)}`, signal),
+  cohort: (id: string, signal: AbortSignal) => request<RunCohortComparison>(`/cohort/${encodeURIComponent(id)}`, signal),
 };
 
 export function comparisonSegments(points: ComparisonPoint[], value: (point: ComparisonPoint) => number | null) {
