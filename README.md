@@ -34,7 +34,7 @@ Details stehen unter [Datenschutz und Betrieb](#datenschutz-und-betrieb).
 
 | Bereich | Aktueller Funktionsumfang |
 |---|---|
-| **Übersicht** | Entwicklungskarten für Körper, Laufen und Kraft, visuelles Wochenjournal mit Training, Schlaf und Energie, Konsistenz, freiwilliger kurzer Check-in |
+| **Übersicht** | Entwicklungskarten mit Monats-Zeitreise, lokales Monatsrückblick-Poster, Wochenjournal mit Tagesdetails, Konsistenz, freiwilliger kurzer Check-in |
 | **Körper** | Gemeinsamer Vergleich von Bauch/Taille, Gewicht und Kraftleistung; Gewichtstrends, TDEE, Waagen-KFA mit Einordnung, manuelle Körpermaße mit Messgrafik, historische Nachträge, Einzeltrends und Messjournal |
 | **Laufen** | Streckenatlas mit automatisch gruppierten Runden, persönliche Referenzrunde, Wochenvolumen und mechanische Belastung, Pulszonen mit dynamischer Tempo-Spanne, Bestzeiten, standardisierter Puls bei gleicher Pace, experimenteller Fitness-Trend |
 | **Einzelne Läufe** | Eigene Detailseite: Laufziel und Anstrengung, Stationswetter, Trainingsreiz, Pulsstabilität, gekoppelte Strecke und Puls-/Tempokurve, lokale Routenwiedergabe, Laufposter als PNG/SVG, Höhenprofil, Zonen, Runden, Laufstil früh/spät und automatischer statistischer Streckenvergleich |
@@ -63,7 +63,24 @@ die Analysen darunter sind direkt sichtbar. Methodik und Datenbasis bleiben eink
   geeignete Werte liefert. [Methodik](docs/research/garmin-running-mechanics.md).
 - **Wochenjournal:** Sieben abgeschlossene lokale Kalendertage mit Läufen,
   Krafttraining, Hauptschlaf und freiwilliger Energieangabe. Frühere Zeiträume
-  lassen sich wochenweise aufrufen; fehlende Messwerte bleiben offen.
+  lassen sich wochenweise aufrufen. Ein Tag öffnet seine Einheiten und direkte
+  Links zu Lauf, Übungen und Nacht; fehlende Messwerte bleiben offen.
+- **Zeitreise und Monatsrückblick:** Ein Monatsregler zeigt die drei Entwicklungskarten
+  mit den bis zum damaligen Stichtag gemessenen Daten. Sensor- und Übungswechsel
+  begrenzen Vergleiche. Das Monats-Poster enthält Streckenkonturen, Lauf-/Gym-Bilanz
+  und optional den Gewichtsverlauf; Export als lokales 1024 × 1024 PNG oder SVG.
+- **Interaktive Verläufe:** Ein Messdatum gilt gemeinsam für alle Körpermaß-Kurven;
+  ein ausgewählter Lauf wird in Pace- und Pulsverteilung gleichzeitig hervorgehoben.
+  Der Messassistent markiert die gewählte Messstelle kurz auf der Silhouette.
+- **Streckenabschnitte:** Im Atlas lassen sich 500-m-Abschnitte gegen räumlich
+  zugeordnete Wiederholungen vergleichen. Versetzte Starts, mehrdeutige Zuordnungen
+  und Messlücken werden ausgeschlossen; kleine Gruppen bleiben als solche sichtbar.
+- **Typische Nacht:** Optionales Median-/50-%-Band aus früheren vollständigen
+  Garmin-Nächten, ausgerichtet an der Zeit seit Schlafbeginn. Mindestens sieben
+  Vergleichsnächte und fünf Nächte je Abschnitt; Lücken werden nicht aufgefüllt.
+- **Synchronisierung:** Manuelles Aktualisieren nennt tatsächlich neu hinzugekommene
+  Läufe, Nächte und Messtage, bietet direkte Links und markiert neue Einträge kurz.
+  Kleine Übergänge unterstützen die Bedienung und beachten reduzierte Bewegung.
 
 - **Referenzrunde:** In den Laufdetails eine Runde auswählen. Die Laufübersicht sammelt
   passende Wiederholungen derselben Sensorperiode und Richtung. Einzelne Pulsunterschiede

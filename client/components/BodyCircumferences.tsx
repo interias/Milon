@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent } from "react";
 import {
   circumferenceApi, formatCm, signedCm, measurementDate, measurementStamp,
-  measurementBounds, measurementStats, measurementSegments, measurementMonths,
+  measurementBounds, measurementStats, measurementSegments, measurementMonths, measurementCursorDate,
   type CircumferenceData, type CircumferenceDefinition, type CircumferenceEntry,
   type CircumferenceInput, type CircumferencePreferences, type CircumferencePeriod,
   type MeasureKey, type MeasurementBounds, type MeasurementStats,
@@ -43,7 +43,7 @@ function BodyDiagram({ definitions, active, onSelect }: {
           aria-label={`${definition.name}: ${definition.site}`} onClick={() => onSelect?.(definition.key)}
           onKeyDown={event => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(definition.key); } }}>
           <title>{definition.name} · {definition.site}</title>
-          <ellipse cx={x + width / 2} cy={y} rx={width / 2} ry={height / 2} fill={definition.color} fillOpacity=".12" stroke={definition.color} strokeWidth="3.5" />
+          <ellipse key={`${definition.key}-${active === definition.key}`} className={active === definition.key ? styles.drawMeasure : undefined} pathLength="1" cx={x + width / 2} cy={y} rx={width / 2} ry={height / 2} fill={definition.color} fillOpacity=".12" stroke={definition.color} strokeWidth="3.5" />
           <circle cx={x + width} cy={y} r="7" fill={definition.color} stroke="white" strokeWidth="2" />
         </g>;
       })}
@@ -57,7 +57,8 @@ function MeasureName({ definition, onClick }: { definition: CircumferenceDefinit
   </button>;
 }
 
-function Trend({ stat, bounds }: { stat: MeasurementStats; bounds: MeasurementBounds }) {
+type MeasureCursor = { date: string | null; dates: string[]; onPick: (date: string | null) => void };
+function Trend({ stat, bounds, cursor }: { stat: MeasurementStats; bounds: MeasurementBounds; cursor: MeasureCursor }) {
   const gradientId = useId().replace(/:/g, "");
   if (!stat.count) return <div className={styles.emptyChart}>Hier beginnt dein Verlauf.</div>;
   const width = 420, height = 62, values = stat.points.map(point => point.value);
@@ -65,7 +66,23 @@ function Trend({ stat, bounds }: { stat: MeasurementStats; bounds: MeasurementBo
   const span = measurementStamp(bounds.end) - measurementStamp(bounds.start);
   const x = (date: string) => span ? 4 + (measurementStamp(date) - measurementStamp(bounds.start)) / span * (width - 8) : width / 2;
   const y = (value: number) => 6 + (high - value) / Math.max(high - low, 1) * (height - 12);
-  return <svg className={styles.rowChart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img"
+  const selectedPoint = stat.points.find(point => point.date === cursor.date);
+  function pick(event: PointerEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const fraction = Math.max(0, Math.min(1, ((event.clientX - rect.left) / rect.width * width - 4) / (width - 8)));
+    cursor.onPick(measurementCursorDate(cursor.dates, measurementStamp(bounds.start) + fraction * span));
+  }
+  return <svg className={styles.rowChart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="group" tabIndex={0}
+    aria-description="Mit den Pfeiltasten ein gemeinsames Messdatum wählen, Escape hebt die Auswahl auf."
+    onPointerMove={pick} onPointerDown={event => { event.currentTarget.focus(); pick(event); }}
+    onKeyDown={event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === "Escape") cursor.onPick(null);
+      else if (event.key === "Home") cursor.onPick(cursor.dates[0] ?? null);
+      else if (event.key === "End") cursor.onPick(cursor.dates.at(-1) ?? null);
+      else { const index = cursor.date ? cursor.dates.indexOf(cursor.date) : cursor.dates.length - 1; cursor.onPick(cursor.dates[Math.max(0, Math.min(cursor.dates.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)))] ?? null); }
+    }}
     aria-label={`${stat.name}: ${stat.count === 1 ? "ein Messwert" : `${formatCm(stat.first!.value)} auf ${formatCm(stat.last!.value)} Zentimeter`}`}>
     <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop stopColor={stat.color} stopOpacity=".14" /><stop offset="1" stopColor={stat.color} stopOpacity="0" /></linearGradient></defs>
     <line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#edf1f0" />
@@ -74,27 +91,29 @@ function Trend({ stat, bounds }: { stat: MeasurementStats; bounds: MeasurementBo
       return <g key={segment[0].date}><path d={`${path} L${x(segment.at(-1)!.date)},${height} L${x(segment[0].date)},${height} Z`} fill={`url(#${gradientId})`} /><path d={path} fill="none" stroke={stat.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /></g>;
     })}
     {stat.points.map((point, index) => <circle key={point.date} cx={x(point.date)} cy={y(point.value)} r={index === stat.count - 1 ? 2.7 : 1.5} fill={stat.color}><title>{measurementDate(point.date, true)} · {formatCm(point.value)} cm</title></circle>)}
+    {cursor.date && <line x1={x(cursor.date)} x2={x(cursor.date)} y1="2" y2={height - 2} stroke="#607e77" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+    {selectedPoint && <circle cx={x(selectedPoint.date)} cy={y(selectedPoint.value)} r="4" fill="white" stroke={stat.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />}
   </svg>;
 }
 
-function MeasureRow({ stat, bounds, active, onSelect }: {
-  stat: MeasurementStats; bounds: MeasurementBounds; active: boolean; onSelect: () => void;
+function MeasureRow({ stat, bounds, active, onSelect, cursor }: {
+  stat: MeasurementStats; bounds: MeasurementBounds; active: boolean; onSelect: () => void; cursor: MeasureCursor;
 }) {
   return <article className={`${styles.measureRow} ${active ? styles.selected : ""}`} style={measureStyle(stat.color)}>
     <div className={styles.rowTop}><MeasureName definition={stat} onClick={onSelect} />
       <div className={styles.rowDelta}>{signedCm(stat.delta)} <small>cm</small><em>{stat.count === 1 ? "Startwert" : stat.percent == null ? "—" : `${signedCm(stat.percent)} %`}</em></div>
     </div>
-    <div className={styles.rowMain}><div className={styles.chartCell}><Trend stat={stat} bounds={bounds} /></div>
+    <div className={styles.rowMain}><div className={styles.chartCell}><Trend stat={stat} bounds={bounds} cursor={cursor} /></div>
       <div className={styles.rowValues}><span>{formatCm(stat.first?.value)} <i>→</i></span><strong>{formatCm(stat.last?.value)} <small>cm</small></strong></div>
     </div>
-    <div className={styles.rowMeta}><span>{stat.first ? `${measurementDate(stat.first.date, true)} → ${measurementDate(stat.last!.date, true)}` : "Noch keine Messung"}</span><span>{stat.count} {stat.count === 1 ? "Messung" : "Messungen"}</span></div>
+    <div className={styles.rowMeta}><span className={cursor.date ? styles.cursorValue : undefined}>{cursor.date ? <>{measurementDate(cursor.date)}: <strong>{formatCm(stat.points.find(point => point.date === cursor.date)?.value)} cm</strong>{!stat.points.some(point => point.date === cursor.date) && " · nicht gemessen"}</> : stat.first ? `${measurementDate(stat.first.date, true)} → ${measurementDate(stat.last!.date, true)}` : "Noch keine Messung"}</span><span>{stat.count} {stat.count === 1 ? "Messung" : "Messungen"}</span></div>
   </article>;
 }
 
 function Guide({ definition }: { definition: CircumferenceDefinition }) {
   return <div className={styles.entryGuide}>
     <div className={styles.guideFigure}><BodyDiagram definitions={[definition]} active={definition.key} /></div>
-    <div className={styles.guideCopy}><p className={styles.guideLabel}>SO MISST DU</p><h4>{definition.name}</h4><p>{definition.definition}</p><small>Schematische Markierung · rechts am Körper ist links im Bild.</small></div>
+    <div key={definition.key} className={styles.guideCopy}><p className={styles.guideLabel}>SO MISST DU</p><h4>{definition.name}</h4><p>{definition.definition}</p><small>Schematische Markierung · rechts am Körper ist links im Bild.</small></div>
   </div>;
 }
 
@@ -106,6 +125,9 @@ function EntryDialog({ data, entry, historical, measure, onClose, onSaved }: {
   const [protocol, setProtocol] = useState<CircumferenceInput["protocol"]>(entry?.protocol || (historical ? "unknown" : "standard"));
   const [values, setValues] = useState<Partial<Record<MeasureKey, string>>>(() => Object.fromEntries(Object.entries(entry?.values || {}).map(([key, value]) => [key, String(value).replace(".", ",")])));
   const [active, setActive] = useState(measure), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const mounted = useRef(true), completion = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (completion.current) clearTimeout(completion.current); }; }, []);
   const definition = data.definitions.find(definition => definition.key === active) || data.definitions[0];
   const primary = data.definitions.filter(definition => data.preferences.visible_keys.includes(definition.key));
   const extra = data.definitions.filter(definition => !data.preferences.visible_keys.includes(definition.key));
@@ -113,6 +135,7 @@ function EntryDialog({ data, entry, historical, measure, onClose, onSaved }: {
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (saving) return;
     const parsed: CircumferenceInput["values"] = {};
     for (const definition of data.definitions) {
       const raw = (values[definition.key] || "").trim();
@@ -127,7 +150,10 @@ function EntryDialog({ data, entry, historical, measure, onClose, onSaved }: {
     try {
       const input = { date, protocol, values: parsed };
       const result = entry ? await circumferenceApi.update(entry.id, input) : await circumferenceApi.create(input);
-      onSaved(result);
+      if (!mounted.current) return;
+      setSaved(true);
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) onSaved(result);
+      else completion.current = setTimeout(() => { if (mounted.current) onSaved(result); }, 220);
     } catch (error) { setError(errorMessage(error)); setSaving(false); }
   }
 
@@ -155,7 +181,7 @@ function EntryDialog({ data, entry, historical, measure, onClose, onSaved }: {
         </details>
         {error && <p className={styles.error} role="alert">{error}</p>}
       </div>
-      <div className={styles.dialogActions}><button type="button" className={styles.secondary} disabled={saving} onClick={onClose}>Abbrechen</button><button type="submit" className={styles.primary} disabled={saving}>{saving ? "Speichern …" : "Speichern"}</button></div>
+      <div className={styles.dialogActions}><button type="button" className={styles.secondary} disabled={saving} onClick={onClose}>Abbrechen</button><button type="submit" className={styles.primary} disabled={saving}>{saved ? <span role="status" className={styles.savedCheck}>✓ Gespeichert</span> : saving ? "Speichern …" : "Speichern"}</button></div>
     </form>
   </Dialog>;
 }
@@ -188,6 +214,7 @@ export function BodyCircumferences({ onChange }: { onChange?: () => void }) {
   const [selected, setSelected] = useState<MeasureKey>("abdomen_navel"), [entry, setEntry] = useState<OpenEntry | null>(null);
   const [configOpen, setConfigOpen] = useState(false), [guideOpen, setGuideOpen] = useState(false), [notice, setNotice] = useState("");
   const [journalOpen, setJournalOpen] = useState(false), [journalMode, setJournalMode] = useState<"entries" | "months">("entries");
+  const [cursorDate, setCursorDate] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal, savedMessage?: string) => {
     setLoading(true); setError("");
@@ -200,6 +227,8 @@ export function BodyCircumferences({ onChange }: { onChange?: () => void }) {
 
   const bounds = useMemo(() => data ? measurementBounds(data.entries, data.preferences.period, data.today) : null, [data]);
   const stats = useMemo(() => data && bounds ? measurementStats(data.definitions, data.entries, bounds) : [], [data, bounds]);
+  const cursorDates = useMemo(() => [...new Set(stats.filter(stat => data?.preferences.visible_keys.includes(stat.key)).flatMap(stat => stat.points.map(point => point.date)))].sort(), [stats, data]);
+  const cursor = { date: cursorDate && cursorDates.includes(cursorDate) ? cursorDate : null, dates: cursorDates, onPick: setCursorDate };
 
   async function savePreferences(preferences: CircumferencePreferences) {
     setPreferenceBusy(true);
@@ -238,7 +267,7 @@ export function BodyCircumferences({ onChange }: { onChange?: () => void }) {
   const visible = data.preferences.visible_keys.map(key => stats.find(stat => stat.key === key)).filter((stat): stat is MeasurementStats => !!stat);
   const current = visible.find(stat => stat.key === selected) || visible[0];
   const allCurrent = data.definitions.find(definition => definition.key === selected) || current;
-  const rows = visible.map(stat => <MeasureRow key={stat.key} stat={stat} bounds={bounds} active={stat.key === current.key} onSelect={() => setSelected(stat.key)} />);
+  const rows = visible.map(stat => <MeasureRow key={stat.key} stat={stat} bounds={bounds} active={stat.key === current.key} onSelect={() => setSelected(stat.key)} cursor={cursor} />);
   const figure = <div className={styles.figurePanel}><BodyDiagram definitions={visible} active={current.key} onSelect={setSelected} /><div className={styles.figureCaption}><strong style={{ color: current.color }}>{current.name}</strong><span>{current.site}</span><button type="button" className={styles.textButton} onClick={() => { setSelected(current.key); setGuideOpen(true); }}>So misst du ↗</button></div></div>;
 
   return <section className={styles.root} aria-label="Körpermaße">
@@ -248,7 +277,7 @@ export function BodyCircumferences({ onChange }: { onChange?: () => void }) {
       <div className={styles.toolbar}><div className={styles.segmented} aria-label="Zeitraum">{PERIODS.map(([period, label]) => <button key={period} type="button" aria-pressed={data.preferences.period === period} disabled={busy} onClick={() => changePreferences({ period })}>{label}</button>)}</div><span className={styles.periodRange}>{measurementDate(bounds.start, true)} – {measurementDate(bounds.end, true)}</span><button type="button" className={styles.textButton} disabled={busy} onClick={() => setConfigOpen(true)}>Anzeige ändern ⚙</button></div>
       <div className={styles.viewBar}><div className={`${styles.segmented} ${styles.subtle}`} aria-label="Ansicht"><button type="button" aria-pressed={data.preferences.layout === "rows"} disabled={busy} onClick={() => changePreferences({ layout: "rows" })}>Zeilen</button><button type="button" aria-pressed={data.preferences.layout === "atlas"} disabled={busy} onClick={() => changePreferences({ layout: "atlas" })}>Körperatlas</button></div>{loading && <span className={styles.note} role="status">Aktualisieren …</span>}</div>
       <div className={styles.view}>{data.preferences.layout === "rows" ? <div className={styles.rows}>{figure}<div className={styles.rowsList}><div className={styles.rowsLegend}><span>Maß & Verlauf</span><span>Start → zuletzt · Veränderung</span></div>{rows}</div></div> : <div className={styles.atlas}><div className={styles.atlasSide}>{rows.slice(0, Math.ceil(rows.length / 2))}</div>{figure}<div className={styles.atlasSide}>{rows.slice(Math.ceil(rows.length / 2))}</div></div>}</div>
-      <div className={styles.cardFoot}><span>Eigene cm-Skala je Verlauf · Δ = erster → letzter Wert im Zeitraum</span><span>Markierung oder Maß anklicken</span></div>
+      <div className={styles.cardFoot}><span>Eigene cm-Skala je Verlauf · Δ = erster → letzter Wert im Zeitraum</span><span>{cursor.date ? <button type="button" className={styles.textButton} onClick={() => setCursorDate(null)}>Datumauswahl aufheben ×</button> : "Verlauf berühren oder ← →: ein Datum für alle Maße"}</span></div>
     </div>
     <details className={styles.journal} open={journalOpen} onToggle={event => setJournalOpen(event.currentTarget.open)}>
       <summary><span>Messjournal <small>{data.entries.length} {data.entries.length === 1 ? "Eintrag" : "Einträge"}</small></span><span className={styles.summaryHint}>Werte & Monatsansicht</span></summary>

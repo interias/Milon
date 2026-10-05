@@ -5,6 +5,7 @@ import { RunWeeklyZones } from "@/components/RunIntensityZones";
 import { RouteAtlas } from "@/components/RouteAtlas";
 import { loadRouteAtlas, type RouteAtlasData } from "@/lib/route-atlas";
 import { routeDate, runRoutesApi } from "@/lib/run-routes";
+import { captureSyncInventory, finishManualSync } from "@/lib/sync-feedback";
 import styles from "./RunRoutes.module.css";
 
 const message = (error: unknown) => error instanceof Error ? error.message : "Die Anfrage ist fehlgeschlagen. Bitte erneut versuchen.";
@@ -46,16 +47,18 @@ export function RunRoutes() {
     if (syncController.current) return;
     const controller = new AbortController(); syncController.current = controller;
     setSyncing(true); setSyncError(""); setFeedback("");
+    const before = await captureSyncInventory();
     try {
       const result = await runRoutesApi.sync(controller.signal);
       if (controller.signal.aborted) return;
       if (result.error) throw new Error(result.error);
       const loaded = await load();
       if (controller.signal.aborted) return;
-      setFeedback(result.mode === "not_configured" ? "Garmin ist noch nicht verbunden." : loaded ? "Garmin-Strecken aktualisiert." : "Garmin importiert. Bitte den Atlas erneut laden.");
-      window.dispatchEvent(new CustomEvent("milon:data-refresh", { detail: { source: "garmin-routes" } }));
+      const feedback = await finishManualSync(before, "garmin-routes");
+      if (controller.signal.aborted) return;
+      setFeedback(result.mode === "not_configured" ? "Garmin ist noch nicht verbunden." : loaded ? feedback : "Garmin importiert. Bitte den Atlas erneut laden.");
     } catch (issue) {
-      if (!controller.signal.aborted) { setSyncError(message(issue)); await load(); }
+      if (!controller.signal.aborted) { setSyncError(message(issue)); await load(); await finishManualSync(before, "garmin-routes"); }
     } finally { if (!controller.signal.aborted) { setSyncing(false); syncController.current = null; } }
   }
   return <section id="strecken" className={styles.section}><Card className={styles.card}>

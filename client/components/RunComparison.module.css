@@ -31,6 +31,14 @@
 .median { stroke:var(--color-ink); stroke-width:1.3; }
 .dot { fill:var(--color-surface); stroke:#65817d; stroke-width:1.5; }
 .runPoint { cursor:pointer; }
+.runPoint .dot { transition:fill 180ms ease,stroke 180ms ease; }
+.activePoint .dot { fill:var(--color-accent); stroke:var(--color-accent); stroke-width:2; }
+.halo { fill:#d3ebe4; stroke:none; }
+.readout { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 14px; min-height:37px; margin-top:12px; padding:9px 10px; border-radius:5px; background:#f2f8f6; color:var(--color-muted); font-size:10px; font-variant-numeric:tabular-nums; }
+.readoutDate { min-width:65px; font-weight:600; color:var(--color-ink); }
+.readout strong { color:var(--color-accent); font:600 16px var(--font-display); }
+.readout a,.readoutHint { margin-left:auto; color:var(--color-accent); font-size:10px; }
+.readout a { text-decoration:underline; text-underline-offset:3px; }
 .runPoint:hover .dot,.runPoint:focus .dot { fill:var(--color-accent-2); stroke:var(--color-accent); stroke-width:2; }
 .selected line { stroke:var(--color-accent); stroke-width:1.5; }
 .selected path { fill:var(--color-accent); stroke:var(--color-surface); stroke-width:1.5; }
@@ -41,6 +49,8 @@
 .method summary { cursor:pointer; width:fit-content; }
 .method p { margin-top:7px; max-width:85ch; }
 .section summary:focus-visible,.section button:focus-visible,.runPoint:focus-visible { outline:2px solid var(--color-accent-2); outline-offset:3px; }
+.readout a:focus-visible { outline:2px solid var(--color-accent-2); outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) { .runPoint .dot { transition:none; } }
 @media(max-width:500px) {
   .section { padding:16px; }
   .header { gap:8px; }

@@ -1,5 +1,36 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Interaktive Entwicklung (2026-10-05)
+
+- `metrics/overview_history.py` liefert `/metrics/overview/history` mit monatlichen
+  Stichtagen aus ausschließlich bis dahin gemessenen Werten. Laufpuls verwendet
+  dieselbe Sensorperiode und einen festen Referenzpunkt; die Kraftberechnung
+  bestimmt den damals verfügbaren Übungskorb neu. Dünne Monatsverknüpfungen bleiben
+  unbekannt, Vergleiche über veränderte Körbe fehlen. `/metrics/overview/monthly`
+  liefert Kalenderbilanzen für den lokalen SVG-/1024-PNG-Export in `MonthlyRecap`.
+- `metrics/route_segments.py` ergänzt `/metrics/running/segments/{activity_id}`.
+  500-m-GPS-Abschnitte werden räumlich auf vollständige Läufe der vorhandenen
+  97-%-Kohorte projiziert. Startabstand höchstens 30 m, Richtung und eindeutiger
+  Fortschritt werden geprüft. Pausen und Aufzeichnungslücken unterbrechen den
+  Vergleich. Zeitgewichteter Puls braucht mindestens 90 % Abdeckung; dieselben
+  Vergleichsläufe liefern Pace und Puls. Min/Max beschreiben beobachtete Streuung.
+- `RunComparison` koppelt die Auswahl über beide Verteilungen. Körpermaß-Kurven
+  teilen ein reales Messdatum; an diesem Tag nicht gemessene Maße bleiben leer.
+  `BodyCircumferences` zeichnet die aktive Messstelle kurz und bestätigt das
+  Speichern vor dem Schließen. Bewegung beachtet `prefers-reduced-motion`.
+- Das Wochenjournal enthält exakte kanonische Garmin-IDs und Übungsnamen für
+  Tagesdetails. Nächte sind über `/gesundheit?night=YYYY-MM-DD` direkt erreichbar;
+  der Listen-Endpunkt akzeptiert dafür ein historisches `end`.
+- Nachtantworten enthalten eine optionale `reference`: höchstens 28 vorherige
+  vollständige Garmin-Hauptnächte, mindestens sieben insgesamt. Median und Quartile
+  je 5-Minuten-Bin brauchen fünf Nächte, jede Nacht zählt einmal. Ausrichtung ab
+  Schlafbeginn in UTC; ausgewählte, zukünftige und überlappende Nächte fehlen.
+- `/ingest/inventory` liefert stabile externe IDs bzw. Kalendertage für Vorher-/
+  Nachher-Vergleiche manueller Importe. Wiedereinlesen derselben Identität zählt
+  nicht als neuer Eintrag. `SyncFeedback` hält Links und Hervorhebungen für zwei
+  Minuten im Browser; Importfehler bleiben daneben sichtbar. Keine Migration,
+  zusätzlichen Remote-Abrufe oder LLM-Kosten für diese Erweiterungen.
+
 ## Visuelle Garmin-Auswertungen (2026-10-05)
 
 - `metrics/route_atlas.py` gruppiert alle lokal gespeicherten Strecken mit dem

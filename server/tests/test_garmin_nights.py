@@ -185,3 +185,97 @@ def test_api_validates_calendar_days_and_supported_periods(db):
     assert client.get("/metrics/garmin/nights?days=14").status_code == 200
     assert client.get("/metrics/garmin/nights?days=30").status_code == 200
     assert client.get("/metrics/garmin/nights?days=365").status_code == 422
+
+
+def reference_row(day, hr, *, every=120, gap=False, complete=True):
+    data = payload(day)
+    if not complete:
+        data["sleepLevels"][0]["activityLevel"] = -1
+    start = data["dailySleepDTO"]["sleepStartTimestampGMT"]
+    data["sleepHeartRate"] = [{"startGMT": start + second * 1000, "value": hr}
+                             for second in range(0, 28800, every) if not gap or not 3600 <= second < 4200]
+    return GarminDaily(day=day, raw_json=json.dumps({"sleep": data}))
+
+
+def test_reference_excludes_selected_future_old_and_wrong_watch(db, monkeypatch):
+    day = date(2026, 11, 10)
+    monkeypatch.setattr(nights.settings, "watch_source_switch_date", day - timedelta(days=7))
+    rows = [reference_row(day - timedelta(days=index), 40 + index) for index in range(1, 8)]
+    rows += [reference_row(day, 200), reference_row(day + timedelta(days=1), 200),
+             reference_row(day - timedelta(days=8), 200), reference_row(day - timedelta(days=29), 200)]
+    selected = nights._night(reference_row(day, 200), detail=True)
+    value = nights._reference(rows, selected)
+    assert value["status"] == "ready" and value["complete_nights"] == 7
+    assert value["metrics"]["heart_rate"]["bins"][0] == {"start_seconds": 0, "end_seconds": 300,
+          "nights": 7, "median": 44.0, "q1": 42.5, "q3": 45.5}
+
+
+def test_reference_gives_one_vote_per_night_and_never_interpolates_missing_bins(db):
+    day = date(2026, 11, 10)
+    rows = [reference_row(day - timedelta(days=index), 40 + index, every=1 if index == 1 else 120,
+                          gap=index <= 3) for index in range(1, 8)]
+    value = nights._reference(rows, nights._night(reference_row(day, 100), detail=True))
+    bins = value["metrics"]["heart_rate"]["bins"]
+    assert bins[0]["median"] == 44 and bins[0]["nights"] == 7
+    assert not any(point["start_seconds"] in (3600, 3900) for point in bins)
+    assert next(point for point in bins if point["start_seconds"] == 4200)["nights"] == 7
+
+
+def test_reference_needs_seven_complete_nights_and_five_per_metric_bin(db):
+    day = date(2026, 11, 10)
+    selected = nights._night(reference_row(day, 100), detail=True)
+    rows = [reference_row(day - timedelta(days=index), 50, complete=index != 7) for index in range(1, 8)]
+    value = nights._reference(rows, selected)
+    assert value["status"] == "collecting" and value["complete_nights"] == 6
+    assert all(not item["bins"] for item in value["metrics"].values())
+    rows[-1] = reference_row(day - timedelta(days=7), 50)
+    for row in rows[:3]:
+        data = json.loads(row.raw_json)
+        data["sleep"]["hrvData"] = []
+        row.raw_json = json.dumps(data)
+    value = nights._reference(rows, selected)
+    assert value["status"] == "ready" and value["metrics"]["hrv"]["bins"] == []
+    assert value["metrics"]["hrv"]["nights"] == 4
+
+
+def test_reference_bins_use_elapsed_utc_across_dst_not_normalized_night_length(db):
+    selected_day = date(2026, 10, 26)
+    row = reference_row(date(2026, 10, 25), 50)
+    rows = [row] + [reference_row(selected_day - timedelta(days=index), 50) for index in range(2, 8)]
+    selected = nights._night(reference_row(selected_day, 70), detail=True)
+    value = nights._reference(rows, selected)
+    bins = value["metrics"]["heart_rate"]["bins"]
+    assert len(bins) == 96 and bins[-1]["end_seconds"] == 28800
+    assert all(point["nights"] == 7 for point in bins)
+    selected["window_minutes"] = 300
+    shorter = nights._reference(rows, selected)
+    assert len(shorter["metrics"]["heart_rate"]["bins"]) == 60
+    assert shorter["metrics"]["heart_rate"]["bins"][-1]["end_seconds"] == 18000
+
+
+def test_historical_deep_link_window_and_future_end_clamp(db):
+    save(db, day=date(2026, 9, 26))
+    save(db, day=DAY)
+    older = nights.nights(14, now=NOW, end=date(2026, 9, 27))
+    assert older["to_date"] == "2026-09-27" and len(older["nights"]) == 1
+    assert nights.nights(14, now=NOW, end=date(2030, 1, 1))["to_date"] == DAY.isoformat()
+
+
+def test_reference_rejects_prior_calendar_day_that_overlaps_selected_night(db, monkeypatch):
+    day = date(2026, 11, 10)
+    selected = nights._night(reference_row(day, 100), detail=True)
+    rows = [reference_row(day - timedelta(days=index), 50) for index in range(1, 8)]
+    # Same prior waking date, but its final sample lies after the selected night started.
+    data = json.loads(rows[0].raw_json)
+    shift = 17 * 3600_000
+    data["sleep"]["dailySleepDTO"]["sleepStartTimestampGMT"] += shift
+    data["sleep"]["dailySleepDTO"]["sleepEndTimestampGMT"] += shift
+    for phase in data["sleep"]["sleepLevels"]:
+        phase["startGMT"] = (datetime.fromisoformat(phase["startGMT"]) + timedelta(hours=17)).isoformat()
+        phase["endGMT"] = (datetime.fromisoformat(phase["endGMT"]) + timedelta(hours=17)).isoformat()
+    rows[0].raw_json = json.dumps(data)
+    # Keep the prior local waking day: 23:00 UTC falls on the selected day in Berlin,
+    # so use UTC for this fixture to isolate overlap rather than the waking-day check.
+    monkeypatch.setattr(nights.settings, "timezone", "UTC")
+    assert nights._night(rows[0])["complete"]
+    assert nights._reference(rows, selected)["complete_nights"] == 6

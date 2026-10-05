@@ -39,6 +39,17 @@ export type GarminNight = GarminNightSummary & {
   stage_conflict: boolean;
   series: Record<NightMetric, NightSeries>;
   battery_change: number | null;
+  reference: {
+    status: "ready" | "collecting";
+    complete_nights: number;
+    minimum_nights: number;
+    min_bin_nights: number;
+    bin_minutes: number;
+    from_date: string;
+    to_date: string;
+    method: string;
+    metrics: Record<NightMetric, { nights: number; bins: { start_seconds: number; end_seconds: number; nights: number; median: number; q1: number; q3: number }[] }>;
+  };
 };
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
@@ -48,7 +59,7 @@ async function get<T>(path: string, signal: AbortSignal): Promise<T> {
   return response.json();
 }
 export const garminNightsApi = {
-  list: (days: 14 | 30, signal: AbortSignal) => get<GarminNightList>(`?days=${days}`, signal),
+  list: (days: 14 | 30, signal: AbortSignal, end?: string) => get<GarminNightList>(`?days=${days}${end ? `&end=${encodeURIComponent(end)}` : ""}`, signal),
   night: (day: string, signal: AbortSignal) => get<GarminNight>(`/${day}`, signal),
 };
 

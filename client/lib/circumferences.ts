@@ -51,6 +51,10 @@ export const circumferenceApi = {
 };
 
 export const measurementStamp = (date: string) => Date.parse(`${date}T12:00:00Z`);
+export function measurementCursorDate(dates: string[], stamp: number): string | null {
+  if (!dates.length || !Number.isFinite(stamp)) return null;
+  return dates.reduce((nearest, date) => Math.abs(measurementStamp(date) - stamp) < Math.abs(measurementStamp(nearest) - stamp) ? date : nearest);
+}
 export const formatCm = (value: number | null | undefined) => value == null || !Number.isFinite(value)
   ? "—" : value.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 export const signedCm = (value: number | null) => value == null ? "—"

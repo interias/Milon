@@ -10,7 +10,8 @@ from sqlmodel import Session, select
 from ..checkins import CheckIn
 from ..config import settings
 from ..db import engine
-from ..models import StepsDaily, Workout
+from ..garmin_activity import GarminActivity
+from ..models import ExerciseSession, StepsDaily, Workout, WorkoutSet
 from . import body, running, sleep
 
 
@@ -33,6 +34,20 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
                                                       Workout.started_at < end_time).order_by(Workout.started_at)).all()
         checkins = {entry.day: entry for entry in session.exec(select(CheckIn).where(CheckIn.day >= first, CheckIn.day < boundary)).all()}
         steps = {entry.day: entry.steps for entry in session.exec(select(StepsDaily).where(StepsDaily.day >= first, StepsDaily.day < boundary)).all()}
+        run_links = {}
+        linked = session.exec(select(ExerciseSession.started_at, ExerciseSession.ended_at, ExerciseSession.distance_km,
+                                     GarminActivity.activity_id).join(GarminActivity,
+                                     GarminActivity.canonical_external_id == ExerciseSession.external_id)
+                              .where(ExerciseSession.exercise_type == running.RUN, ExerciseSession.started_at >= start_time,
+                                     ExerciseSession.started_at < end_time)).all()
+        for start, end, distance, activity_id in linked:
+            run_links.setdefault((start, end, distance), set()).add(activity_id)
+        exercises = {}
+        workout_ids = [row.id for row in workouts if row.started_at >= start_time]
+        if workout_ids:
+            for workout_id, exercise in session.exec(select(WorkoutSet.workout_id, WorkoutSet.exercise)
+                    .where(WorkoutSet.workout_id.in_(workout_ids)).distinct().order_by(WorkoutSet.exercise)).all():
+                exercises.setdefault(workout_id, []).append(exercise)
     main_sleep = {item["date"]: item for item in sleep.overview(days=7, today=last)["series"] if item["main_sleep"]}
     days = []
     for index in range(7):
@@ -40,10 +55,15 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
         daily_runs = current_runs[current_runs["started_at"].dt.date == day] if not current_runs.empty else current_runs
         daily_strength = [row for row in workouts if row.started_at.date() == day]
         night, entry = main_sleep.get(day.isoformat()), checkins.get(day)
+        def activity_id(row):
+            matches = run_links.get((row.started_at.to_pydatetime(), row.ended_at.to_pydatetime(), row.distance_km), set())
+            return next(iter(matches)) if len(matches) == 1 else None
+
         days.append({"date": day.isoformat(),
                      "runs": [{"started_at": row.started_at.isoformat(), "distance_km": round(float(row.distance_km), 2),
-                               "minutes": round(float(row.dur_min), 1)} for row in daily_runs.itertuples()],
-                     "strength": [{"started_at": row.started_at.isoformat(), "title": row.title or "Krafttraining"}
+                               "minutes": round(float(row.dur_min), 1), "activity_id": activity_id(row)} for row in daily_runs.itertuples()],
+                     "strength": [{"started_at": row.started_at.isoformat(), "title": row.title or "Krafttraining",
+                                   "exercises": exercises.get(row.id, [])}
                                   for row in daily_strength],
                      "sleep": {"hours": night["asleep_hours"], "source": night["source_package"],
                                "label": sleep.LABELS.get(night["source_package"], "Uhr"),
