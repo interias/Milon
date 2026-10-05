@@ -56,22 +56,30 @@ function ComparisonChart({ data }: { data: RunComparisonData }) {
 }
 
 export function RunComparison({ activityId, candidates }: { activityId: string; candidates: RunInsightCandidate[] }) {
-  const selectId = useId();
-  const [open, setOpen] = useState(false), [selected, setSelected] = useState(candidates[0]?.activity_id || "");
+  const selectId = useId(), headingId = useId();
+  const [selected, setSelected] = useState("");
+  const selectedId = candidates.some(candidate => candidate.activity_id === selected) ? selected : candidates[0]?.activity_id || "";
   const [data, setData] = useState<RunComparisonData | null>(null), [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (!open || !selected) return;
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("milon:data-refresh", refresh);
+    return () => window.removeEventListener("milon:data-refresh", refresh);
+  }, []);
+  useEffect(() => {
+    if (!selectedId) return;
     const controller = new AbortController();
     setData(null); setError("");
-    runInsightsApi.compare(activityId, selected, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Vergleich konnte nicht geladen werden."); });
+    runInsightsApi.compare(activityId, selectedId, controller.signal).then(value => { if (!controller.signal.aborted) setData(value); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Vergleich konnte nicht geladen werden."); });
     return () => controller.abort();
-  }, [activityId, selected, open, revision]);
-  const current = data?.first.activity_id === activityId && data.second.activity_id === selected ? data : null;
+  }, [activityId, selectedId, revision]);
+  const current = data?.first.activity_id === activityId && data.second.activity_id === selectedId ? data : null;
   const result = current?.comparison;
-  return <details className={styles.details} onToggle={event => setOpen(event.currentTarget.open)}><summary>Läufe vergleichen <span>Puls & Tempo über die Distanz</span></summary>
+  return <section className={styles.section} aria-labelledby={headingId}>
+    <header className={styles.header}><div><h2 id={headingId}>Läufe vergleichen</h2><p>Puls & Tempo über die Distanz</p></div>
+      {candidates.length > 0 && <div className={styles.picker}><label className={styles.label} htmlFor={selectId}>Vergleichslauf</label><select id={selectId} value={selectedId} onChange={event => setSelected(event.target.value)} className={styles.select}>{candidates.map(candidate => <option key={candidate.activity_id} value={candidate.activity_id}>{routeDate(candidate.started_at)} · {de(candidate.distance_km, 2)} km · {candidate.similarity_label}</option>)}</select></div>}
+    </header>
     {!candidates.length ? <p className={styles.note}>Noch kein weiterer geeigneter Lauf mit vollständiger Aufzeichnung vorhanden.</p> : <>
-      <label className={styles.label} htmlFor={selectId}>Vergleichslauf</label><select id={selectId} value={selected} onChange={event => setSelected(event.target.value)} className={styles.select}>{candidates.map(candidate => <option key={candidate.activity_id} value={candidate.activity_id}>{routeDate(candidate.started_at)} · {de(candidate.distance_km, 2)} km · {candidate.similarity_label}</option>)}</select>
       {error ? <p className={styles.note} role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Erneut laden</button></p> : !current ? <p className={styles.note} role="status">Vergleich wird geladen …</p> : <>
         {result?.status === "observed" && <div className={styles.result}><div><span>Pulsdifferenz</span><strong>{finite(result.hr_delta_bpm) ? `${result.hr_delta_bpm > 0 ? "+" : ""}${de(result.hr_delta_bpm, 1)}` : "–"} <small>bpm</small></strong></div><p>Vergleich minus ausgewählter Lauf · {result.matched_pairs} passende Minutenpaare bei ähnlichem Tempo und Gefälle.</p></div>}
         <p className={styles.note}>{result?.reason}</p>
@@ -79,5 +87,5 @@ export function RunComparison({ activityId, candidates }: { activityId: string; 
         <details className={styles.method}><summary>So wird verglichen</summary><p className={styles.note}>{result?.method}</p></details>
       </>}
     </>}
-  </details>;
+  </section>;
 }

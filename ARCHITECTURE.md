@@ -2,6 +2,17 @@
 
 ## Garmin: Vergleich, Intensität und Datenstatus
 
+Jeder importierte Garmin-Lauf hat eine direkt verlinkbare Detailseite unter
+`/laufen/[activityId]`. Eine kurze Einordnung zeigt zuerst Garmins geschätzten
+Trainingsreiz, die beschreibende Pulsstabilität und den aktuellen standardisierten
+Puls-Trend über mehrere Läufe. Die Entwicklung verwendet nur die neueste Schätzung
+und deren bereits berechneten Vergleich; fehlende Daten nach Sensorwechseln werden
+nicht durch ältere Werte ersetzt. Es gibt keinen Gesamt-Score für einen „guten“ Lauf.
+Kennzahlen und Zeitverlauf mit gekoppelter Strecke folgen darunter; Pulszonen,
+Drift, Runden, Laufdynamik und Vergleich sind ohne Aufklappen sichtbar.
+Nur Methodik und Datenbasis bleiben eingeklappt. Abschnittslinks verkürzen die
+Navigation; der Rückweg zur Laufübersicht stellt den gewählten Lauf wieder her.
+
 Die vorhandenen Laufdetails koppeln den Zeitcursor an einen GPS-Punkt derselben
 UTC-Aufzeichnung. Unterbrechungen und fehlende Zeitstempel bleiben Lücken. Der
 Laufvergleich legt Puls und Pace zweier Aufzeichnungen über die gelaufene Distanz;

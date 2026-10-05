@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui";
-import { RunActivityDetail } from "@/components/RunActivityDetail";
+import Link from "next/link";
 import { RunWeeklyZones } from "@/components/RunIntensityZones";
 import { de, de0, dur } from "@/lib/format";
 import { projectRunRoute, routeDate, runRoutesApi, type RunRouteDetail, type RunRouteList } from "@/lib/run-routes";
@@ -48,7 +48,6 @@ function RoutePreview({ route }: { route: RunRouteDetail }) {
 }
 
 export function RunRoutes() {
-  const [activityId, setActivityId] = useState<string | null>(null);
   const [list, setList] = useState<RunRouteList | null>(null), [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<RunRouteDetail | null>(null), [detailRevision, setDetailRevision] = useState(0);
   const [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [detailLoading, setDetailLoading] = useState(false);
@@ -66,11 +65,18 @@ export function RunRoutes() {
     setListError("");
     try {
       const result = await runRoutesApi.list(offset, controller.signal);
+      const requested = !offset ? new URLSearchParams(window.location.search).get("lauf") : null;
+      let items = result.items;
+      if (requested && /^[0-9]{1,30}$/.test(requested) && !items.some(item => item.activity_id === requested)) {
+        const restored = await runRoutesApi.detail(requested, controller.signal).catch(() => null);
+        if (restored) items = [...items, restored];
+      }
       if (controller.signal.aborted || revision !== listRequest.current.revision) return false;
-      setList(previous => offset && previous ? { ...result, items: Array.from(new Map([...previous.items, ...result.items].map(item => [item.activity_id, item])).values()) } : result);
+      setList(previous => offset && previous ? { ...result, items: Array.from(new Map([...previous.items, ...items].map(item => [item.activity_id, item])).values()) } : { ...result, items });
       setNextOffset(result.items.length ? offset + result.items.length : result.total);
       if (!offset) {
-        setSelectedId(previous => result.items.some(item => item.activity_id === previous) ? previous : result.items[0]?.activity_id || "");
+        setSelectedId(previous => items.some(item => item.activity_id === previous) ? previous
+          : requested && items.some(item => item.activity_id === requested) ? requested : items[0]?.activity_id || "");
         setDetailRevision(previous => previous + 1);
       }
       return true;
@@ -138,7 +144,7 @@ export function RunRoutes() {
   const busy = loading || loadingMore || syncing;
   const previousSyncFailed = list?.sync?.status === "error";
 
-  return <Card className={styles.card}>
+  return <section id="strecken" className={styles.section}><Card className={styles.card}>
     <div className={styles.header}><div><h3 className="text-sm font-semibold">Gelaufene Strecken</h3><p className="text-[11px] text-muted">Deine Garmin-Läufe mit GPS</p></div><button type="button" className={styles.refreshButton} disabled={busy} onClick={() => void synchronize()}>{syncing ? "Garmin wird aktualisiert …" : "Garmin aktualisieren"}</button></div>
     {syncError && <p className={styles.error} role="alert">{syncError}</p>}
     {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
@@ -151,11 +157,10 @@ export function RunRoutes() {
         {current.elevation_gain_m != null && <span><strong>↗ {de0(current.elevation_gain_m)}</strong> m <small>Anstieg</small></span>}
       </div>}
       {detailLoading ? <p className={styles.emptyPreview} role="status">GPS-Verlauf wird geladen …</p> : detailError ? <div className={styles.emptyPreview}><p className={styles.error} role="alert">{detailError}</p><button type="button" className={styles.retryButton} onClick={() => setDetailRevision(value => value + 1)}>Verlauf erneut laden</button></div> : route ? <RoutePreview route={route} /> : null}
-      {current && <div className={styles.detailRow}><p className={styles.matchNote}>{current.matched_external_id ? "Mit deinem vorhandenen Lauf verknüpft." : "Direkt aus Garmin Connect."}</p><button type="button" className={styles.detailButton} onClick={() => setActivityId(current.activity_id)}>Laufdetails <span aria-hidden="true">↗</span></button></div>}
+      {current && <div className={styles.detailRow}><p className={styles.matchNote}>{current.matched_external_id ? "Mit deinem vorhandenen Lauf verknüpft." : "Direkt aus Garmin Connect."}</p><Link className={styles.detailButton} href={`/laufen/${encodeURIComponent(current.activity_id)}`}>Laufdetails <span aria-hidden="true">→</span></Link></div>}
       {nextOffset < list.total && <p className={styles.count}>{list.items.length} von {list.total} Läufen geladen</p>}
     </>}
     <RunWeeklyZones />
     {list?.sync?.last_sync && <p className={`${styles.syncNote} ${previousSyncFailed ? styles.failedSync : ""}`}>{previousSyncFailed ? "Letzter Import fehlgeschlagen" : "Letzter Import"} · {routeDate(list.sync.last_sync)}{previousSyncFailed && <span>Bitte Garmin erneut aktualisieren.</span>}</p>}
-    {activityId && <RunActivityDetail activityId={activityId} onClose={() => setActivityId(null)} />}
-  </Card>;
+  </Card></section>;
 }
