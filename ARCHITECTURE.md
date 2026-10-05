@@ -1,5 +1,29 @@
 # Fitness-Tracker — Architektur & Plan
 
+## Garmin: gelaufene GPS-Strecken
+
+`garminconnect` liest Laufaktivitäten und GPX-Dateien direkt aus Garmin Connect.
+Die lokal eingerichtete Sitzung liegt als `GARMIN_SESSION_B64` in
+`data/garmin/.env`; der Wert enthält serialisierte Sitzungstokens, kein Passwort.
+Base64 dient nur der Formatierung. Erneuerte Tokens werden atomar zurückgeschrieben;
+API-Antworten und Synchronisationsprotokolle enthalten keine Zugangsdaten.
+
+`POST /ingest/garmin` und der allgemeine Daten-Refresh importieren neue Routen.
+Bei laufendem Scheduler wird alle 15 Minuten geprüft. Der Erstimport und
+`?full=true` lesen höchstens 1.000 Laufaktivitäten; weitere Abrufe prüfen die
+letzten 30. Ein Vollabruf lädt auch vorhandene Tracks neu. Fehler einzelner
+Aktivitäten lassen erfolgreich gespeicherte Routen bestehen und werden als
+unvollständiger Import gemeldet.
+
+Die Tabelle `garmin_routes` ist über die Garmin-Aktivitäts-ID idempotent und
+unabhängig von `exercise_sessions`. Startzeit, Distanz und verstrichene Dauer
+ordnen eine Route nur bei einem eindeutigen Treffer einem bestehenden Lauf zu.
+Garmin-Routen erzeugen keine zusätzlichen Trainingseinheiten oder Kilometer in
+den bisherigen Health-Connect-Auswertungen; diese behalten ihren Importweg.
+GPS-Punkte gelangen nicht in den Coach-Kontext. GPX-Segmente und Unterbrechungen
+bleiben getrennt. Listen und Details liefert `GET /metrics/running/routes`.
+Die Laufseite zeigt den Verlauf lokal als SVG, ohne externen Kartenhintergrund.
+
 ## Körpermaße: manuelle Umfangsmessungen
 
 Die Körperseite ergänzt die importierten Waagenwerte um manuelle Umfänge mit

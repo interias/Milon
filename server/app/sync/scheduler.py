@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlmodel import Session, select
 
 from ..config import INCOMING_DIR, settings
 from ..db import engine
-from ..ingest import fddb, health_connect, hevy
+from ..ingest import fddb, garmin, health_connect, hevy
 from ..models import SyncState
 
 _scheduler: BackgroundScheduler | None = None
@@ -33,7 +34,7 @@ def _tz():
 def record_sync(source: str, status: str, detail: str | None = None, cursor: str | None = None) -> None:
     with Session(engine) as s:
         row = s.get(SyncState, source) or SyncState(source=source)
-        row.last_sync = datetime.now()
+        row.last_sync = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
         row.status = status
         row.detail = (detail or "")[:500]
         if cursor is not None:
@@ -55,6 +56,15 @@ def sync_fddb() -> None:
         record_sync("fddb", "ok", json.dumps({k: v for k, v in res.items() if k != "columns"}))
     except Exception as e:  # noqa: BLE001
         record_sync("fddb", "error", str(e))
+
+
+def sync_garmin() -> None:
+    if not garmin.configured():
+        return
+    try:
+        record_sync("garmin", "ok", json.dumps(garmin.import_garmin()))
+    except Exception as e:  # Garmin importer exposes only sanitized failures.
+        record_sync("garmin", "error", str(e))
 
 
 def sync_hc_if_new() -> None:
@@ -93,6 +103,7 @@ def start_scheduler() -> None:
     tz = _tz()
     sch = BackgroundScheduler(timezone=tz) if tz else BackgroundScheduler()
     sch.add_job(sync_hevy, "interval", hours=6, id="hevy", replace_existing=True)
+    sch.add_job(sync_garmin, "interval", minutes=15, id="garmin", replace_existing=True)
     sch.add_job(sync_fddb, "cron", hour=4, minute=30, id="fddb", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())

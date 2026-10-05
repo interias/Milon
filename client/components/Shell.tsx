@@ -62,7 +62,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new Event("milon:data-refresh"));
       const failed = Object.entries(result).filter(([, value]) =>
         value != null && typeof value === "object" && "error" in value
-      ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect" }[source] || source));
+      ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect", garmin: "Garmin" }[source] || source));
       setRefreshFailed(failed.length > 0);
       setRefreshMessage(failed.length ? `Import fehlgeschlagen: ${failed.join(", ")}.` : "Import abgeschlossen.");
       const st = await api.ingestStatus();

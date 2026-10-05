@@ -9,7 +9,7 @@ import json
 from fastapi import APIRouter, HTTPException
 
 from ..config import INCOMING_DIR, settings
-from ..ingest import drive, fddb, health_connect, hevy
+from ..ingest import drive, fddb, garmin, health_connect, hevy
 from ..sync import scheduler
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -42,6 +42,11 @@ def ingest_hevy(full: bool = False) -> dict:
 @router.post("/fddb")
 def ingest_fddb(full: bool = False) -> dict:
     return _run("fddb", lambda: fddb.import_fddb(full=full))
+
+
+@router.post("/garmin")
+def ingest_garmin(full: bool = False) -> dict:
+    return _run("garmin", lambda: garmin.import_garmin(full=full))
 
 
 @router.post("/health-connect")
@@ -97,4 +102,9 @@ def refresh_all(full: bool = False) -> dict:
             res["health_connect"] = {"error": e.detail}
     else:
         res["health_connect"] = {"skipped": "keine DB in data/incoming/ und kein Drive konfiguriert"}
+    if garmin.configured():
+        try:
+            res["garmin"] = _run("garmin", lambda: garmin.import_garmin(full=full))
+        except HTTPException as e:
+            res["garmin"] = {"error": e.detail}
     return res
