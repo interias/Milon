@@ -134,7 +134,7 @@ def fitness() -> dict:
         reference = _load_reference(candidate, now)
         with engine.connect() as con:
             sessions = pd.read_sql(_SESSION_SQL, con, parse_dates=["started_at", "ended_at"])
-            windows = pd.read_sql("SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady "
+            windows = pd.read_sql("SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady, source "
                                   "FROM run_minutes WHERE model_version='shr-v1' ORDER BY external_id, minute", con)
         legacy_ids = set(getattr(settings, "watch_source_legacy_session_ids", []))
         fingerprint = hashlib.sha256((SERVICE_VERSION + run_fitness.MODEL_VERSION + now.date().isoformat()

@@ -4,7 +4,7 @@ Verified 2026-10-05 against the installed `garminconnect==0.3.17`, its [versione
 
 ## Recommendation
 
-Make Garmin the primary source for Garmin-recorded activities and watch metrics from the configured watch-switch date onward. Start with complete running records, then sleep, resting heart rate, HRV and steps. Keep Health Connect for historical Samsung data and Arboleaf body measurements; keep Hevy for gym sets and FDDB for nutrition. The existing GPS importer establishes connectivity but currently leaves these other measurements on their existing paths. [Current architecture](../../ARCHITECTURE.md)
+Make Garmin the primary source for Garmin-recorded activities and watch metrics from the configured watch-switch date onward. Start with complete running records, then sleep, HRV and steps; keep Garmin resting HR separately attributed until its discrepancy is resolved. Keep Health Connect for historical Samsung data and Arboleaf body measurements; keep Hevy for gym sets and FDDB for nutrition. The implementation following this research now applies this source policy; see the final section and [current architecture](../../ARCHITECTURE.md).
 
 The current library uses Garmin Connect's consumer services. It is an unofficial integration, not the approved Garmin developer program, and endpoint behavior can change. Garmin's official program targets approved business integrations. Faster reads still require the watch to have synchronized to Garmin Connect; server polling cannot retrieve an unsynchronized watch recording. [Library project](https://pypi.org/project/garminconnect/0.3.17/) · [Garmin program FAQ](https://developer.garmin.com/gc-developer-program/program-faq/)
 
@@ -89,4 +89,4 @@ Bounded authenticated reads and read-only comparison with the local HC export co
 - A VO2max estimate was populated on a running day but not on the subsequent non-record day, while the HC series lacked the newer estimate. Import measurement dates/ranges; an empty response for a day must not erase the last valid value.
 - Training readiness, recovery time, stress and Body Battery data were retrievable; the sampled SpO2 response was empty. Advanced score semantics and longitudinal usefulness still require validation.
 
-No additional production import paths were enabled by this audit. The release continues to import GPS routes directly while other measurements retain their existing sources.
+The audit initially enabled no additional production paths. The subsequent implementation now imports sufficiently complete running series into canonical activity metrics, plus direct steps, sleep and VO2max. Recovery observations remain source-attributed and Garmin resting HR is kept distinct. See [current architecture](../../ARCHITECTURE.md) for synchronization, completeness guards and HC reconciliation; owning a device still does not guarantee every optional field is populated.

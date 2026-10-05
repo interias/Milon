@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui";
+import { RunActivityDetail } from "@/components/RunActivityDetail";
 import { de, de0, dur } from "@/lib/format";
 import { projectRunRoute, routeDate, runRoutesApi, type RunRouteDetail, type RunRouteList } from "@/lib/run-routes";
 import styles from "./RunRoutes.module.css";
@@ -46,6 +47,7 @@ function RoutePreview({ route }: { route: RunRouteDetail }) {
 }
 
 export function RunRoutes() {
+  const [activityId, setActivityId] = useState<string | null>(null);
   const [list, setList] = useState<RunRouteList | null>(null), [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<RunRouteDetail | null>(null), [detailRevision, setDetailRevision] = useState(0);
   const [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [detailLoading, setDetailLoading] = useState(false);
@@ -148,9 +150,10 @@ export function RunRoutes() {
         {current.elevation_gain_m != null && <span><strong>↗ {de0(current.elevation_gain_m)}</strong> m <small>Anstieg</small></span>}
       </div>}
       {detailLoading ? <p className={styles.emptyPreview} role="status">GPS-Verlauf wird geladen …</p> : detailError ? <div className={styles.emptyPreview}><p className={styles.error} role="alert">{detailError}</p><button type="button" className={styles.retryButton} onClick={() => setDetailRevision(value => value + 1)}>Verlauf erneut laden</button></div> : route ? <RoutePreview route={route} /> : null}
-      {current?.matched_external_id && <p className={styles.matchNote}>Mit deinem vorhandenen Lauf verknüpft.</p>}
+      {current && <div className={styles.detailRow}><p className={styles.matchNote}>{current.matched_external_id ? "Mit deinem vorhandenen Lauf verknüpft." : "Direkt aus Garmin Connect."}</p><button type="button" className={styles.detailButton} onClick={() => setActivityId(current.activity_id)}>Laufdetails <span aria-hidden="true">↗</span></button></div>}
       {nextOffset < list.total && <p className={styles.count}>{list.items.length} von {list.total} Läufen geladen</p>}
     </>}
     {list?.sync?.last_sync && <p className={`${styles.syncNote} ${previousSyncFailed ? styles.failedSync : ""}`}>{previousSyncFailed ? "Letzter Import fehlgeschlagen" : "Letzter Import"} · {routeDate(list.sync.last_sync)}{previousSyncFailed && <span>Bitte Garmin erneut aktualisieren.</span>}</p>}
+    {activityId && <RunActivityDetail activityId={activityId} onClose={() => setActivityId(null)} />}
   </Card>;
 }

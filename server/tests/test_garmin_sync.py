@@ -84,6 +84,8 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(garmin, "SESSION_FILE", path)
     monkeypatch.setattr(garmin, "settings", SimpleNamespace(timezone="Europe/Berlin"))
     monkeypatch.setattr(garmin_routes, "engine", engine)
+    monkeypatch.setattr(garmin, "_pull_metrics", lambda api, activities, full:
+                        {"activities": {"errors": 0}, "daily": {"errors": 0}})
     api = FakeGarmin([activity()])
     monkeypatch.setattr(garmin, "_new_client", lambda: api)
     yield SimpleNamespace(path=path, engine=engine, api=api)
@@ -104,9 +106,9 @@ def test_configured_never_opens_credentials_or_connects(isolated, monkeypatch):
     assert garmin.import_garmin()["mode"] == "not_configured"
 
 
-def test_initial_import_is_route_only_and_persists_rotated_tokens(isolated, caplog):
+def test_route_stage_is_independent_and_persists_rotated_tokens(isolated, caplog):
     result = garmin.import_garmin()
-    assert result == {"mode": "initial", "imported": 1, "skipped": 0, "no_route": 0,
+    assert {key: value for key, value in result.items() if key not in ("activities", "daily")} == {"mode": "initial", "imported": 1, "skipped": 0, "no_route": 0,
                       "checked": 1, "errors": 0, "history_limited": False}
     assert isolated.api.loaded == TOKENS
     assert isolated.api.pages == [(0, 50, "running")]
@@ -253,3 +255,38 @@ def test_invalid_activity_metadata_is_counted_without_saving(isolated, changes):
         garmin.import_garmin()
     assert error.value.result["errors"] == 1
     assert route_ids(isolated.engine) == set()
+
+
+def test_existing_routes_still_supply_activity_summaries_to_metrics(isolated, monkeypatch):
+    garmin.import_garmin()
+    received = []
+    def pull(api, activities, full):
+        received.extend(activities)
+        return {"activities": {"errors": 0, "imported": 1}, "daily": {"errors": 0}}
+    monkeypatch.setattr(garmin, "_pull_metrics", pull)
+    result = garmin.import_garmin()
+    assert result["skipped"] == 1
+    assert len(received) == 1 and received[0]["activityId"] == 1
+    assert result["activities"]["imported"] == 1
+
+
+def test_route_failure_does_not_prevent_daily_and_activity_sync(isolated, monkeypatch):
+    isolated.api.gpx["1"] = RuntimeError(CANARY)
+    received = []
+    monkeypatch.setattr(garmin, "_pull_metrics", lambda api, activities, full:
+                        received.append(activities) or {"activities": {"errors": 0}, "daily": {"errors": 0}})
+    with pytest.raises(garmin.GarminSyncError) as failure:
+        garmin.import_garmin()
+    assert received and len(received[0]) == 1
+    assert CANARY not in str(failure.value)
+    assert read_tokens(isolated.path) == ROTATED
+
+
+def test_partial_metric_failure_is_reported_after_routes_are_saved(isolated, monkeypatch):
+    monkeypatch.setattr(garmin, "_pull_metrics", lambda api, activities, full:
+                        {"activities": {"errors": 2}, "daily": {"errors": 0}})
+    with pytest.raises(garmin.GarminSyncError) as failure:
+        garmin.import_garmin()
+    assert route_ids(isolated.engine) == {"1"}
+    assert failure.value.result["errors"] == 2
+    assert read_tokens(isolated.path) == ROTATED

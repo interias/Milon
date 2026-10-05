@@ -7,6 +7,7 @@ import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { HealthDetails } from "@/components/HealthDetails";
 import { SleepPanel } from "@/components/SleepPanel";
+import { GarminRecovery } from "@/components/GarminRecovery";
 import { de, de0, dm } from "@/lib/format";
 
 export default function Gesundheit() {
@@ -15,18 +16,25 @@ export default function Gesundheit() {
   const [errors, setErrors] = useState<string[]>([]);
   const [raw, setRaw] = useState(false);
   const [details, setDetails] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("milon:data-refresh", refresh);
+    return () => window.removeEventListener("milon:data-refresh", refresh);
+  }, []);
   useEffect(() => {
     let active = true;
+    setErrors([]);
     const failed = (key: string) => { if (active) setErrors((values) => [...values, key]); };
     api.healthOverview().then((value) => { if (active) setOverview(value); }).catch(() => failed("overview"));
     api.healthSteps(30).then((value) => { if (active) setSteps(value); }).catch(() => failed("steps"));
     return () => { active = false; };
-  }, []);
+  }, [revision]);
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden." : "Wird geladen …";
   const summary = overview?.steps;
   const cycling = overview?.cycling;
   return <>
-    <PageTitle title="Gesundheit" sub="Schritte, Alltagsbewegung & Schlaf" />
+    <PageTitle title="Gesundheit" sub="Schritte, Alltagsbewegung, Schlaf & Erholung" />
     <Card>
       <h2 className="text-sm font-semibold">Schritte · 7-Tage-Mittel</h2>
       {summary ? <>
@@ -34,6 +42,7 @@ export default function Gesundheit() {
         {summary.last_day ? <>
           <p className="mt-2 text-xs text-muted">{dm(summary.window_start ?? summary.last_day)}–{dm(summary.last_day)} · {summary.days7} erfasste Tage im 7-Tage-Fenster</p>
           <p className="mt-1 text-xs text-muted">Letzter erfasster Wert: {de0(summary.last)} Schritte · {new Date(`${summary.last_day}T12:00:00`).toLocaleDateString("de-DE")}</p>
+          {summary.provisional_day && <p className="mt-1 text-xs text-muted">Heute · noch unvollständig</p>}
         </> : <p className="mt-2 text-xs text-muted">Noch keine Schritte erfasst.</p>}
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
       {steps ? <RunTrendChart label="Schritte · 7-Tage-Mittel" unit="Schritte" showPoints={false} points={steps.map((point) => ({ date: point.date, value: point.avg7, detail: `${point.days7} erfasste Tage im 7-Tage-Fenster` }))} observations={raw ? steps.map((point) => ({ date: point.date, value: point.steps, detail: "Erfasster Tageswert" })) : []} /> : <p className="mt-4 text-xs text-muted" role="status">{state("steps")}</p>}
@@ -49,6 +58,7 @@ export default function Gesundheit() {
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
     <SleepPanel />
+    <GarminRecovery />
     <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Historie & Details</button>
     {details && <RunAnalysisDialog title="Bewegung · Historie & Details" onClose={() => setDetails(false)}><HealthDetails overview={overview} /></RunAnalysisDialog>}
   </>;

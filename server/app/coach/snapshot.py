@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 from zoneinfo import ZoneInfo
 
 from ..config import settings
@@ -18,6 +19,8 @@ def _pace(p: float | None) -> str:
 
 
 def build_snapshot() -> dict:
+    from .. import garmin_daily
+
     return {
         "stand": datetime.now(ZoneInfo(settings.timezone)).date().isoformat(),
         "ernaehrung": nutrition.summary(),
@@ -36,6 +39,7 @@ def build_snapshot() -> dict:
         "kraft_index": strength.strength_index("3m"),
         "schlaf": sleep.overview(30)["summary"],
         "checkins": checkins.summary(30),
+        "garmin_erholung": garmin_daily.coach_summary(14),
     }
 
 
@@ -72,7 +76,7 @@ def snapshot_text() -> str:
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
         f"Ø-HF {r.get('avg_hr') or '–'} bpm (max {r.get('max_hr') or '–'}), "
         f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %{hr_note}. "
-        f"Wochenvolumen (4 Wo, km): {vol}. Höhenmeter: nicht verfügbar.",
+        f"Wochenvolumen (4 Wo, km): {vol}. Höhenmeter sind gegebenenfalls in einzelnen Garmin-Laufdetails vorhanden.",
         "",
         f"KRAFT: Top-e1RM {k.get('top_lift')} {k.get('top_e1rm')} kg; Wochen-Tonnage ~{(k.get('week_tonnage_kg') or 0)/1000:.1f} t; "
         f"RPE Ø {k.get('rpe')}. Tonnage (6 Wo): {ton}. e1RM-Hauptübungen: {lifts}.",
@@ -109,4 +113,7 @@ def snapshot_text() -> str:
         + (f"KFA-Szenario (15%-Annahme) {fp['current']}→{fp['projected']} % ({fp['per_month']:+} %/Monat)" if fp.get("projected") is not None else f"KFA: {fp.get('reason', 'nicht verfügbar')}")
         + ".",
     ]
+    if snap.get("garmin_erholung"):
+        lines.append("GARMIN ERHOLUNG (Schätzungen, Messdaten beachten): "
+                     + json.dumps(snap["garmin_erholung"], ensure_ascii=False, allow_nan=False))
     return "\n".join(lines)

@@ -1,0 +1,56 @@
+.content { min-width:0; font-variant-numeric:tabular-nums; }
+.intro { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.intro h3 { font-size:14px; font-weight:600; }
+.intro p { color:var(--color-muted); font-size:11px; margin-top:4px; }
+.source { flex:none; background:#edf6f3; color:var(--color-accent); border:1px solid #d6e8e2; border-radius:4px; padding:3px 6px; font-size:10px; }
+.summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:19px 0 22px; }
+.summary>div>span { display:block; color:var(--color-muted); font-size:11px; margin-bottom:3px; }
+.summary strong { display:block; font:700 24px var(--font-display); letter-spacing:-.02em; white-space:nowrap; }
+.summary small { color:var(--color-muted); font:400 11px var(--font-sans); letter-spacing:0; }
+.chart { min-width:0; }
+.chartHeader { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.chartHeader h3 { font-size:12px; font-weight:600; }
+.chartHeader label { display:flex; align-items:center; gap:6px; color:var(--color-muted); font-size:11px; cursor:pointer; }
+.chart input { accent-color:var(--color-accent); }
+.legend { display:flex; flex-wrap:wrap; gap:5px 15px; font-size:10px; color:var(--color-muted); margin:7px 0 9px; }
+.hrKey,.paceKey { display:inline-flex; align-items:center; gap:5px; }
+.hrKey::before,.paceKey::before { content:""; width:12px; height:2px; background:currentColor; }
+.hrKey,.hrText { color:#9a5b00; fill:#9a5b00; }
+.paceKey,.paceText { color:var(--color-accent); fill:var(--color-accent); }
+.plot { display:block; width:100%; border-radius:4px; outline-color:var(--color-accent-2); touch-action:pan-y; overflow:visible; }
+.plot text { font:10px var(--font-sans); }
+.grid { stroke:var(--color-line); }
+.hrLine { stroke:#9a5b00; }
+.paceLine { stroke:var(--color-accent); }
+.heightLine { stroke:#70817c; }
+.axisText { fill:var(--color-muted); }
+.cursor { stroke:var(--color-ink); stroke-dasharray:3 3; stroke-width:1; opacity:.6; }
+.readout { min-height:36px; display:flex; flex-wrap:wrap; align-items:center; gap:5px 15px; border:1px solid var(--color-line); background:#f8faf9; padding:8px 10px; border-radius:6px; font-size:11px; color:var(--color-muted); }
+.readout strong { color:var(--color-ink); font-weight:600; }
+.note { font-size:10px; line-height:1.65; color:var(--color-muted); margin-top:8px; }
+.details { margin-top:13px; padding-top:13px; border-top:1px solid var(--color-line); font-size:12px; }
+.details>summary { cursor:pointer; font-weight:600; }
+.details>summary>span { color:var(--color-muted); font-size:10px; font-weight:400; margin-left:7px; }
+.details>summary:focus-visible,.content button:focus-visible { outline:2px solid var(--color-accent-2); outline-offset:4px; }
+.tableWrap { margin-top:11px; overflow-x:auto; }
+.tableWrap table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:11px; }
+.tableWrap th,.tableWrap td { padding:8px 7px; text-align:right; border-bottom:1px solid #edf1f0; }
+.tableWrap th:first-child { text-align:left; }
+.tableWrap thead { color:var(--color-muted); background:#f7f9f8; font-size:10px; }
+.tableWrap th { font-weight:500; }
+.dynamics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; margin-top:15px; }
+.dynamics dt { color:var(--color-muted); font-size:10px; }
+.dynamics dd { margin-top:4px; font-size:16px; font-weight:600; }
+.dynamics dd span { color:var(--color-muted); font-size:10px; font-weight:400; }
+.empty { padding:25px 0; color:var(--color-muted); font-size:12px; line-height:1.7; }
+.empty button { color:var(--color-accent); margin-top:8px; font-size:12px; cursor:pointer; }
+@media(max-width:500px) {
+  .summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px 20px; margin:17px 0 21px; }
+  .summary strong { font-size:23px; }
+  .legend { gap:4px 12px; }
+  .legend>span:last-child { width:100%; }
+  .dynamics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .intro { gap:8px; }
+  .intro h3 { font-size:13px; }
+  .tableWrap th,.tableWrap td { padding:8px 5px; }
+}

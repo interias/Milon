@@ -20,6 +20,7 @@ def init_db() -> None:
     from . import checkins  # noqa: F401 -- register optional self-report table for every entry point
     from . import circumferences  # noqa: F401 -- keep manual measurements independent of imports
     from . import garmin_routes  # noqa: F401 -- routes supplement existing sessions
+    from . import garmin_activity, garmin_daily  # noqa: F401 -- source-owned Garmin records
 
     SQLModel.metadata.create_all(engine)
     _run_migrations()

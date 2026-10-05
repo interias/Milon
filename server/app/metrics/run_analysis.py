@@ -17,7 +17,7 @@ from . import run_standardization
 
 _analysis_lock = Lock()
 _SESSION_SQL = """
-    SELECT e.external_id, e.started_at, e.ended_at, e.distance_km,
+    SELECT e.external_id, e.started_at, e.ended_at, e.distance_km, e.source,
            COALESCE(a.category, 'auto') AS category, COALESCE(a.exclude, 0) AS exclude
     FROM exercise_sessions e LEFT JOIN run_annotations a ON a.external_id=e.external_id
     WHERE e.exercise_type=33 ORDER BY e.started_at, e.external_id
@@ -32,7 +32,7 @@ def standardized_hr() -> dict:
         with engine.connect() as con:
             sessions = pd.read_sql(_SESSION_SQL, con, parse_dates=["started_at", "ended_at"])
             windows = pd.read_sql(
-                "SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady, model_version "
+                "SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady, model_version, source "
                 "FROM run_minutes WHERE model_version = ? ORDER BY external_id, minute", con, params=(version,),
             )
         fingerprint = hashlib.sha256(

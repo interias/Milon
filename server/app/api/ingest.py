@@ -46,7 +46,7 @@ def ingest_fddb(full: bool = False) -> dict:
 
 @router.post("/garmin")
 def ingest_garmin(full: bool = False) -> dict:
-    return _run("garmin", lambda: garmin.import_garmin(full=full))
+    return _run("garmin", lambda: garmin.import_garmin(full=full, force_daily=True))
 
 
 @router.post("/health-connect")
@@ -104,7 +104,7 @@ def refresh_all(full: bool = False) -> dict:
         res["health_connect"] = {"skipped": "keine DB in data/incoming/ und kein Drive konfiguriert"}
     if garmin.configured():
         try:
-            res["garmin"] = _run("garmin", lambda: garmin.import_garmin(full=full))
+            res["garmin"] = _run("garmin", lambda: garmin.import_garmin(full=full, force_daily=True))
         except HTTPException as e:
             res["garmin"] = {"error": e.detail}
     return res

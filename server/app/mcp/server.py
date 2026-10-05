@@ -237,6 +237,15 @@ def get_weekly_review() -> dict:
     return activity.weekly_review()
 
 
+@mcp.tool()
+def get_garmin_recovery(days: int = 14) -> dict:
+    """Direct Garmin recovery observations with dates; missing HRV baseline stays unknown.
+    Readiness and Body Battery reuse sleep/HRV inputs, not independent evidence or clearance to train.
+    Garmin resting HR is distinct from historical HC daily minima. No GPS or raw recordings."""
+    from .. import garmin_daily
+    return garmin_daily.coach_summary(max(1, min(days, 90)))
+
+
 def main() -> None:
     # MCP liest tracker.db direkt (laeuft NICHT im Container) -> Spalten-Migrationen
     # muessen auch hier laufen, sonst bricht die Metrik-Schicht nach einem git pull,

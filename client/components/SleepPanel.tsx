@@ -105,11 +105,18 @@ export function SleepPanel() {
   const [source, setSource] = useState("current");
   const [performance, setPerformance] = useState<SleepPerformance | null>(null);
   const [performanceError, setPerformanceError] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("milon:data-refresh", refresh);
+    return () => window.removeEventListener("milon:data-refresh", refresh);
+  }, []);
   useEffect(() => {
     let active = true;
+    setOverviewError(false);
     api.sleepOverview(90).then((data) => { if (active) setOverview(data); }).catch(() => { if (active) setOverviewError(true); });
     return () => { active = false; };
-  }, []);
+  }, [revision]);
   useEffect(() => {
     if (!expanded) return;
     let active = true;
@@ -117,7 +124,7 @@ export function SleepPanel() {
     setPerformanceError(false);
     api.sleepPerformance(kind, source, 180).then((data) => { if (active) setPerformance(data); }).catch(() => { if (active) setPerformanceError(true); });
     return () => { active = false; };
-  }, [expanded, kind, source]);
+  }, [expanded, kind, source, revision]);
   const result = performance?.kind === kind && performance.source === source ? performance : null;
   const summary = overview?.summary;
   const unknown = overview?.series.filter((point) => point.main_sleep && point.asleep_hours == null) ?? [];
@@ -126,7 +133,7 @@ export function SleepPanel() {
     {summary ? <>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div><p className="text-xs text-muted">Letzte erfasste Nacht</p><p className="mt-1 font-display text-2xl font-extrabold">{de(summary.latest_asleep_hours, 2)} <span className="text-sm font-normal text-muted">h Schlaf</span></p>
-          <p className="mt-1 text-xs text-muted">{summary.latest_date ? dateLabel(summary.latest_date) : "Noch keine Nacht erfasst"}{summary.latest_date && summary.latest_asleep_hours == null ? " · Schlafdauer unbekannt" : ""}</p>
+          <p className="mt-1 text-xs text-muted">{summary.latest_date ? dateLabel(summary.latest_date) : "Noch keine Nacht erfasst"}{summary.latest_date && summary.latest_asleep_hours == null ? " · Schlafphasen nicht ausreichend erfasst" : ""}</p>
           {summary.latest_date && <p className="mt-1 text-xs text-muted">Schlaffenster {de(summary.latest_window_hours, 2)} h</p>}</div>
         <div><p className="text-xs text-muted">Aktuelle Uhr · letzte 7 Tage</p><p className="mt-1 font-display text-2xl font-extrabold">{de(summary.avg_asleep_hours_7d, 2)} <span className="text-sm font-normal text-muted">h im Mittel</span></p>
           <p className="mt-1 text-xs text-muted">{summary.known_asleep_nights_7d} bekannte / {summary.nights_7d} erfasste Nächte · 7 Kalendertage</p></div>

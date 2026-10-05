@@ -477,9 +477,12 @@ def read_health_connect(db_path: str | Path) -> dict:
 def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
     """Importiert die HC-DB idempotent (Append: nur neue Zeilen werden geschrieben).
     full=True macht eine Voll-Reconciliation (loescht source-Zeilen vorher -> spiegelt auch Loeschungen)."""
+    from .. import garmin_activity, garmin_daily
+
     data = read_health_connect(db_path)
     models_ = (BodyMeasurement, ExerciseSession, RunBestEffort, Vo2Max, StepsDaily, RestingHrDaily, SleepSession)
     with Session(engine) as s:
+        protected_ids = garmin_activity.protected_hc_ids(s, data["sessions"])
         if full:
             for m in models_:
                 # Historien nie löschen, wenn der Import keine liefert (Fehlkonfiguration/leerer
@@ -501,7 +504,8 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
              "weight_kg": v.get("weight_kg"), "body_fat_pct": v.get("body_fat_pct")}
             for t, v in data["body"].items() if t is not None
         ]
-        sess_rows = [d for d in data["sessions"] if d["started_at"] is not None]
+        sess_rows = [d for d in data["sessions"]
+                     if d["started_at"] is not None and d["external_id"] not in protected_ids]
         vo2_rows = [d for d in data["vo2"] if d["measured_at"] is not None]
 
         # HF kam spaeter dazu: liefert der Export HF, werden bestehende Sessions per
@@ -514,13 +518,14 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
         upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
         # Remove splits disproved by positively identified coarse replacement-watch data.
-        invalid_ids = data["best_efforts_invalid_ids"]
+        invalid_ids = [key for key in data["best_efforts_invalid_ids"] if key not in protected_ids]
         for i in range(0, len(invalid_ids), 400):
             s.execute(delete(RunBestEffort).where(RunBestEffort.source == SOURCE,
                                                  RunBestEffort.external_id.in_(invalid_ids[i:i + 400])))
         # Best-Efforts kommen (wie HF) nachträglich rein: DO UPDATE retro-füllt bestehende Läufe,
         # sobald der Export Distanz-Segmente liefert (deterministisch aus den Segmenten neu berechnet).
-        upsert(s, RunBestEffort, data["best_efforts"], ["external_id", "distance_m"],
+        upsert(s, RunBestEffort, [row for row in data["best_efforts"]
+                               if row["external_id"] not in protected_ids], ["external_id", "distance_m"],
                update_cols=["seconds", "started_at"])
         upsert(s, Vo2Max, vo2_rows, ["measured_at"])
         upsert(s, StepsDaily, data["steps"], ["day"], update_cols=["steps"])  # Schritte/Tag koennen wachsen
@@ -532,15 +537,18 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         upsert(s, SleepSession, sleep_data["rows"], ["external_id", "source_package"], update_cols=sleep_updates)
         minute_data = data["run_windows"]
         if minute_data["available"]:
-            for i in range(0, len(minute_data["session_ids"]), 400):
-                ids = minute_data["session_ids"][i:i + 400]
+            minute_ids = [key for key in minute_data["session_ids"] if key not in protected_ids]
+            for i in range(0, len(minute_ids), 400):
+                ids = minute_ids[i:i + 400]
                 s.execute(delete(RunMinute).where(RunMinute.external_id.in_(ids)))
-            upsert(s, RunMinute, minute_data["rows"], ["external_id", "minute"])
+            upsert(s, RunMinute, [row for row in minute_data["rows"]
+                                 if row["external_id"] not in protected_ids], ["external_id", "minute"])
         if full:
             # Partial raw series must not erase prior windows of retained sessions.
             retained = select(ExerciseSession.external_id).where(ExerciseSession.external_id.is_not(None))
             s.execute(delete(RunMinute).where(RunMinute.source == SOURCE,
                                               RunMinute.external_id.not_in(retained)))
+        garmin_daily.apply_daily(s)
         s.commit()
         after = {m.__name__: count_rows(s, m, SOURCE) for m in models_}
 
