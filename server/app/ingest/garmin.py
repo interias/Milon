@@ -1,4 +1,4 @@
-"""Read Garmin running routes without changing Health Connect activity metrics."""
+"""Synchronize Garmin routes, complete running records and daily watch metrics."""
 from __future__ import annotations
 
 import base64
@@ -153,7 +153,7 @@ def _summary(activity: dict) -> dict:
     }
 
 
-def _pull_routes(api, full: bool) -> dict:
+def _pull_routes(api, full: bool, collected: list[dict] | None = None) -> dict:
     from .. import garmin_routes
 
     known = _known_route_ids()
@@ -173,6 +173,8 @@ def _pull_routes(api, full: bool) -> dict:
             raise GarminSyncError("Garmin-Aktivitäten konnten nicht vollständig gelesen werden.", result) from None
         for activity in activities[:page_size]:
             result["checked"] += 1
+            if collected is not None and isinstance(activity, dict):
+                collected.append(activity)
             try:
                 summary = _summary(activity)
                 activity_id = summary["activity_id"]
@@ -207,7 +209,47 @@ def _pull_routes(api, full: bool) -> dict:
     return result
 
 
-def import_garmin(full: bool = False) -> dict:
+def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
+    from .. import garmin_activity, garmin_daily
+
+    outcomes = {}
+    for name, pull in (
+        ("activities", lambda: garmin_activity.sync_activities(api, activities, full=full)),
+        ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
+    ):
+        try:
+            outcomes[name] = pull()
+        except Exception:
+            # A failed category must not suppress the other categories or leak payloads.
+            outcomes[name] = {"errors": 1, "status": "error"}
+    return outcomes
+
+
+def _pull_all(api, full: bool, force_daily: bool = False) -> dict:
+    activities: list[dict] = []
+    route_failed = False
+    try:
+        result = _pull_routes(api, full, activities)
+    except GarminSyncError as failure:
+        route_failed = True
+        result = failure.result or {"mode": "full" if full else "incremental", "imported": 0,
+                                    "skipped": 0, "no_route": 0, "checked": 0,
+                                    "errors": 1, "history_limited": False}
+    result.update(_pull_metrics(api, activities, full, force_daily=True) if force_daily
+                  else _pull_metrics(api, activities, full))
+    metric_errors = sum(outcome.get("errors", 0) for outcome in
+                        (result["activities"], result["daily"]))
+    result["errors"] += metric_errors
+    if route_failed or metric_errors:
+        raise GarminSyncError(
+            "Garmin-Import teilweise fehlgeschlagen; vorhandene Daten bleiben erhalten. "
+            f"{result['imported']} Strecken gespeichert, "
+            f"{max(1, result['errors'])} Importfehler. Bitte erneut aktualisieren.", result,
+        ) from None
+    return result
+
+
+def import_garmin(full: bool = False, force_daily: bool = False) -> dict:
     """Bounded initial/backfill sync; later pulls inspect the latest 30 running activities."""
     if not configured():
         return {"mode": "not_configured", "imported": 0, "skipped": 0,
@@ -221,7 +263,7 @@ def import_garmin(full: bool = False) -> dict:
             api = _new_client()
             with _private_library_logs():
                 api.login(tokenstore=json.dumps(tokens))
-                return _pull_routes(api, full)
+                return _pull_all(api, full, force_daily=force_daily)
         except GarminSyncError:
             raise
         except Exception:

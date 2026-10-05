@@ -86,7 +86,7 @@ class SyncTests(TestCase):
             response = client.post("/ingest/refresh?full=true")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["garmin"], {"imported": 2})
-            sync.assert_called_once_with(full=True)
+        sync.assert_called_once_with(full=True, force_daily=True)
 
 
 if __name__ == "__main__":

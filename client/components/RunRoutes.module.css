@@ -22,6 +22,9 @@
 .legend .endMarker { border:1.5px solid #14201f; width:11px; height:11px; }
 .segmentNote,.matchNote,.count,.syncNote { font-size:10px; line-height:1.5; color:#4d5b5a; margin-top:8px; }
 .matchNote { color:#0a6e66; }
+.detailRow { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
+.detailRow .matchNote { margin:0; }
+.detailButton { display:flex; align-items:center; gap:8px; flex:none; border:1px solid #d6e3df; background:#f4f9f7; border-radius:5px; padding:6px 9px; font-size:11px; font-weight:600; color:#0a6e66; cursor:pointer; }
 .syncNote { border-top:1px solid #edf1f0; padding-top:9px; margin-top:11px; }
 .syncNote span { display:block; }
 .failedSync { color:#9a5b00; }

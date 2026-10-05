@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import checkins, circumferences, coach, garmin_routes, ingest, metrics, progress, run_zones, sleep
 from .api import settings as settings_api
+from .api import garmin_activity, garmin_daily
 from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
 from .sync import scheduler
@@ -52,6 +53,8 @@ app.include_router(sleep.router)
 app.include_router(run_zones.router)
 app.include_router(circumferences.router)
 app.include_router(garmin_routes.router)
+app.include_router(garmin_activity.router)
+app.include_router(garmin_daily.router)
 
 # Statische Auslieferung der Fortschritts-Fotos
 app.mount("/media/progress", StaticFiles(directory=str(PROGRESS_DIR)), name="progress-media")

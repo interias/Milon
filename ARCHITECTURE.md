@@ -1,28 +1,51 @@
 # Fitness-Tracker — Architektur & Plan
 
-## Garmin: gelaufene GPS-Strecken
+## Garmin: direkte Uhrdaten und Laufdetails
 
-`garminconnect` liest Laufaktivitäten und GPX-Dateien direkt aus Garmin Connect.
+`garminconnect` liest Laufaktivitäten, Messreihen und Tagesdaten direkt aus Garmin Connect.
 Die lokal eingerichtete Sitzung liegt als `GARMIN_SESSION_B64` in
 `data/garmin/.env`; der Wert enthält serialisierte Sitzungstokens, kein Passwort.
 Base64 dient nur der Formatierung. Erneuerte Tokens werden atomar zurückgeschrieben;
 API-Antworten und Synchronisationsprotokolle enthalten keine Zugangsdaten.
 
-`POST /ingest/garmin` und der allgemeine Daten-Refresh importieren neue Routen.
+`POST /ingest/garmin` und der allgemeine Daten-Refresh importieren Routen und Uhrdaten.
 Bei laufendem Scheduler wird alle 15 Minuten geprüft. Der Erstimport und
 `?full=true` lesen höchstens 1.000 Laufaktivitäten; weitere Abrufe prüfen die
 letzten 30. Ein Vollabruf lädt auch vorhandene Tracks neu. Fehler einzelner
 Aktivitäten lassen erfolgreich gespeicherte Routen bestehen und werden als
-unvollständiger Import gemeldet.
+unvollständiger Import gemeldet. Tagesdaten werden stündlich geprüft; manuelles Aktualisieren
+umgeht diese Wartezeit. Der erste Tagesimport liest ab dem Uhrenwechsel höchstens 90 Tage,
+danach die jüngsten drei Tage und begrenzt ältere fehlgeschlagene Abrufe. `full=true` liest
+ab dem konfigurierten Uhrenwechsel erneut. Fehlende Werte bleiben unbekannt.
 
 Die Tabelle `garmin_routes` ist über die Garmin-Aktivitäts-ID idempotent und
 unabhängig von `exercise_sessions`. Startzeit, Distanz und verstrichene Dauer
 ordnen eine Route nur bei einem eindeutigen Treffer einem bestehenden Lauf zu.
-Garmin-Routen erzeugen keine zusätzlichen Trainingseinheiten oder Kilometer in
-den bisherigen Health-Connect-Auswertungen; diese behalten ihren Importweg.
+`garmin_activities` hält vollständige Puls-/Tempo-Messreihen, Runden, Zonen und
+Qualitätsnachweise getrennt vom GPX. Nur ausreichend vollständige Aufzeichnungen werden
+ab dem Uhrenwechsel zur Quelle der kanonischen Läufe, Minutenfenster und Bestzeiten.
+Bestehende Health-Connect-IDs bleiben erhalten; neue Läufe erhalten eine Garmin-ID.
+`garmin_activity_aliases` erkennt später eintreffende HC-Spiegel. Unklare Zuordnungen
+bleiben offen; ein HC-Vollimport darf direkte Daten weder überschreiben noch verdoppeln.
+Aktive Dauer bleibt in den Details separat von der verstrichenen Dauer sichtbar.
+Analyse-Caches berücksichtigen Messreihen und Quelle; gespeicherte Pulsreferenzen bleiben bestehen.
+
+`garmin_daily` hält Tagesantworten und normalisierte Werte lokal mit Messdatum und
+Abrufstatus. Schritte, vollständige Schlafnächte und tatsächliche VO₂max-Messtage
+erhalten Garmin-Vorrang; nach HC-Importen wird diese Auswahl in derselben Transaktion
+wiederhergestellt. Historische Samsung-Daten, Arboleaf, Hevy und FDDB behalten ihre Quellen.
+Garmin-Ruhepuls bleibt separat vom bisherigen HC-Wert, da deren Definition/Zuordnung
+nicht abschließend übereinstimmt. HRV ohne persönliche Baseline bekommt kein Erholungsurteil.
+Readiness und Body Battery sind überlappende Garmin-Schätzungen, keine unabhängigen Belege.
+
 GPS-Punkte gelangen nicht in den Coach-Kontext. GPX-Segmente und Unterbrechungen
 bleiben getrennt. Listen und Details liefert `GET /metrics/running/routes`.
 Die Laufseite zeigt den Verlauf lokal als SVG, ohne externen Kartenhintergrund.
+`GET /metrics/running/activities/{id}` ergänzt kompakte Laufdetails mit gemeinsamer
+Puls-/Tempo-Zeitachse, optionalem Höhenprofil, Runden und Laufdynamik. Die Anzeige wird
+ausgedünnt, die Berechnung verwendet die vollständige geprüfte Messreihe.
+`GET /metrics/garmin/recovery` versorgt eine kompakte Erholungskarte auf Gesundheit.
+Coach und MCP erhalten dazu einen kompakten Datensnapshot mit Messdaten und Grenzen.
 
 ## Körpermaße: manuelle Umfangsmessungen
 

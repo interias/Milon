@@ -23,7 +23,7 @@ def _read(sql: str, **kw) -> pd.DataFrame:
 
 # ---------------- Schritte ----------------
 def _steps() -> pd.DataFrame:
-    df = _read("SELECT day, steps FROM steps_daily ORDER BY day", parse_dates=["day"])
+    df = _read("SELECT day, steps, source FROM steps_daily ORDER BY day", parse_dates=["day"])
     return df.sort_values("day") if not df.empty else df
 
 
@@ -63,10 +63,12 @@ def steps_summary() -> dict:
     cutoff = getattr(settings, "watch_source_switch_date", None)
     if cutoff is not None:
         source_label = f"Health Connect · Import-Auswahl: {name} ab {cutoff:%d.%m.%Y} (kein Quellen-Fallback)"
+    if not df.empty and "source" in df and df.iloc[-1]["source"] == "garmin_direct":
+        source_label = "Garmin Connect direkt · ältere Watch-Daten aus Health Connect bleiben erhalten"
     if df.empty:
         return {"last": None, "last_day": None, "avg7": None, "avg30": None, "best": None,
                 "total_days": 0, "days7": 0, "days30": 0, "window_start": None,
-                "source_label": source_label}
+                "source_label": source_label, "provisional_day": False}
     s = df.set_index("day")["steps"].sort_index()
     last_day = s.index.max()
     w7 = s[s.index > last_day - pd.Timedelta(days=7)]    # letzte 7 Kalendertage (nicht 7 Zeilen)
@@ -78,6 +80,7 @@ def steps_summary() -> dict:
         "days7": int(w7.count()),
         "days30": int(w30.count()),
         "source_label": source_label,
+        "provisional_day": last_day.date() == datetime.now(ZoneInfo(settings.timezone)).date(),
         "avg7": int(round(w7.mean())),
         "avg30": int(round(w30.mean())),
         "best": int(s.max()),

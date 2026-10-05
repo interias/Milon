@@ -71,7 +71,7 @@ export type StepsWeek = { week: string; steps: number | null; days: number };
 export type CyclingWeek = { week: string; km: number; rides: number };
 export type CyclingRide = { date: string; km: number; dur_min: number; speed: number };
 export type StepsHealth = {
-  days7: number; days30: number; window_start: string | null; source_label: string;
+  days7: number; days30: number; window_start: string | null; source_label: string; provisional_day?: boolean;
   last: number | null; last_day: string | null; avg7: number | null;
   avg30: number | null; best: number | null; total_days: number;
 };

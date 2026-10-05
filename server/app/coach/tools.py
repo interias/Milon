@@ -88,7 +88,11 @@ TOOLS = [
         {"exercise": {"type": "string", "description": "genauer Uebungsname, z. B. 'Squat (Langhantel)'"},
          "weeks": {"type": "integer"}}, ["exercise"]),
     _fn("get_health_overview", "Allgemeine Gesundheitswerte: Schritte (letzter erfasster Tag/Oe7T/Oe30T) + Radfahren. Datenstand und Erfassungstage beachten."),
-    _fn("get_sleep_overview", "Schlafdauer und Erfassungstage aus Health Connect. Hauptschlaf ohne Wachphasen; "
+    _fn("get_garmin_recovery", "Direkte Garmin-Erholungsdaten mit Messdatum: nächtliche HRV, Garmin-Ruhepuls, "
+        "Body Battery und Trainingsbereitschaft. Fehlende HRV-Baseline ist unbekannt. Garmin-Scores "
+        "enthalten bereits Schlaf/HRV; keine unabhängige Bestätigung und keine Trainingsfreigabe.",
+        {"days": {"type": "integer", "minimum": 1, "maximum": 90, "description": "Default 14"}}),
+    _fn("get_sleep_overview", "Schlafdauer und Erfassungstage der ausgewählten Uhr. Hauptschlaf ohne Wachphasen; "
         "Nickerchen separat. Datenstand, Quelle und fehlende Naechte nennen, Schlafstadien sind Uhr-Schaetzungen.",
         {"days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Default 90"}}),
     _fn("get_sleep_performance", "Vorherige Nacht und folgende Trainingsleistung: Lauf-Effizienz oder "
@@ -183,6 +187,9 @@ def dispatch(name: str, args: dict):
         return strength.e1rm_trend(str(args.get("exercise", "")), int(args.get("weeks", 26)))
     if name == "get_health_overview":
         return health.overview()
+    if name == "get_garmin_recovery":
+        from .. import garmin_daily
+        return garmin_daily.coach_summary(max(1, min(90, int(args.get("days", 14)))))
     if name == "get_sleep_overview":
         from ..metrics import sleep
         result = sleep.overview(max(1, min(365, int(args.get("days", 90)))))
