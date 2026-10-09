@@ -119,7 +119,22 @@ export default function Overview() {
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
     <WeatherCard />
-    {historyPoint ? <HistoryCards point={historyPoint} /> : <div className="grid gap-4 md:grid-cols-3">
+    <CheckIn />
+
+    <Card className="mt-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <CardTitle title="Konsistenz" sub="Training und Schritte · Zeitraum passend zur verfügbaren Breite" />
+        {c && <p className="text-sm"><strong>{c.streak >= c.total - (c.days.at(-1)?.level === 0 ? 1 : 0) ? "≥ " : ""}{c.streak}</strong> <span className="text-xs text-muted">Tage aktive Serie</span></p>}
+      </div>
+      {c ? <><ConsistencyHistory data={c} fit />
+        <div className="mt-3 flex flex-wrap gap-x-5">
+          <button className="py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button>
+          {!sickOpen && <button className="py-1 text-xs font-semibold text-[#5b3f8c]" onClick={() => setSickOpen(true)}>Krankheitstage eintragen</button>}
+        </div>
+        {sickOpen && <SickDaysForm onDone={() => setSickOpen(false)} />}</> : <StateNote resource={consistency} />}
+    </Card>
+
+    {historyPoint ? <div className="mt-4"><HistoryCards point={historyPoint} /></div> : <div className="mt-4 grid gap-4 md:grid-cols-3">
       <DevelopmentCard title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper">
         {b?.weight_avg7 != null ? <>
           <p className="mt-3 font-display text-3xl font-extrabold">{de(b.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
@@ -150,22 +165,7 @@ export default function Overview() {
       </DevelopmentCard>
     </div>}
     <OverviewHistory onSelect={setHistoryPoint} />
-
-    <CheckIn />
     <WeeklyReview />
-
-    <Card className="mt-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <CardTitle title="Konsistenz" sub="Training und Schritte · Zeitraum passend zur verfügbaren Breite" />
-        {c && <p className="text-sm"><strong>{c.streak >= c.total - (c.days.at(-1)?.level === 0 ? 1 : 0) ? "≥ " : ""}{c.streak}</strong> <span className="text-xs text-muted">Tage aktive Serie</span></p>}
-      </div>
-      {c ? <><ConsistencyHistory data={c} fit />
-        <div className="mt-3 flex flex-wrap gap-x-5">
-          <button className="py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button>
-          {!sickOpen && <button className="py-1 text-xs font-semibold text-[#5b3f8c]" onClick={() => setSickOpen(true)}>Krankheitstage eintragen</button>}
-        </div>
-        {sickOpen && <SickDaysForm onDone={() => setSickOpen(false)} />}</> : <StateNote resource={consistency} />}
-    </Card>
 
     <div className="mt-4">
       <Card className="flex flex-col">

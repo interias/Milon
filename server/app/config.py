@@ -82,7 +82,9 @@ class Settings(BaseSettings):
     # den Daten ableiten (robustes 95.-Perzentil der max_hr, Boden 180).
     run_hr_max: float = 180.0
 
-    # Wetter auf der Übersicht (Open-Meteo). Ort wird in den Einstellungen per Name geocodiert.
+    # Wetter auf der Übersicht (Open-Meteo). Orte werden in den Einstellungen per Name geocodiert;
+    # erster Ort = Standard. WEATHER_PLACE/LAT/LON = Altformat (ein Ort), wird beim Speichern abgelöst.
+    weather_places: list[dict] = Field(default_factory=list)
     weather_place: str = ""
     weather_lat: float | None = None
     weather_lon: float | None = None

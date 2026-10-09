@@ -3,6 +3,8 @@ Secrets werden maskiert ausgegeben; PUT aktualisiert nur übergebene, nicht-leer
 (live im Settings-Objekt UND persistent in server/.env)."""
 from __future__ import annotations
 
+import json
+
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -39,7 +41,7 @@ def _current() -> dict:
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
-        "weather_place": settings.weather_place,
+        "weather_places": [item["place"] for item in weather.places()],
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
     }
@@ -64,7 +66,7 @@ class SettingsIn(BaseModel):
     openrouter_model: str | None = None
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
-    weather_place: str | None = None  # "" = Wetter ausblenden
+    weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
     fddb_user: str | None = None
@@ -96,20 +98,27 @@ def update_settings(body: SettingsIn) -> dict:
         settings.run_hr_max = body.run_hr_max
         env_updates["RUN_HR_MAX"] = str(body.run_hr_max)
 
-    if body.weather_place is not None and body.weather_place.strip() != settings.weather_place:
-        place = body.weather_place.strip()
-        if place:
-            try:
-                hit = weather.geocode(place)
-            except httpx.HTTPError as exc:
-                raise HTTPException(status_code=502, detail="Ortssuche nicht erreichbar.") from exc
+    if body.weather_places is not None:
+        names = [name.strip() for name in body.weather_places if name.strip()]
+        if len(names) > 8:
+            raise HTTPException(status_code=422, detail="Höchstens 8 Orte.")
+        known = {item["place"].casefold(): item for item in weather.places()}
+        resolved: list[dict] = []
+        for name in names:
+            hit = known.get(name.casefold())  # bereits geocodierte Orte nicht erneut suchen
             if hit is None:
-                raise HTTPException(status_code=422, detail=f"Ort „{place}“ nicht gefunden.")
-        else:
-            hit = {"place": "", "lat": None, "lon": None}
-        settings.weather_place, settings.weather_lat, settings.weather_lon = hit["place"], hit["lat"], hit["lon"]
-        env_updates.update({"WEATHER_PLACE": hit["place"], "WEATHER_LAT": "" if hit["lat"] is None else str(hit["lat"]),
-                            "WEATHER_LON": "" if hit["lon"] is None else str(hit["lon"])})
+                try:
+                    hit = weather.geocode(name)
+                except httpx.HTTPError as exc:
+                    raise HTTPException(status_code=502, detail="Ortssuche nicht erreichbar.") from exc
+                if hit is None:
+                    raise HTTPException(status_code=422, detail=f"Ort „{name}“ nicht gefunden.")
+            if all(hit["place"] != item["place"] for item in resolved):
+                resolved.append(hit)
+        settings.weather_places = resolved
+        settings.weather_place, settings.weather_lat, settings.weather_lon = "", None, None
+        env_updates.update({"WEATHER_PLACES": json.dumps(resolved, ensure_ascii=False),
+                            "WEATHER_PLACE": "", "WEATHER_LAT": "", "WEATHER_LON": ""})
 
     if env_updates:
         update_env_file(env_updates)
