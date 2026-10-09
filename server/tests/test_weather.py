@@ -112,3 +112,30 @@ def test_clothing_thresholds_and_adjustments():
     assert level(13, wet=True) == "kompression-oben"  # nass fühlt sich 2 °C kälter an
     assert weather.clothing(13, True, 25) == {"level": "kompression", "text": "Lange Kompression oben & unten",
                                               "extras": ["wasserabweisende Schicht", "Windweste"], "felt": 9, "adjust": 4}
+
+
+def test_day_selection_slices_hours_summary_and_advice(monkeypatch):
+    temps = [8] * 8 + [12] * 12 + [9] * 4
+    raw = {
+        "current": {"temperature_2m": 9, "weather_code": 0},
+        "hourly": {"time": [h["time"] for h in hours(9, temps) + hours(10, temps)],
+                   "temperature_2m": temps + [t + 3 for t in temps], "precipitation_probability": [0] * 48,
+                   "precipitation": [0] * 48, "weather_code": [3] * 24 + [61] * 24, "is_day": [1] * 48},
+        "daily": {"time": ["2026-10-09", "2026-10-10"], "temperature_2m_max": [12, 15], "temperature_2m_min": [8, 11],
+                  "precipitation_sum": [0, 2], "precipitation_probability_max": [0, 70], "weather_code": [3, 61],
+                  "wind_speed_10m_max": [10, 30], "sunrise": [s for s, _ in SUNS], "sunset": [s for _, s in SUNS]},
+    }
+    monkeypatch.setattr(weather, "_fetch", lambda lat, lon: raw)
+    monkeypatch.setattr(weather, "_cache", {})
+    monkeypatch.setattr(weather.settings, "weather_places", [{"place": "Wesel", "lat": 51.67, "lon": 6.62}])
+    now = datetime(2026, 10, 9, 20, 0)
+    tonight = weather.today(0, 0, now)
+    assert tonight["date"] == "2026-10-09" and tonight["now_hour"] == "2026-10-09T20:00"
+    assert tonight["run"]["date"] == "2026-10-10"  # heute schon dunkel → morgen früh
+    assert [d["date"] for d in tonight["days"]] == ["2026-10-09", "2026-10-10"] and tonight["days"][1]["icon"] == "rain"
+    tomorrow = weather.today(0, 1, now)
+    assert tomorrow["date"] == "2026-10-10" and tomorrow["now_hour"] is None
+    assert len(tomorrow["hours"]) == 24 and tomorrow["hours"][0]["time"] == "2026-10-10T00:00"
+    assert tomorrow["day"]["temp_max"] == 15 and tomorrow["day"]["wind_max_kmh"] == 30
+    assert tomorrow["run"]["date"] == "2026-10-10" and tomorrow["run"]["morning"]["start"] == "2026-10-10T07:50"
+    assert weather.today(0, 9, now)["date"] == "2026-10-10"  # außerhalb → letzter Tag

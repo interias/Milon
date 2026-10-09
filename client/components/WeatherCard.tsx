@@ -9,6 +9,8 @@ import { linePath } from "@/components/charts";
 import { de, de0 } from "@/lib/format";
 
 const PLACE_KEY = "milon.weather.place";
+const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const weekday = (date: string) => WEEKDAYS[new Date(`${date}T12:00:00`).getDay()];
 const hour = (iso: string) => Number(iso.slice(11, 13));
 const clock = (iso: string) => iso.slice(11, 16);
 
@@ -42,7 +44,7 @@ export function WeatherIcon({ icon, night = false, size = 20 }: { icon: string; 
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-accent">{body}</svg>;
 }
 
-function HourChart({ hours, nowHour, run }: { hours: WeatherHour[]; nowHour: string; run: RunAdvice | null }) {
+function HourChart({ hours, nowHour, run }: { hours: WeatherHour[]; nowHour: string | null; run: RunAdvice | null }) {
   const W = 240, H = 100, top = 10, bottom = 66, rainH = 30;
   const temps = hours.map((h) => h.temp);
   const lo = Math.min(...temps) - 0.5, hi = Math.max(...temps) + 0.5;
@@ -61,7 +63,7 @@ function HourChart({ hours, nowHour, run }: { hours: WeatherHour[]; nowHour: str
   const tx = (iso: string) => { const f = frac(iso); return f == null ? null : ((f + 0.5) / hours.length) * W; };
   const tpct = (iso: string) => { const f = frac(iso); return `${((f ?? 0) + 0.5) / hours.length * 100}%`; };
   const sunrise = run ? tx(run.sunrise) : null, sunset = run ? tx(run.sunset) : null;
-  const windows = run?.day === "heute" ? [run.morning, run.best].filter((w): w is RunWindow => w != null) : [];
+  const windows = run?.date === day0 ? [run.morning, run.best].filter((w): w is RunWindow => w != null) : [];
   return <div className="mt-4">
     <div className="relative h-32">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
@@ -111,12 +113,12 @@ function HourChart({ hours, nowHour, run }: { hours: WeatherHour[]; nowHour: str
   </div>;
 }
 
-function RunWindowRow({ label, w, day }: { label: string; w: RunWindow; day: string }) {
+function RunWindowRow({ label, w, other }: { label: string; w: RunWindow; other: string | null }) {
   const tone = w.rating === "ideal" ? "bg-accent text-white" : w.rating === "gut" ? "bg-accent/10 text-accent" : "bg-surface-alt text-muted";
   const rain = w.rain_prob >= 20 || w.wet ? `Regen ${w.rain_prob} %` : "trocken";
   return <li className="flex flex-col gap-0.5">
     <p className="flex flex-wrap items-baseline gap-x-2">
-      <span className="w-28 text-xs font-semibold text-muted">{label}{day === "morgen" ? " · morgen" : ""}</span>
+      <span className="w-28 text-xs font-semibold text-muted">{label}{other ? ` · ${other}` : ""}</span>
       <strong className="tabular-nums">{clock(w.start)}–{clock(w.end)}</strong>
       <span className="text-xs text-muted">{de0(w.temp)}° · {rain} · Wind {w.wind_kmh} km/h</span>
       <span className={`rounded px-1.5 text-[11px] font-semibold ${tone}`}>{w.rating}</span>
@@ -126,12 +128,14 @@ function RunWindowRow({ label, w, day }: { label: string; w: RunWindow; day: str
   </li>;
 }
 
-function RunAdviceBlock({ run }: { run: RunAdvice | null }) {
+function RunAdviceBlock({ run, date, isToday }: { run: RunAdvice | null; date: string; isToday: boolean }) {
   if (!run) return <p className="mt-3 border-t border-line pt-3 text-xs text-muted">Laufen: kein Tageslicht-Fenster in Sicht.</p>;
+  // Fällt die Empfehlung auf einen anderen Tag (heute schon dunkel), Tag dazuschreiben.
+  const other = run.date === date ? null : isToday ? "morgen" : weekday(run.date);
   return <div className="mt-3 border-t border-line pt-3">
     <ul className="flex flex-col gap-2 text-sm">
-      {run.morning && <RunWindowRow label="Morgenlauf" w={run.morning} day={run.day} />}
-      {run.best && <RunWindowRow label={run.morning ? "Bestes Fenster" : "Empfehlung"} w={run.best} day={run.day} />}
+      {run.morning && <RunWindowRow label="Morgenlauf" w={run.morning} other={other} />}
+      {run.best && <RunWindowRow label={run.morning ? "Bestes Fenster" : "Empfehlung"} w={run.best} other={other} />}
     </ul>
     {run.notes.length > 0 && <p className="mt-2 text-xs text-muted">{run.notes.join(" · ")}</p>}
   </div>;
@@ -141,6 +145,7 @@ export function WeatherCard() {
   const [data, setData] = useState<Weather | null>(null);
   const [error, setError] = useState(false);
   const [index, setIndex] = useState<number | null>(null);
+  const [dayIdx, setDayIdx] = useState(0);
   useEffect(() => {
     let saved = 0;
     try { saved = Number(localStorage.getItem(PLACE_KEY)) || 0; } catch { /* Speicher gesperrt */ }
@@ -149,11 +154,11 @@ export function WeatherCard() {
   useEffect(() => {
     if (index === null) return;
     let active = true;
-    const load = () => api.weather(index).then((w) => { if (active) { setData(w); setError(false); } }).catch(() => { if (active) setError(true); });
+    const load = () => api.weather(index, dayIdx).then((w) => { if (active) { setData(w); setError(false); } }).catch(() => { if (active) setError(true); });
     void load();
     const timer = window.setInterval(load, 30 * 60_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [index]);
+  }, [index, dayIdx]);
   function browse(step: number) {
     if (!data?.configured) return;
     const next = (data.index + step + data.places.length) % data.places.length;
@@ -169,6 +174,7 @@ export function WeatherCard() {
   </Card>;
 
   const { current, day } = data;
+  const isToday = data.now_hour != null;
   const many = data.places.length > 1;
   const arrow = "flex h-8 w-8 items-center justify-center rounded border border-line text-accent hover:border-accent";
   return <Card>
@@ -180,21 +186,36 @@ export function WeatherCard() {
         <button type="button" aria-label="Nächster Ort" onClick={() => browse(1)} className={arrow}>›</button>
       </>}
     </div>
+    <div className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Wettertag">
+      {data.days.map((d, i) => <button key={d.date} type="button" role="tab" aria-selected={i === dayIdx} onClick={() => setDayIdx(i)}
+        aria-label={`${i === 0 ? "Heute" : weekday(d.date)}: ${d.text}, ${de0(d.temp_max)} bis ${de0(d.temp_min)} Grad, Regen bis ${d.rain_prob_max ?? 0} %`}
+        className={`flex min-w-[3.6rem] flex-1 flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-[11px] transition-colors ${i === dayIdx ? "border-accent bg-accent/5" : "border-transparent hover:border-line"}`}>
+        <span className={`font-semibold ${i === dayIdx ? "text-accent" : ""}`}>{i === 0 ? "Heute" : weekday(d.date)}</span>
+        <WeatherIcon icon={d.icon} size={20} />
+        <span className="tabular-nums"><strong>{de0(d.temp_max)}°</strong> <span className="text-muted">{de0(d.temp_min)}°</span></span>
+      </button>)}
+    </div>
     <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-      <div className="flex items-center gap-3">
+      {isToday ? <div className="flex items-center gap-3">
         <WeatherIcon icon={current.icon} night={!current.is_day} size={44} />
         <div>
           <p className="font-display text-3xl font-extrabold leading-none tracking-tight">{de0(current.temp)}<span className="text-lg font-semibold text-muted">°C</span></p>
           <p className="mt-1 text-sm">{current.text} <span className="text-xs text-muted">· gefühlt {de0(current.feels_like)}°</span></p>
         </div>
-      </div>
+      </div> : <div className="flex items-center gap-3">
+        <WeatherIcon icon={day.icon} size={44} />
+        <div>
+          <p className="font-display text-xl font-extrabold leading-none tracking-tight">{weekday(data.date)}, {data.date.slice(8, 10)}.{data.date.slice(5, 7)}.</p>
+          <p className="mt-1 text-sm">{day.text}</p>
+        </div>
+      </div>}
       <div className="text-xs text-muted sm:text-right">
         <p className="text-sm text-ink"><span className="font-semibold">↑ {de0(day.temp_max)}°</span> · ↓ {de0(day.temp_min)}°</p>
-        <p className="mt-1">{day.rain_mm > 0 ? `${de(day.rain_mm, 1)} mm Regen · bis ${day.rain_prob_max ?? 0} %` : "Kein Regen erwartet"} · Wind {de0(current.wind_kmh)} km/h</p>
+        <p className="mt-1">{day.rain_mm > 0 ? `${de(day.rain_mm, 1)} mm Regen · bis ${day.rain_prob_max ?? 0} %` : "Kein Regen erwartet"} · {isToday ? `Wind ${de0(current.wind_kmh)} km/h` : `Wind bis ${de0(day.wind_max_kmh)} km/h`}</p>
         <p className="mt-1">☀ {clock(day.sunrise)}–{clock(day.sunset)}</p>
       </div>
     </div>
     {data.hours.length > 1 && <HourChart hours={data.hours} nowHour={data.now_hour} run={data.run} />}
-    <RunAdviceBlock run={data.run} />
+    <RunAdviceBlock run={data.run} date={data.date} isToday={isToday} />
   </Card>;
 }

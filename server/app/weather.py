@@ -56,17 +56,18 @@ def places() -> list[dict]:
 
 def _fetch(lat: float, lon: float) -> dict:
     response = httpx.get(FORECAST_URL, timeout=10, params={
-        "latitude": lat, "longitude": lon, "timezone": settings.timezone, "forecast_days": 2,
+        "latitude": lat, "longitude": lon, "timezone": settings.timezone, "forecast_days": 7,
         "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day",
         "hourly": "temperature_2m,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m",
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,weather_code",
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,weather_code,wind_speed_10m_max",
     })
     response.raise_for_status()
     return response.json()
 
 
-def today(index: int = 0, now: datetime | None = None) -> dict:
-    """Stündlicher Verlauf des heutigen Tages + aktuelle Werte. `configured=False` ohne Ort."""
+def today(index: int = 0, day: int = 0, now: datetime | None = None) -> dict:
+    """Stündlicher Verlauf eines Tages (0 = heute … 6) + aktuelle Werte + 7-Tage-Streifen.
+    `configured=False` ohne Ort."""
     known = places()
     if not known:
         return {"configured": False}
@@ -93,28 +94,37 @@ def today(index: int = 0, now: datetime | None = None) -> dict:
         "is_day": bool(hourly["is_day"][i]),
         **describe(hourly["weather_code"][i]),
     } for i, stamp in enumerate(hourly.get("time", []))]
-    today_iso = local_now.strftime("%Y-%m-%d")
-    hours = [h for h in all_hours if h["time"].startswith(today_iso)]
+    dates = daily.get("time") or [local_now.strftime("%Y-%m-%d")]
+    day = max(0, min(day, len(dates) - 1))
+    date = dates[day]
+    hours = [h for h in all_hours if h["time"].startswith(date)]
     suns = list(zip(daily.get("sunrise") or [], daily.get("sunset") or []))
-    first = lambda name: (daily.get(name) or [None])[0]  # noqa: E731
+    pick = lambda name, i=day: (daily.get(name) or [None] * (i + 1))[i]  # noqa: E731
+    # Kommende Tage: Empfehlung ab Mitternacht des gewählten Tages, heute ab jetzt.
+    start = local_now.replace(tzinfo=None) if day == 0 else datetime.fromisoformat(date)
     return {
         "configured": True,
         "place": known[index]["place"],
         "index": index,
         "places": [item["place"] for item in known],
-        "now_hour": local_now.strftime("%Y-%m-%dT%H:00"),
+        "date": date,
+        "now_hour": local_now.strftime("%Y-%m-%dT%H:00") if day == 0 else None,
         "current": {
             "temp": current.get("temperature_2m"), "feels_like": current.get("apparent_temperature"),
             "wind_kmh": current.get("wind_speed_10m"), "is_day": bool(current.get("is_day", 1)),
             **describe(current.get("weather_code")),
         },
         "day": {
-            "temp_max": first("temperature_2m_max"), "temp_min": first("temperature_2m_min"),
-            "rain_mm": first("precipitation_sum"), "rain_prob_max": first("precipitation_probability_max"),
-            "sunrise": first("sunrise"), "sunset": first("sunset"), **describe(first("weather_code")),
+            "temp_max": pick("temperature_2m_max"), "temp_min": pick("temperature_2m_min"),
+            "rain_mm": pick("precipitation_sum"), "rain_prob_max": pick("precipitation_probability_max"),
+            "wind_max_kmh": pick("wind_speed_10m_max"),
+            "sunrise": pick("sunrise"), "sunset": pick("sunset"), **describe(pick("weather_code")),
         },
+        "days": [{"date": d, "temp_max": pick("temperature_2m_max", i), "temp_min": pick("temperature_2m_min", i),
+                  "rain_prob_max": pick("precipitation_probability_max", i), **describe(pick("weather_code", i))}
+                 for i, d in enumerate(dates)],
         "hours": hours,
-        "run": run_advice(all_hours, local_now.replace(tzinfo=None), suns),
+        "run": run_advice(all_hours, start, suns[day:]),
         "source": "Open-Meteo",
     }
 
@@ -194,14 +204,14 @@ def run_advice(hours: list[dict], now: datetime, suns: list[tuple[str, str]]) ->
                    for w in [_window(by_hour, start)] if w is not None]
         if not windows:
             continue
-        day = "heute" if offset == 0 else "morgen"
+        day = "heute" if offset == 0 else "morgen"  # relativ zum angefragten Tag
         best = min(windows, key=lambda w: w["score"])
         morning = windows[0] if windows[0]["start"] == _ceil5(sunrise).strftime("%Y-%m-%dT%H:%M") else None
         notes = []
         if all(w["wet"] for w in windows):
-            notes.append(f"{day.capitalize()} keine trockene Stunde bei Tageslicht")
+            notes.append("Keine trockene Stunde bei Tageslicht")
         if max(w["temp"] for w in windows) >= 30:
             notes.append("Hitze: möglichst früh laufen")
-        return {"day": day, "sunrise": rise, "sunset": set_, "morning": morning,
+        return {"day": day, "date": rise[:10], "sunrise": rise, "sunset": set_, "morning": morning,
                 "best": None if morning and best["start"] == morning["start"] else best, "notes": notes}
     return None
