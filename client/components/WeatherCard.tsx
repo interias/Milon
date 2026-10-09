@@ -3,11 +3,12 @@
 // Daten: Open-Meteo via Backend (/weather); Ort in den Einstellungen.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type Weather, type WeatherHour } from "@/lib/api";
+import { api, type RunAdvice, type RunWindow, type Weather, type WeatherHour } from "@/lib/api";
 import { Card } from "@/components/ui";
 import { linePath } from "@/components/charts";
 import { de, de0 } from "@/lib/format";
 
+const PLACE_KEY = "milon.weather.place";
 const hour = (iso: string) => Number(iso.slice(11, 13));
 const clock = (iso: string) => iso.slice(11, 16);
 
@@ -41,7 +42,7 @@ export function WeatherIcon({ icon, night = false, size = 20 }: { icon: string; 
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-accent">{body}</svg>;
 }
 
-function HourChart({ hours, nowHour }: { hours: WeatherHour[]; nowHour: string }) {
+function HourChart({ hours, nowHour, run }: { hours: WeatherHour[]; nowHour: string; run: RunAdvice | null }) {
   const W = 240, H = 100, top = 10, bottom = 66, rainH = 30;
   const temps = hours.map((h) => h.temp);
   const lo = Math.min(...temps) - 0.5, hi = Math.max(...temps) + 0.5;
@@ -54,6 +55,13 @@ function HourChart({ hours, nowHour }: { hours: WeatherHour[]; nowHour: string }
   const maxIdx = temps.indexOf(Math.max(...temps)), minIdx = temps.indexOf(Math.min(...temps));
   const ticks = hours.map((h, i) => ({ h, i })).filter(({ h }) => hour(h.time) % 3 === 0);
   const pct = (i: number) => `${((i + 0.5) / hours.length) * 100}%`;
+  // Uhrzeit → x (gleiche Skala wie die Stundenpunkte); null, wenn nicht heute.
+  const day0 = hours[0].time.slice(0, 10);
+  const frac = (iso: string) => iso.slice(0, 10) === day0 ? Number(iso.slice(11, 13)) + Number(iso.slice(14, 16)) / 60 : null;
+  const tx = (iso: string) => { const f = frac(iso); return f == null ? null : ((f + 0.5) / hours.length) * W; };
+  const tpct = (iso: string) => { const f = frac(iso); return `${((f ?? 0) + 0.5) / hours.length * 100}%`; };
+  const sunrise = run ? tx(run.sunrise) : null, sunset = run ? tx(run.sunset) : null;
+  const windows = run?.day === "heute" ? [run.morning, run.best].filter((w): w is RunWindow => w != null) : [];
   return <div className="mt-4">
     <div className="relative h-32">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
@@ -63,6 +71,10 @@ function HourChart({ hours, nowHour }: { hours: WeatherHour[]; nowHour: string }
             <stop offset="1" stopColor="var(--color-accent)" stopOpacity="0" />
           </linearGradient>
         </defs>
+        {sunrise != null && <rect x={0} width={sunrise} y={0} height={H} fill="var(--color-ink)" opacity={0.05} />}
+        {sunset != null && <rect x={sunset} width={W - sunset} y={0} height={H} fill="var(--color-ink)" opacity={0.05} />}
+        {windows.map((w) => <rect key={w.start} x={tx(w.start)!} width={tx(w.end)! - tx(w.start)!} y={0} height={H} fill="var(--color-accent)" opacity={0.12} />)}
+        {[sunrise, sunset].map((sx, k) => sx != null && <line key={k} x1={sx} x2={sx} y1={0} y2={H} stroke="var(--color-warn)" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.6} />)}
         {hours.map((h, i) => h.rain_prob ? <rect key={h.time} x={x(i) - 3.2} width={6.4} y={H - (h.rain_prob / 100) * rainH}
           height={(h.rain_prob / 100) * rainH} rx={1} fill="var(--color-accent-2)" opacity={0.25 + Math.min(h.rain_mm, 3) / 6} /> : null)}
         <path d={`${line} L${x(hours.length - 1)} ${bottom + 4} L${x(0)} ${bottom + 4} Z`} fill="url(#wx-temp)" />
@@ -77,6 +89,10 @@ function HourChart({ hours, nowHour }: { hours: WeatherHour[]; nowHour: string }
       {[maxIdx, minIdx].filter((v, k, a) => a.indexOf(v) === k).map((i) => <span key={i}
         className="absolute -translate-x-1/2 text-[11px] font-semibold text-ink"
         style={{ left: pct(i), top: `calc(${(y(hours[i].temp) / H) * 100}% ${i === maxIdx ? "- 18px" : "+ 5px"})` }}>{de0(hours[i].temp)}°</span>)}
+      {windows.map((w) => <span key={w.start} className="absolute bottom-0 -translate-x-1/2 rounded bg-accent px-1 text-[10px] font-semibold text-white"
+        style={{ left: `calc((${tpct(w.start)} + ${tpct(w.end)}) / 2)` }}>Lauf</span>)}
+      {run && [["↑", run.sunrise], ["↓", run.sunset]].map(([arrow, iso]) => frac(iso) != null && <span key={iso}
+        className="absolute top-3 -translate-x-1/2 rounded bg-surface px-0.5 text-[10px] font-semibold text-warn" style={{ left: tpct(iso) }}>☀{arrow} {clock(iso)}</span>)}
       {nowX != null && <span className="absolute top-0 -translate-x-1/2 rounded bg-surface px-1 text-[10px] font-semibold text-muted" style={{ left: pct(nowIdx) }}>jetzt</span>}
     </div>
     <div className="relative mt-1 h-12">
@@ -87,33 +103,83 @@ function HourChart({ hours, nowHour }: { hours: WeatherHour[]; nowHour: string }
         <span className="text-[10px] tabular-nums text-muted">{clock(h.time).slice(0, 2)}</span>
       </div>)}
     </div>
-    <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted">
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
       <span className="h-0.5 w-4 rounded bg-accent" /><span>Temperatur</span>
       <span className="ml-2 h-2.5 w-2 rounded-[2px] bg-accent-2/60" /><span>Regenwahrscheinlichkeit</span>
+      {windows.length > 0 && <><span className="ml-2 h-2.5 w-2.5 rounded-[2px] bg-accent/15" /><span>Laufempfehlung</span></>}
     </div>
+  </div>;
+}
+
+function RunWindowRow({ label, w, day }: { label: string; w: RunWindow; day: string }) {
+  const tone = w.rating === "ideal" ? "bg-accent text-white" : w.rating === "gut" ? "bg-accent/10 text-accent" : "bg-surface-alt text-muted";
+  const rain = w.rain_prob >= 20 || w.wet ? `Regen ${w.rain_prob} %` : "trocken";
+  return <li className="flex flex-col gap-0.5">
+    <p className="flex flex-wrap items-baseline gap-x-2">
+      <span className="w-28 text-xs font-semibold text-muted">{label}{day === "morgen" ? " · morgen" : ""}</span>
+      <strong className="tabular-nums">{clock(w.start)}–{clock(w.end)}</strong>
+      <span className="text-xs text-muted">{de0(w.temp)}° · {rain} · Wind {w.wind_kmh} km/h</span>
+      <span className={`rounded px-1.5 text-[11px] font-semibold ${tone}`}>{w.rating}</span>
+    </p>
+    <p className="text-xs text-muted"><span className="font-semibold text-accent">Kleidung:</span> <span className="text-ink">{w.clothing.text}{w.clothing.extras.length ? ` + ${w.clothing.extras.join(", ")}` : ""}</span>
+      {w.clothing.adjust > 0 && <> · fühlt sich wie {de0(w.clothing.felt)}° an</>}</p>
+  </li>;
+}
+
+function RunAdviceBlock({ run }: { run: RunAdvice | null }) {
+  if (!run) return <p className="mt-3 border-t border-line pt-3 text-xs text-muted">Laufen: kein Tageslicht-Fenster in Sicht.</p>;
+  return <div className="mt-3 border-t border-line pt-3">
+    <ul className="flex flex-col gap-2 text-sm">
+      {run.morning && <RunWindowRow label="Morgenlauf" w={run.morning} day={run.day} />}
+      {run.best && <RunWindowRow label={run.morning ? "Bestes Fenster" : "Empfehlung"} w={run.best} day={run.day} />}
+    </ul>
+    {run.notes.length > 0 && <p className="mt-2 text-xs text-muted">{run.notes.join(" · ")}</p>}
   </div>;
 }
 
 export function WeatherCard() {
   const [data, setData] = useState<Weather | null>(null);
   const [error, setError] = useState(false);
+  const [index, setIndex] = useState<number | null>(null);
   useEffect(() => {
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(PLACE_KEY)) || 0; } catch { /* Speicher gesperrt */ }
+    setIndex(saved);
+  }, []);
+  useEffect(() => {
+    if (index === null) return;
     let active = true;
-    const load = () => api.weather().then((w) => { if (active) { setData(w); setError(false); } }).catch(() => { if (active) setError(true); });
+    const load = () => api.weather(index).then((w) => { if (active) { setData(w); setError(false); } }).catch(() => { if (active) setError(true); });
     void load();
     const timer = window.setInterval(load, 30 * 60_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [index]);
+  function browse(step: number) {
+    if (!data?.configured) return;
+    const next = (data.index + step + data.places.length) % data.places.length;
+    try { localStorage.setItem(PLACE_KEY, String(next)); } catch { /* Speicher gesperrt */ }
+    setIndex(next);
+  }
 
-  if (error) return <Card className="mb-4"><p className="text-xs text-muted" role="status">Wetter gerade nicht verfügbar.</p></Card>;
+  if (error) return <Card><p className="text-xs text-muted" role="status">Wetter gerade nicht verfügbar.</p></Card>;
   if (!data) return null;
-  if (!data.configured) return <Card className="mb-4">
+  if (!data.configured) return <Card>
     <p className="text-sm"><span className="font-semibold">Wetter</span> <span className="text-muted">· Lege deinen Ort fest, um hier den Tagesverlauf zu sehen.</span></p>
     <Link href="/einstellungen" className="mt-2 inline-block py-1 text-xs font-semibold text-accent">Ort in den Einstellungen festlegen →</Link>
   </Card>;
 
   const { current, day } = data;
-  return <Card className="mb-4">
+  const many = data.places.length > 1;
+  const arrow = "flex h-8 w-8 items-center justify-center rounded border border-line text-accent hover:border-accent";
+  return <Card>
+    <div className="mb-3 flex items-center gap-2">
+      <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{data.place}</h2>
+      {many && <>
+        <span className="flex gap-1" aria-hidden="true">{data.places.map((p, i) => <span key={p} className={`h-1.5 w-1.5 rounded-full ${i === data.index ? "bg-accent" : "bg-line"}`} />)}</span>
+        <button type="button" aria-label="Vorheriger Ort" onClick={() => browse(-1)} className={arrow}>‹</button>
+        <button type="button" aria-label="Nächster Ort" onClick={() => browse(1)} className={arrow}>›</button>
+      </>}
+    </div>
     <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div className="flex items-center gap-3">
         <WeatherIcon icon={current.icon} night={!current.is_day} size={44} />
@@ -125,9 +191,10 @@ export function WeatherCard() {
       <div className="text-xs text-muted sm:text-right">
         <p className="text-sm text-ink"><span className="font-semibold">↑ {de0(day.temp_max)}°</span> · ↓ {de0(day.temp_min)}°</p>
         <p className="mt-1">{day.rain_mm > 0 ? `${de(day.rain_mm, 1)} mm Regen · bis ${day.rain_prob_max ?? 0} %` : "Kein Regen erwartet"} · Wind {de0(current.wind_kmh)} km/h</p>
-        <p className="mt-1">{data.place} · ☀ {clock(day.sunrise)}–{clock(day.sunset)}</p>
+        <p className="mt-1">☀ {clock(day.sunrise)}–{clock(day.sunset)}</p>
       </div>
     </div>
-    {data.hours.length > 1 && <HourChart hours={data.hours} nowHour={data.now_hour} />}
+    {data.hours.length > 1 && <HourChart hours={data.hours} nowHour={data.now_hour} run={data.run} />}
+    <RunAdviceBlock run={data.run} />
   </Card>;
 }

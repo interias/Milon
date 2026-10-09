@@ -15,7 +15,8 @@ export default function Einstellungen() {
   const [model, setModel] = useState("");
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
-  const [place, setPlace] = useState("");
+  const [places, setPlaces] = useState<string[]>([]);
+  const [newPlace, setNewPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlace(d.weather_place ?? ""); })
+      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -36,7 +37,8 @@ export default function Einstellungen() {
       if (model && model !== s.openrouter_model) body.openrouter_model = model;
       const hr = parseFloat(hrMax);
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
-      if (place.trim() !== (s.weather_place ?? "")) body.weather_place = place.trim();
+      const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
+      if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
       (["openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
         if (secrets[k]?.trim()) body[k] = secrets[k].trim();
@@ -46,7 +48,8 @@ export default function Einstellungen() {
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
-      setPlace(updated.weather_place ?? "");
+      setPlaces(updated.weather_places ?? []);
+      setNewPlace("");
       setSecrets({});
       setFddbUser("");
       setMsg("Gespeichert ✓");
@@ -126,14 +129,22 @@ export default function Einstellungen() {
         </Card>
 
         <Card className="md:col-span-2">
-          <CardTitle title="Wetter" sub="Tagesverlauf oben auf der Übersicht (Open-Meteo, ohne Konto)" />
-          <label className="block max-w-sm">
-            <span className="mb-1 block text-[11px] text-muted">Ort</span>
-            <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="z. B. Köln" className={INPUT} />
+          <CardTitle title="Wetter · Orte" sub="Tagesverlauf oben auf der Übersicht (Open-Meteo, ohne Konto) · auf der Karte durchblätterbar" />
+          {places.length > 0 && <ul className="mb-3 max-w-md divide-y divide-line rounded-lg border border-line">
+            {places.map((name, i) => <li key={name} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate">{name}</span>
+              {i === 0 ? <span className="text-[11px] font-semibold text-accent">Standard</span>
+                : <button type="button" onClick={() => setPlaces([name, ...places.filter((p) => p !== name)])} className="text-[11px] text-muted underline underline-offset-4">Als Standard</button>}
+              <button type="button" aria-label={`${name} entfernen`} onClick={() => setPlaces(places.filter((p) => p !== name))} className="px-1 text-muted hover:text-bad">✕</button>
+            </li>)}
+          </ul>}
+          <label className="block max-w-md">
+            <span className="mb-1 block text-[11px] text-muted">Ort hinzufügen</span>
+            <input type="text" value={newPlace} onChange={(e) => setNewPlace(e.target.value)} placeholder="z. B. Köln" className={INPUT} />
           </label>
           <p className="mt-2 text-[11px] text-muted">
-            Der Ort wird beim Speichern gesucht und als gerundete Koordinate in server/.env abgelegt; nur diese geht an Open-Meteo.
-            Leer speichern blendet das Wetter aus.
+            Neue Orte werden beim Speichern gesucht und als gerundete Koordinate in server/.env abgelegt; nur diese geht an Open-Meteo.
+            Höchstens 8 Orte; ohne Orte ist die Wetterkarte ausgeblendet.
           </p>
         </Card>
 
