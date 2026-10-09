@@ -63,6 +63,9 @@ def _run_migrations() -> None:
         for col in ("max_hr", "hr_drift_pct"):
             if col not in ex_cols:
                 con.exec_driver_sql(f"ALTER TABLE exercise_sessions ADD COLUMN {col} REAL")
+        checkin_cols = cols("checkins")
+        if checkin_cols and "sick" not in checkin_cols:
+            con.exec_driver_sql("ALTER TABLE checkins ADD COLUMN sick BOOLEAN")
 
 
 def get_session() -> Iterator[Session]:

@@ -87,6 +87,18 @@ def weekly_review(now: datetime | None = None) -> dict:
             "note": "Erfasste Aktivität und Gewichtsänderung sind neutral; fehlende Messungen bleiben unbekannt."}
 
 
+def _sick_days(start: date, end: date) -> set[date]:
+    """Selbst eingetragene Krankheitstage (Check-ins); fehlende Tabelle = keine."""
+    try:
+        with engine.connect() as con:
+            rows = con.exec_driver_sql(
+                "SELECT day FROM checkins WHERE sick = 1 AND day >= ? AND day <= ?",
+                (start.isoformat(), end.isoformat())).fetchall()
+    except Exception:  # Tabelle/Spalte noch nicht migriert
+        return set()
+    return {date.fromisoformat(str(row[0])[:10]) for row in rows}
+
+
 def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     """Tages-Heatmap der Trainingskonsistenz + aktuelle Streak. Level je Tag:
     3 = Kraft/Lauf, 2 = Schrittziel erreicht, 1 = halbes Schrittziel, 0 = nichts."""
@@ -108,13 +120,14 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
         first = min((d for d in trained | step_map.keys() if d <= end), default=end)
         days = (end - first).days + 1
     start = end - timedelta(days=days - 1)
+    sick = _sick_days(start, end)
     out: list[dict] = []
     for i in range(days):
         d = start + timedelta(days=i)
         is_train = d in trained
         st = step_map.get(d, 0)
         level = 3 if is_train else (2 if st >= step_goal else 1 if st >= step_goal / 2 else 0)
-        out.append({"date": d.isoformat(), "level": level, "steps": st, "trained": is_train})
+        out.append({"date": d.isoformat(), "level": level, "steps": st, "trained": is_train, "sick": d in sick})
 
     rev = list(reversed(out))
     skip = 1 if (rev and rev[0]["level"] == 0) else 0  # heute evtl. noch nicht erfasst
@@ -122,6 +135,8 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     for day in rev[skip:]:
         if day["level"] >= 1:
             streak += 1
+        elif day["sick"]:
+            continue  # Krankheitstage pausieren die Serie, statt sie zu brechen
         else:
             break
     return {
@@ -129,6 +144,7 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
         "streak": streak,
         "active_days": sum(1 for x in out if x["level"] >= 1),
         "trained_days": sum(1 for x in out if x["trained"]),
+        "sick_days": len(sick),
         "total": days,
         "step_goal": step_goal,
     }

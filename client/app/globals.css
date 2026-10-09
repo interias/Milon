@@ -14,6 +14,8 @@
   --color-good: #0a6e66;
   --color-warn: #9a5b00;
   --color-bad: #b3261e;
+  /* Krankheitstage: blasses Lavendel, gleiche Helligkeit wie die mittlere Teal-Stufe */
+  --color-sick: #b7a3d9;
 
   --font-display: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

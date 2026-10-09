@@ -3,7 +3,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # config.py -> app -> server -> <repo-root>
@@ -81,6 +81,16 @@ class Settings(BaseSettings):
     # Datenableitung (einzelne Sensor-Spikes verschieben das beobachtete Max). 0 = aus
     # den Daten ableiten (robustes 95.-Perzentil der max_hr, Boden 180).
     run_hr_max: float = 180.0
+
+    # Wetter auf der Übersicht (Open-Meteo). Ort wird in den Einstellungen per Name geocodiert.
+    weather_place: str = ""
+    weather_lat: float | None = None
+    weather_lon: float | None = None
+
+    @field_validator("weather_lat", "weather_lon", mode="before")
+    @classmethod
+    def blank_coordinate(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
 
     def resolved_database_url(self) -> str:
         """Bindet eine relative sqlite-URL (sqlite:///./...) an die Repo-Root,

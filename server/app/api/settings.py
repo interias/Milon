@@ -3,9 +3,11 @@ Secrets werden maskiert ausgegeben; PUT aktualisiert nur übergebene, nicht-leer
 (live im Settings-Objekt UND persistent in server/.env)."""
 from __future__ import annotations
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .. import weather
 from ..coach import profile
 from ..config import settings, update_env_file
 from ..sync import scheduler
@@ -37,6 +39,7 @@ def _current() -> dict:
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
+        "weather_place": settings.weather_place,
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
     }
@@ -61,6 +64,7 @@ class SettingsIn(BaseModel):
     openrouter_model: str | None = None
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
+    weather_place: str | None = None  # "" = Wetter ausblenden
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
     fddb_user: str | None = None
@@ -91,6 +95,21 @@ def update_settings(body: SettingsIn) -> dict:
     if body.run_hr_max is not None and body.run_hr_max >= 0:
         settings.run_hr_max = body.run_hr_max
         env_updates["RUN_HR_MAX"] = str(body.run_hr_max)
+
+    if body.weather_place is not None and body.weather_place.strip() != settings.weather_place:
+        place = body.weather_place.strip()
+        if place:
+            try:
+                hit = weather.geocode(place)
+            except httpx.HTTPError as exc:
+                raise HTTPException(status_code=502, detail="Ortssuche nicht erreichbar.") from exc
+            if hit is None:
+                raise HTTPException(status_code=422, detail=f"Ort „{place}“ nicht gefunden.")
+        else:
+            hit = {"place": "", "lat": None, "lon": None}
+        settings.weather_place, settings.weather_lat, settings.weather_lon = hit["place"], hit["lat"], hit["lon"]
+        env_updates.update({"WEATHER_PLACE": hit["place"], "WEATHER_LAT": "" if hit["lat"] is None else str(hit["lat"]),
+                            "WEATHER_LON": "" if hit["lon"] is None else str(hit["lon"])})
 
     if env_updates:
         update_env_file(env_updates)

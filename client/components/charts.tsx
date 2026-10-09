@@ -15,7 +15,7 @@ function domain(ys: number[]): [number, number] {
 // Pfad durch die Punkte: gerade Segmente (default) ODER monotone kubische Interpolation
 // (Fritsch–Carlson). Die Kurve läuft durch ALLE echten Punkte und erzeugt keine neuen
 // Extrema/Overshoots — glatter Verlauf ohne erfundene Ausschläge (ehrlich für Trendlinien).
-function linePath(pts: (readonly [number, number])[], smooth = false): string {
+export function linePath(pts: (readonly [number, number])[], smooth = false): string {
   if (pts.length < 2) return "";
   if (!smooth || pts.length === 2) {
     return pts.map((p, k) => (k ? "L" : "M") + p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");

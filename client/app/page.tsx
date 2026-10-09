@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type Report, type Consistency } from "@/lib/api";
 import { Card, CardTitle, PageTitle } from "@/components/ui";
 import { Heatmap } from "@/components/Heatmap";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
-import { CheckIn } from "@/components/CheckIn";
+import { CheckIn, CHECKINS_CHANGED } from "@/components/CheckIn";
+import { WeatherCard } from "@/components/WeatherCard";
 import { WeeklyReview } from "@/components/WeeklyReview";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
@@ -24,13 +25,42 @@ function useResource<T>(load: () => Promise<T>): Resource<T> {
   return state;
 }
 const loadStrength = () => api.strengthIndex("3m");
-const loadConsistency = () => api.activityConsistency(0);
 const loadReport = () => api.coachReports(1);
 const signed = (value: number | null | undefined, digits = 1) => value == null || !Number.isFinite(value) ? "Kein Vergleich verfügbar" : `${value > 0 ? "+" : value === 0 ? "±" : ""}${de(value, digits)}`;
 const stamp = (date: string) => Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
 
 function StateNote({ resource, empty = "Noch keine Daten verfügbar." }: { resource: Resource<unknown>; empty?: string }) {
   return <p className="mt-3 text-xs text-muted" role="status">{resource.loading ? "Wird geladen …" : resource.error ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : empty}</p>;
+}
+function SickDaysForm({ onDone }: { onDone: () => void }) {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const [start, setStart] = useState(today);
+  const [end, setEnd] = useState(today);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save(sick: boolean) {
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/checkins/sick`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ start, end, sick }),
+      });
+      if (!response.ok) throw new Error("Zeitraum ungültig (höchstens 93 Tage, nicht in der Zukunft).");
+      window.dispatchEvent(new Event(CHECKINS_CHANGED));
+      onDone();
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusy(false); }
+  }
+  const input = "rounded border border-line bg-surface px-2 py-1.5 text-base sm:text-sm";
+  return <div className="mt-3 rounded-card border border-sick/50 bg-sick/10 p-3">
+    <div className="flex flex-wrap items-end gap-3 text-xs">
+      <label className="flex flex-col gap-1 text-muted">Krank von<input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className={input} /></label>
+      <label className="flex flex-col gap-1 text-muted">bis<input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)} className={input} /></label>
+      <button type="button" disabled={busy || !start || !end} onClick={() => void save(true)} className="rounded bg-[#5b3f8c] px-3 py-2 font-semibold text-white disabled:opacity-50">Eintragen</button>
+      <button type="button" disabled={busy || !start || !end} onClick={() => void save(false)} className="py-2 text-muted underline underline-offset-4 disabled:opacity-50">Zeitraum entfernen</button>
+      <button type="button" onClick={onDone} className="py-2 text-muted underline underline-offset-4">Abbrechen</button>
+    </div>
+    {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
+  </div>;
 }
 function DevelopmentCard({ title, subtitle, href, children }: { title: string; subtitle: string; href: string; children: ReactNode }) {
   return <Card className="flex h-full min-w-0 flex-col"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted">{subtitle}</p><div className="flex-1">{children}</div><Link href={href} className="mt-4 w-fit py-1 text-xs font-semibold text-accent">{title} ansehen →</Link></Card>;
@@ -51,7 +81,7 @@ function ConsistencyHistory({ data, fit = false }: { data: Consistency; fit?: bo
   const days = fit ? (capacity ? data.days.slice(-capacity) : []) : data.days;
   return <div ref={container} className="min-w-0">
     <Heatmap days={days} />
-    {days.length > 0 && <p className="mt-3 text-xs text-muted">{dm(days[0].date)}–{dm(days.at(-1)!.date)} · {days.filter((d) => d.trained).length} Trainingstage · {days.filter((d) => d.level >= 1).length} aktive Tage · aktiv ab Training oder {de0(data.step_goal / 2)} Schritten</p>}
+    {days.length > 0 && <p className="mt-3 text-xs text-muted">{dm(days[0].date)}–{dm(days.at(-1)!.date)} · {days.filter((d) => d.trained).length} Trainingstage · {days.filter((d) => d.level >= 1).length} aktive Tage{days.some((d) => d.sick) ? ` · ${days.filter((d) => d.sick).length} Krankheitstage` : ""} · aktiv ab Training oder {de0(data.step_goal / 2)} Schritten</p>}
   </div>;
 }
 
@@ -60,7 +90,15 @@ export default function Overview() {
   const running = useResource<StandardizedHr>(api.runStandardizedHr);
   const fitness = useResource<RunningFitnessData>(api.runFitness);
   const strength = useResource<StrengthIndex>(loadStrength);
+  const [checkinRevision, setCheckinRevision] = useState(0);
+  const loadConsistency = useCallback(() => api.activityConsistency(0), [checkinRevision]);
   const consistency = useResource<Consistency>(loadConsistency);
+  const [sickOpen, setSickOpen] = useState(false);
+  useEffect(() => {
+    const bump = () => setCheckinRevision((n) => n + 1);
+    window.addEventListener(CHECKINS_CHANGED, bump);
+    return () => window.removeEventListener(CHECKINS_CHANGED, bump);
+  }, []);
   const reports = useResource<Report[]>(loadReport);
   const [yearOpen, setYearOpen] = useState(false);
   const [historyPoint, setHistoryPoint] = useState<HistoryPoint | null>(null);
@@ -80,6 +118,7 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
+    <WeatherCard />
     {historyPoint ? <HistoryCards point={historyPoint} /> : <div className="grid gap-4 md:grid-cols-3">
       <DevelopmentCard title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper">
         {b?.weight_avg7 != null ? <>
@@ -120,7 +159,12 @@ export default function Overview() {
         <CardTitle title="Konsistenz" sub="Training und Schritte · Zeitraum passend zur verfügbaren Breite" />
         {c && <p className="text-sm"><strong>{c.streak >= c.total - (c.days.at(-1)?.level === 0 ? 1 : 0) ? "≥ " : ""}{c.streak}</strong> <span className="text-xs text-muted">Tage aktive Serie</span></p>}
       </div>
-      {c ? <><ConsistencyHistory data={c} fit /><button className="mt-3 py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button></> : <StateNote resource={consistency} />}
+      {c ? <><ConsistencyHistory data={c} fit />
+        <div className="mt-3 flex flex-wrap gap-x-5">
+          <button className="py-1 text-xs font-semibold text-accent" onClick={() => setYearOpen(true)}>Gesamten Zeitraum ansehen →</button>
+          {!sickOpen && <button className="py-1 text-xs font-semibold text-[#5b3f8c]" onClick={() => setSickOpen(true)}>Krankheitstage eintragen</button>}
+        </div>
+        {sickOpen && <SickDaysForm onDone={() => setSickOpen(false)} />}</> : <StateNote resource={consistency} />}
     </Card>
 
     <div className="mt-4">

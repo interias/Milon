@@ -15,6 +15,7 @@ export default function Einstellungen() {
   const [model, setModel] = useState("");
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
+  const [place, setPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -22,7 +23,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); })
+      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlace(d.weather_place ?? ""); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -35,6 +36,7 @@ export default function Einstellungen() {
       if (model && model !== s.openrouter_model) body.openrouter_model = model;
       const hr = parseFloat(hrMax);
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
+      if (place.trim() !== (s.weather_place ?? "")) body.weather_place = place.trim();
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
       (["openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
         if (secrets[k]?.trim()) body[k] = secrets[k].trim();
@@ -44,6 +46,7 @@ export default function Einstellungen() {
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
+      setPlace(updated.weather_place ?? "");
       setSecrets({});
       setFddbUser("");
       setMsg("Gespeichert ✓");
@@ -119,6 +122,18 @@ export default function Einstellungen() {
             Zonen-Grenzen: Z1 &lt;70 % · Z2 70–80 % · Z3 80–90 % · Z4 ≥90 % von HFmax.
             <strong> 0</strong> = automatisch aus den Daten ableiten (robustes 95.-Perzentil, Boden 180) —
             fest eingetragen ist robuster gegen Sensor-Ausreißer.
+          </p>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardTitle title="Wetter" sub="Tagesverlauf oben auf der Übersicht (Open-Meteo, ohne Konto)" />
+          <label className="block max-w-sm">
+            <span className="mb-1 block text-[11px] text-muted">Ort</span>
+            <input type="text" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="z. B. Köln" className={INPUT} />
+          </label>
+          <p className="mt-2 text-[11px] text-muted">
+            Der Ort wird beim Speichern gesucht und als gerundete Koordinate in server/.env abgelegt; nur diese geht an Open-Meteo.
+            Leer speichern blendet das Wetter aus.
           </p>
         </Card>
 

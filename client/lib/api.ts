@@ -57,9 +57,16 @@ export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: 
 export type StepsPoint = { date: string; steps: number };
 export type StepsSummary = { last: number | null; last_day: string | null; avg7: number | null; series: StepsPoint[] };
 export type Activity = { kind: "run" | "workout"; date: string; title: string; detail: string };
-export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean };
+export type WeatherInfo = { code: number | null; icon: string; text: string };
+export type WeatherHour = WeatherInfo & { time: string; temp: number; rain_prob: number | null; rain_mm: number; is_day: boolean };
+export type Weather = { configured: false } | {
+  configured: true; place: string; now_hour: string; source: string; hours: WeatherHour[];
+  current: WeatherInfo & { temp: number; feels_like: number; wind_kmh: number; is_day: boolean };
+  day: WeatherInfo & { temp_max: number; temp_min: number; rain_mm: number; rain_prob_max: number | null; sunrise: string; sunset: string };
+};
+export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; sick?: boolean };
 export type Consistency = {
-  days: ConsistencyDay[]; streak: number; active_days: number; trained_days: number; total: number; step_goal: number;
+  days: ConsistencyDay[]; streak: number; active_days: number; trained_days: number; sick_days?: number; total: number; step_goal: number;
 };
 export type WeekCompare = {
   days: number;
@@ -263,11 +270,11 @@ export type CoachGoal = {
 export type CoachProfile = { context: string; goals: CoachGoal[] };
 export type CoachProfileUpdate = { context: string; goals: Omit<CoachGoal, "effective_status">[] };
 export type AppSettings = {
-  openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; fddb_user_masked: string;
+  openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_place: string; fddb_user_masked: string;
   keys: { openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
-  openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; openrouter_api_key?: string; hevy_api_key?: string;
+  openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_place?: string; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
@@ -343,6 +350,7 @@ export const api = {
   nutritionKcal: (days = 30) => get<KcalPoint[]>(`/metrics/nutrition/kcal?days=${days}`),
   bodySteps: (days = 14) => get<StepsSummary>(`/metrics/body/steps?days=${days}`),
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),
+  weather: () => get<Weather>("/weather"),
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
   activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),

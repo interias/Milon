@@ -21,6 +21,7 @@ class CheckIn(SQLModel, table=True):
     note: str | None = None
     session_kind: str | None = None
     session_external_id: str | None = None
+    sick: bool | None = None
     updated_at: datetime
 
 
@@ -56,6 +57,7 @@ def summary(days: int = 30, today: date | None = None) -> dict:
         "energy_days": len(energies),
         "training_effort_avg": round(sum(efforts) / len(efforts), 1) if efforts else None,
         "training_effort_days": len(efforts),
+        "sick_days": sum(bool(entry.get("sick")) for entry in entries),
         "linked_sessions": sum(entry["session_external_id"] is not None for entry in entries),
         "last_day": entries[0]["day"] if entries else None, "latest": entries[:5],
         "caveat": "Freiwillige Selbstauskunft (1–5). Fehlende Tage sind unbekannt; Auswahl kann verzerrt sein.",
@@ -90,3 +92,4 @@ def valid_session(session: Session, day: date, kind: str, external_id: str) -> b
     if row is None or row.started_at is None or row.started_at.date() != day:
         return False
     return row.exercise_type in (33, 58) if kind == "run" else row.source == "hevy"
+
