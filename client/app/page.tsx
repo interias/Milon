@@ -62,8 +62,27 @@ function SickDaysForm({ onDone }: { onDone: () => void }) {
     {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
   </div>;
 }
-function DevelopmentCard({ title, subtitle, href, children }: { title: string; subtitle: string; href: string; children: ReactNode }) {
-  return <Card className="flex h-full min-w-0 flex-col"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-xs text-muted">{subtitle}</p><div className="flex-1">{children}</div><Link href={href} className="mt-4 w-fit py-1 text-xs font-semibold text-accent">{title} ansehen →</Link></Card>;
+// Kompakte Kennzahl-Kachel: Hauptwert + Veränderung sichtbar, Nebeninfos unter „Details“.
+function KpiTile({ title, subtitle, href, value, unit, change, meta, details = [], empty }: {
+  title: string; subtitle: string; href: string; value: string | null; unit: string; change: ReactNode; meta: ReactNode;
+  details?: ReactNode[]; empty: ReactNode;
+}) {
+  const shown = details.filter(Boolean);
+  return <section className="flex min-w-0 flex-1 flex-col rounded-card border border-line bg-surface px-4 py-3 shadow-[0_1px_2px_rgba(20,32,31,0.04)]">
+    <Link href={href} className="w-fit whitespace-nowrap text-sm font-semibold hover:text-accent">{title} <span className="text-accent">→</span></Link>
+    <span className="truncate text-[11px] text-muted">{subtitle}</span>
+    {value != null ? <>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-3">
+        <p className="font-display text-2xl font-extrabold">{value} <span className="text-sm font-normal text-muted">{unit}</span></p>
+        <p className="text-xs">{change}</p>
+      </div>
+      <p className="mt-0.5 text-[11px] text-muted">{meta}</p>
+      {shown.length > 0 && <details className="mt-1 text-[11px] text-muted">
+        <summary className="w-fit cursor-pointer select-none py-0.5 hover:text-accent">Details</summary>
+        <div className="mt-1 space-y-0.5">{shown.map((item, i) => <p key={i}>{item}</p>)}</div>
+      </details>}
+    </> : empty}
+  </section>;
 }
 function ConsistencyHistory({ data, fit = false }: { data: Consistency; fit?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
@@ -118,7 +137,33 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
-    <WeatherCard />
+    <div className="grid gap-4 xl:grid-cols-3">
+      <div className="min-w-0 xl:col-span-2"><WeatherCard /></div>
+      <div className="grid min-w-0 gap-4 md:grid-cols-3 xl:flex xl:flex-col">
+        <KpiTile title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper"
+          value={b?.weight_avg7 != null ? de(b.weight_avg7, 1) : null} unit="kg"
+          change={b?.weight_delta7 == null ? "Kein Vergleich" : `${signed(b.weight_delta7, 2)} kg ggü. 7 Tagen`}
+          meta={<>{b?.weight_date ? `Stand ${dm(b.weight_date)}` : "Messdatum fehlt"} · {b?.weight_days7}/7 Messtage</>}
+          details={[b?.weight_delta7 != null && b.previous_weight_days7 < 7 && `Vorheriges Fenster: ${b.previous_weight_days7}/7 Messtage`,
+            "Neutral bewertet · Körperziel noch offen"]}
+          empty={<StateNote resource={body} />} />
+        <KpiTile title="Laufen" subtitle="Puls bei 6:00 /km · Minute 30" href="/laufen"
+          value={run ? de(run.hr, 1) : null} unit="bpm"
+          change={priorRun ? `${signed(run!.hr! - priorRun.hr!, 1)} bpm seit ${dm(priorRun.month)}` : "Kein Vergleich vor 8 Wochen"}
+          meta={<>Stand {run ? dm(run.month) : "–"} · {run?.runs} Läufe{vo2 ? <> · VO₂eq {de(vo2.vo2_eq, 1)}</> : null}</>}
+          details={["Niedriger = höhere Effizienz · geschätzter Verlauf",
+            run?.status === "sensitive" && "Empfindlich gegenüber einzelnen Läufen",
+            currentRun?.hr == null && "Aktuell nicht auswertbar; letzter verfügbarer Wert.",
+            vo2 ? `Eigenes VO₂eq: ${de(vo2.vo2_eq, 1)} ml/kg/min · vorläufige Schätzung, ${dm(vo2.date)}` : "Eigenes VO₂-Äquivalent noch nicht verfügbar."]}
+          empty={<StateNote resource={running} empty="Noch keine ausreichend gestützte Schätzung bei 6:00 /km." />} />
+        <KpiTile title="Kraft" subtitle="Gesamtstärke · Basis 100" href="/kraft"
+          value={index?.value != null ? de0(index.value) : null} unit="Index"
+          change={index?.window_delta_pct == null ? "Kein Vergleich" : `${signed(index.window_delta_pct, 1)} % in 3 Monaten`}
+          meta={<>{lastStrength ? `Bis Woche vom ${dm(lastStrength)}` : "Datenstand fehlt"} · {index?.cohort_size} Übungen</>}
+          details={[`${index?.cohort_size} Übungen · ${index?.groups} Muskelgruppen`, "Basis 100 = Trainingsstart"]}
+          empty={<StateNote resource={strength} empty="Noch nicht genügend vergleichbare Kraftdaten." />} />
+      </div>
+    </div>
     <CheckIn />
 
     <Card className="mt-4">
@@ -134,37 +179,8 @@ export default function Overview() {
         {sickOpen && <SickDaysForm onDone={() => setSickOpen(false)} />}</> : <StateNote resource={consistency} />}
     </Card>
 
-    {historyPoint ? <div className="mt-4"><HistoryCards point={historyPoint} /></div> : <div className="mt-4 grid gap-4 md:grid-cols-3">
-      <DevelopmentCard title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper">
-        {b?.weight_avg7 != null ? <>
-          <p className="mt-3 font-display text-3xl font-extrabold">{de(b.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
-          <p className="mt-2 text-sm">{b.weight_delta7 == null ? "Kein Vergleich verfügbar" : `${signed(b.weight_delta7, 2)} kg gegenüber 7 Tagen zuvor`}</p>
-          <p className="mt-2 text-xs text-muted">{b.weight_date ? `Stand ${dm(b.weight_date)}` : "Messdatum nicht verfügbar"} · {b.weight_days7}/7 Messtage</p>
-          {b.weight_delta7 != null && b.previous_weight_days7 < 7 && <p className="mt-1 text-xs text-muted">Vorheriges Fenster: {b.previous_weight_days7}/7 Messtage</p>}
-          <p className="mt-2 text-xs text-muted">Neutral bewertet · Körperziel noch offen</p>
-        </> : <StateNote resource={body} />}
-      </DevelopmentCard>
-      <DevelopmentCard title="Laufen" subtitle="Puls bei 6:00 /km · Laufminute 30" href="/laufen">
-        {run ? <>
-          <p className="mt-3 font-display text-3xl font-extrabold">{de(run.hr, 1)} <span className="text-sm font-normal text-muted">bpm</span></p>
-          <p className="mt-2 text-sm">{priorRun ? `${signed(run.hr! - priorRun.hr!, 1)} bpm seit ${dm(priorRun.month)}` : "Kein Vergleich vor 8 Wochen verfügbar"}</p>
-          <p className="mt-2 text-xs text-muted">Stand {dm(run.month)} · {run.runs} Läufe</p>
-          <p className="mt-2 text-xs text-muted">Niedriger = höhere Effizienz · geschätzter Verlauf</p>
-          {run.status === "sensitive" && <p className="mt-1 text-xs text-muted">Empfindlich gegenüber einzelnen Läufen</p>}
-          {currentRun?.hr == null && <p className="mt-1 text-xs text-muted">Aktuell nicht auswertbar; letzter verfügbarer Wert.</p>}
-        </> : <StateNote resource={running} empty="Noch keine ausreichend gestützte Schätzung bei 6:00 /km." />}
-        {vo2 ? <p className="mt-3 border-t border-line pt-2 text-xs text-muted">Eigenes VO₂eq: {de(vo2.vo2_eq, 1)} ml/kg/min · vorläufige Schätzung, {dm(vo2.date)}</p> : <StateNote resource={fitness} empty="Eigenes VO₂-Äquivalent noch nicht verfügbar." />}
-      </DevelopmentCard>
-      <DevelopmentCard title="Kraft" subtitle="Gesamtstärke · Basis 100 = Trainingsstart" href="/kraft">
-        {index?.value != null ? <>
-          <p className="mt-3 font-display text-3xl font-extrabold">{de0(index.value)} <span className="text-sm font-normal text-muted">Index</span></p>
-          <p className="mt-2 text-sm">{index.window_delta_pct == null ? "Kein Vergleich verfügbar" : `${signed(index.window_delta_pct, 1)} % im 3-Monats-Vergleich`}</p>
-          <p className="mt-2 text-xs text-muted">{lastStrength ? `Daten bis Woche vom ${dm(lastStrength)}` : "Datenstand nicht verfügbar"}</p>
-          <p className="mt-2 text-xs text-muted">{index.cohort_size} Übungen · {index.groups} Muskelgruppen</p>
-        </> : <StateNote resource={strength} empty="Noch nicht genügend vergleichbare Kraftdaten." />}
-      </DevelopmentCard>
-    </div>}
     <OverviewHistory onSelect={setHistoryPoint} />
+    {historyPoint && <div className="mt-4"><HistoryCards point={historyPoint} /></div>}
     <WeeklyReview />
 
     <div className="mt-4">

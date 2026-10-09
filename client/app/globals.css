@@ -72,3 +72,26 @@ body {
 .milon-new-data { box-shadow:inset 3px 0 0 #0a6e66; background-color:#edf7f4; animation:milon-arrive 180ms ease-out; }
 @keyframes milon-arrive { from { opacity:.55; } to { opacity:1; } }
 @media(prefers-reduced-motion:reduce) { .milon-new-data { animation:none; } }
+
+/* Wetterkarte – dezente Animationen (bei „Bewegung reduzieren“ aus) */
+@keyframes wx-reveal { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes wx-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes wx-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes wx-spin { to { transform: rotate(360deg); } }
+@keyframes wx-drop { 0% { transform: translateY(-1.5px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(2.5px); opacity: 0; } }
+@keyframes wx-drift { from { transform: translateX(-0.7px); } to { transform: translateX(0.7px); } }
+@keyframes wx-flash { 0%, 90%, 100% { opacity: 1; } 94% { opacity: 0.15; } }
+@keyframes wx-pulse { from { transform: scale(1); opacity: 0.45; } to { transform: scale(2.8); opacity: 0; } }
+.wx-reveal { transform-box: fill-box; transform-origin: left; animation: wx-reveal 1.1s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+.wx-bar { transform-box: fill-box; transform-origin: bottom; animation: wx-grow 0.6s ease-out both; }
+.wx-fade { animation: wx-fade 0.35s ease-out both; }
+.wx-pulse { animation: wx-pulse 2.4s ease-out infinite; }
+.wx-anim .wx-rays { transform-box: fill-box; transform-origin: center; animation: wx-spin 24s linear infinite; }
+.wx-anim .wx-cloud { animation: wx-drift 5s ease-in-out infinite alternate; }
+.wx-anim .wx-drops > * { animation: wx-drop 1.6s ease-in infinite; }
+.wx-anim .wx-drops > :nth-child(2) { animation-delay: 0.55s; }
+.wx-anim .wx-drops > :nth-child(3) { animation-delay: 1.1s; }
+.wx-anim .wx-bolt { animation: wx-flash 4.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .wx-reveal, .wx-bar, .wx-fade, .wx-pulse, .wx-anim * { animation: none !important; }
+}
