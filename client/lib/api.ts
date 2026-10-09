@@ -63,11 +63,12 @@ export type RunWindow = {
   start: string; end: string; temp: number; rain_prob: number; wind_kmh: number; wet: boolean; score: number; rating: "ideal" | "gut" | "mäßig";
   clothing: { level: string; text: string; extras: string[]; felt: number; adjust: number };
 };
-export type RunAdvice = { day: "heute" | "morgen"; sunrise: string; sunset: string; morning: RunWindow | null; best: RunWindow | null; notes: string[] };
+export type RunAdvice = { day: "heute" | "morgen"; date: string; sunrise: string; sunset: string; morning: RunWindow | null; best: RunWindow | null; notes: string[] };
 export type Weather = { configured: false } | {
-  configured: true; place: string; index: number; places: string[]; run: RunAdvice | null; now_hour: string; source: string; hours: WeatherHour[];
+  configured: true; place: string; index: number; places: string[]; run: RunAdvice | null; date: string; now_hour: string | null;
+  days: (WeatherInfo & { date: string; temp_max: number; temp_min: number; rain_prob_max: number | null })[]; source: string; hours: WeatherHour[];
   current: WeatherInfo & { temp: number; feels_like: number; wind_kmh: number; is_day: boolean };
-  day: WeatherInfo & { temp_max: number; temp_min: number; rain_mm: number; rain_prob_max: number | null; sunrise: string; sunset: string };
+  day: WeatherInfo & { temp_max: number; temp_min: number; rain_mm: number; rain_prob_max: number | null; wind_max_kmh: number | null; sunrise: string; sunset: string };
 };
 export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; sick?: boolean };
 export type Consistency = {
@@ -355,7 +356,7 @@ export const api = {
   nutritionKcal: (days = 30) => get<KcalPoint[]>(`/metrics/nutrition/kcal?days=${days}`),
   bodySteps: (days = 14) => get<StepsSummary>(`/metrics/body/steps?days=${days}`),
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),
-  weather: (index = 0) => get<Weather>(`/weather?index=${index}`),
+  weather: (index = 0, day = 0) => get<Weather>(`/weather?index=${index}&day=${day}`),
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
   activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),
