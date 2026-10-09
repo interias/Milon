@@ -3,6 +3,7 @@
 import type { ConsistencyDay } from "@/lib/api";
 
 const COLORS = ["var(--color-line)", "rgba(10,110,102,0.30)", "rgba(10,110,102,0.60)", "#0a6e66"];
+const SICK = "var(--color-sick)";
 const MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 export function Heatmap({ days }: { days: ConsistencyDay[] }) {
@@ -44,14 +45,14 @@ export function Heatmap({ days }: { days: ConsistencyDay[] }) {
                 {Array.from({ length: 7 }).map((_, di) => {
                   const c = w[di];
                   const title = c
-                    ? `${c.date}: ${c.trained ? "Training" : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "Keine Aktivität erfasst"}`
+                    ? `${c.date}: ${c.sick ? "Krank" + (c.trained ? " · Training" : "") : c.trained ? "Training" : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "Keine Aktivität erfasst"}`
                     : "";
                   return (
                     <div
                       key={di}
                       title={title}
                       className="h-3 w-3 shrink-0 rounded-[3px]"
-                      style={{ background: c ? COLORS[c.level] : "transparent" }}
+                      style={{ background: c ? (c.sick ? SICK : COLORS[c.level]) : "transparent" }}
                     />
                   );
                 })}
@@ -64,6 +65,8 @@ export function Heatmap({ days }: { days: ConsistencyDay[] }) {
         <span>weniger</span>
         {COLORS.map((c, i) => <span key={i} className="h-3 w-3 rounded-[3px]" style={{ background: c }} />)}
         <span>mehr · Training = volle Farbe</span>
+        <span className="ml-2 h-3 w-3 rounded-[3px]" style={{ background: SICK }} />
+        <span>krank</span>
       </div>
     </div>
   );

@@ -77,3 +77,20 @@ def test_empty_activity_and_api_contract(activity_db):
     assert result["strength"] == {"current_sessions": 0, "previous_sessions": 0}
     assert result["steps"] == {"current_avg": None, "previous_avg": None,
                                "current_days": 0, "previous_days": 0}
+
+
+def test_consistency_marks_sick_days_and_pauses_streak(activity_db, monkeypatch):
+    from app import checkins
+    SQLModel.metadata.create_all(activity_db)
+    today = datetime.now(activity.ZoneInfo("Europe/Berlin")).date()
+    with Session(activity_db) as session:
+        for back in (4, 5):
+            session.add(Workout(started_at=datetime.combine(today - timedelta(days=back), datetime.min.time()) + timedelta(hours=9), source="hevy"))
+        for back in (1, 2, 3):
+            session.add(checkins.CheckIn(day=today - timedelta(days=back), sick=True, updated_at=datetime.now()))
+        session.add(checkins.CheckIn(day=today - timedelta(days=6), energy=3, updated_at=datetime.now()))
+        session.commit()
+    result = activity.consistency(7)
+    assert [d["sick"] for d in result["days"]] == [False, False, False, True, True, True, False]
+    assert result["sick_days"] == 3
+    assert result["streak"] == 2  # two training days, sick days neither count nor break

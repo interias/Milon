@@ -1,11 +1,11 @@
 """Daily check-ins are opt-in; PUT replaces one day's self-report."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator, model_validator
 from sqlmodel import Session
 
 from .. import checkins
@@ -21,6 +21,8 @@ class CheckInInput(BaseModel):
     note: str | None = Field(default=None, max_length=500)
     session_kind: Literal["run", "strength"] | None = None
     session_external_id: str | None = Field(default=None, max_length=200)
+    # Omitted = keep the stored value, so energy-only clients never clear a sick day.
+    sick: StrictBool | None = None
 
     @field_validator("note", "session_external_id")
     @classmethod
@@ -31,8 +33,9 @@ class CheckInInput(BaseModel):
     def validate_entry(self):
         if (self.session_kind is None) != (self.session_external_id is None):
             raise ValueError("Trainingsart und Trainings-ID müssen gemeinsam angegeben werden.")
-        if self.energy is None and self.training_effort is None and self.note is None and self.session_kind is None:
-            raise ValueError("Mindestens Energie, Trainingsanstrengung, eine Notiz oder ein Training angeben.")
+        if (self.energy is None and self.training_effort is None and self.note is None
+                and self.session_kind is None and not self.sick):
+            raise ValueError("Mindestens Energie, Trainingsanstrengung, Krankheit, eine Notiz oder ein Training angeben.")
         return self
 
 
@@ -52,6 +55,44 @@ def list_checkins(days: int = Query(30, ge=1, le=365)) -> dict:
 def list_sessions(day: date) -> list[dict]:
     _past_or_today(day)
     return checkins.sessions_on(day)
+
+
+class SickRangeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: date
+    end: date
+    sick: StrictBool
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.start > self.end:
+            raise ValueError("Der Beginn muss vor dem Ende liegen.")
+        if (self.end - self.start).days > 92:
+            raise ValueError("Höchstens 93 Tage auf einmal.")
+        return self
+
+
+@router.put("/sick")
+def save_sick_range(body: SickRangeInput) -> dict:
+    """Mark or clear sick days; clearing removes entries that would otherwise be empty."""
+    _past_or_today(body.end)
+    now = datetime.now(timezone.utc)
+    days = [body.start + timedelta(days=offset) for offset in range((body.end - body.start).days + 1)]
+    with Session(checkins.engine) as session:
+        for day in days:
+            entry = session.get(checkins.CheckIn, day)
+            if entry is None:
+                if body.sick:
+                    session.add(checkins.CheckIn(day=day, sick=True, updated_at=now))
+                continue
+            entry.sick = True if body.sick else None
+            entry.updated_at = now
+            empty = (entry.energy is None and entry.training_effort is None and entry.note is None
+                     and entry.session_kind is None and not entry.sick)
+            session.delete(entry) if empty else session.add(entry)
+        session.commit()
+    return {"start": body.start.isoformat(), "end": body.end.isoformat(), "sick": body.sick, "days": len(days)}
 
 
 @router.get("/{day}")
@@ -74,6 +115,8 @@ def save_checkin(day: date, body: CheckInInput) -> dict:
                 session, day, body.session_kind, body.session_external_id):
             raise HTTPException(status_code=422, detail="Das ausgewählte Training gehört nicht zu diesem Tag oder ist nicht verfügbar.")
         values = body.model_dump()
+        if "sick" not in body.model_fields_set:
+            values["sick"] = entry.sick if entry is not None else None
         if entry is None:
             entry = checkins.CheckIn(day=day, updated_at=datetime.now(timezone.utc), **values)
         else:

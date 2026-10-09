@@ -133,3 +133,29 @@ def test_summary_excludes_missing_values_and_respects_calendar_window(checkin_cl
 
 def test_today_uses_local_calendar_day():
     assert checkins.local_today(datetime(2026, 10, 3, 23, tzinfo=timezone.utc)) == date(2026, 10, 4)
+
+
+def test_sick_range_marks_preserves_and_clears(checkin_client):
+    client = checkin_client
+    assert client.put("/checkins/2026-10-02", json={"energy": 2}).status_code == 200
+    assert client.put("/checkins/sick", json={"start": "2026-10-01", "end": "2026-10-04", "sick": True}).json()["days"] == 4
+    assert client.get("/checkins/2026-10-01").json()["sick"] is True
+    # Energy-only updates omit `sick` and must not clear it.
+    assert client.put("/checkins/2026-10-02", json={"energy": 1}).json()["sick"] is True
+    assert client.put("/checkins/2026-10-03", json={"sick": False, "note": "besser"}).json()["sick"] is False
+    assert checkins.summary(7, date(2026, 10, 4))["sick_days"] == 3
+    assert client.put("/checkins/sick", json={"start": "2026-10-01", "end": "2026-10-04", "sick": False}).status_code == 200
+    assert client.get("/checkins/2026-10-01").json() is None
+    assert client.get("/checkins/2026-10-02").json()["energy"] == 1
+    assert client.get("/checkins/2026-10-03").json()["note"] == "besser"
+
+
+@pytest.mark.parametrize("body", [
+    {"start": "2026-10-04", "end": "2026-10-03", "sick": True},
+    {"start": "2026-10-03", "end": "2026-10-05", "sick": True},
+    {"start": "2026-01-01", "end": "2026-10-04", "sick": True},
+    {"start": "2026-10-03", "end": "2026-10-04", "sick": "yes"},
+])
+def test_sick_range_validation(checkin_client, body):
+    assert checkin_client.put("/checkins/sick", json=body).status_code == 422
+    assert checkin_client.put("/checkins/sick", json={"start": "2026-10-03", "end": "2026-10-04", "sick": False}).status_code == 200
