@@ -268,3 +268,12 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Orden der stillen Nacht: 50 je Nacht ab 7 h.
   - **Sets:** Garnitur = gleicher Namenszusatz (`item.set`; Altbestand per `_set_suffix` abgeleitet). Ab 2 angelegten Teilen Aura um die Figur, ab 4 pulsierend; rein optisch.
   - **Entzaubern/Aufwerten:** Entzaubern nur für nicht angelegte Gegenstände → Arkanstaub (`DUST` nach Rarität), endgültig; UI fragt nach. Aufwerten bis 3-mal je +4 Stufen für 10/20/30 Staub. API `POST /hero/disenchant`, `POST /hero/upgrade` (409 angelegt / zu wenig Staub / voll).
+- **Aufgeräumt in Tabs (2026-10-16):** Der Einheitenrahmen (Kopf mit Buffs und EP) bleibt oben. Darunter Tabs im Stil der WoW-Fensterreiter:
+  - Charakter: Charakterbogen + Taschen, damit Drag & Drop zusammen bleibt.
+  - Abenteuer: Truhe, Aufträge, Schlachtzug, Instanzen.
+  - Talente
+  - Chronik: Diagramme, Ruf, EP-Quellen.
+  - Erfolge: damit standardmäßig eingeklappt.
+  - Der aktive Tab steht im Hash (`#erfolge`, Link von der Laufen-Seite). Hinweise an den Tabs: „!“ = Truhe wählbar, „▲“ = Verbesserung oder neue Beute in den Taschen, „•“ = freie Talentreihe.
+  - **Kampflog immer sichtbar:** ab `xl` als mitlaufende Spalte rechts (300 px), darunter kompakt unter dem Kopf.
+  - Innere Raster im Tab-Bereich nutzen Container-Queries (`@3xl:`), weil die Spalte schmaler ist als der Viewport.

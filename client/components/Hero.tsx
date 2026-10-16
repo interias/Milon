@@ -541,11 +541,11 @@ function LogLine({ e }: { e: Hero["log"][number] }) {
   }
 }
 
-export function HeroLog({ data }: { data: Hero }) {
+export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClass?: string }) {
   return (
     <Card>
       <CardTitle title="Kampflog" sub="Stufenaufstiege, Klassenwechsel, Beute und Erfolge" />
-      <ol className="wow-chat max-h-96 space-y-0.5 overflow-y-auto p-2.5">
+      <ol className={`wow-chat space-y-0.5 overflow-y-auto p-2.5 ${listClass}`}>
         {data.log.map((e, i) => (
           <li key={i}><span className="mr-1.5 tabular-nums text-[#8a8a8a]">[{dm(e.date)}]</span><LogLine e={e} /></li>
         ))}

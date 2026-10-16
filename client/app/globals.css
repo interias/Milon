@@ -186,3 +186,21 @@ body {
 .wow-aura-pulse { animation: wowAura 2.6s ease-in-out infinite; }
 @keyframes wowAura { 0%, 100% { opacity: .45; transform: scale(.96) } 50% { opacity: .85; transform: scale(1.04) } }
 @media (prefers-reduced-motion: reduce) { .wow-aura-pulse { animation: none } }
+
+/* Heldenreise-Tabs im Stil der WoW-Fensterreiter */
+.wow-tabs { border-bottom: 1px solid #5b4526; padding-bottom: 0; }
+.wow-tab {
+  position: relative; padding: 7px 14px 6px; border: 1px solid #3a2d1a; border-bottom: 0;
+  border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #1a140e, #0d0a07);
+  color: var(--color-muted); font-family: var(--font-cinzel), Georgia, serif; font-weight: 700; font-size: 13px;
+}
+.wow-tab:hover { color: var(--wow-gold-soft); }
+.wow-tab-active {
+  color: #ffd100; border-color: #8a6a35; background: linear-gradient(180deg, #3a2a14, #17120c);
+  box-shadow: inset 0 2px 0 var(--wow-gold); margin-bottom: -1px; padding-bottom: 7px;
+}
+.wow-tab-hint {
+  position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
+  display: grid; place-items: center; font-family: var(--font-sans); font-size: 11px; font-weight: 800; line-height: 1;
+  color: #000; background: #ffd100; box-shadow: 0 0 6px #ffd100;
+}

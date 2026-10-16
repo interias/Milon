@@ -59,6 +59,30 @@ export default function Heldenreise() {
     markSeen,
   }), [hero, load, dragging, seen, markSeen]);
 
+  // Tabs: aktiver Tab steht im Hash (#erfolge usw.), damit Links direkt hinführen.
+  const [tab, setTab] = useState<TabKey>("charakter");
+  useEffect(() => {
+    const read = () => {
+      const h = window.location.hash.slice(1) as TabKey;
+      if (TABS.some((t) => t.key === h)) setTab(h);
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  const choose = (key: TabKey) => {
+    setTab(key);
+    history.replaceState(null, "", `#${key}`);
+  };
+
+  const hints: Partial<Record<TabKey, string>> = {};
+  if (hero) {
+    if (hero.vault.veteran || hero.vault.claimable.length) hints.abenteuer = "!";
+    const upgrade = hero.inventory.some((it) => !it.equipped && it.ilvl > (hero.equipment[it.slot]?.ilvl ?? 0));
+    if (upgrade || hero.inventory.some((it) => !it.equipped && gear.isNew(it.id))) hints.charakter = "▲";
+    if (hero.talents.some((r) => r.unlocked && r.options.length && !r.chosen)) hints.talente = "•";
+  }
+
   return (
     <div className={`wow ${cinzel.variable}`}>
       <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
@@ -68,32 +92,62 @@ export default function Heldenreise() {
           {titles && <HeroTitleChooser data={hero} onChoose={async (key) => { await api.heroTitle(key); await load(); }} onClose={() => setTitles(false)} />}
           <LevelUpBanner level={hero.hero.level} title={hero.hero.title} />
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
-          <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-            <HeroCharacter data={hero} gear={gear} />
-            <div className="space-y-4">
-              <HeroVaultCard data={hero} onClaim={claim} />
-              <HeroQuestLog data={hero} />
+          <div className="xl:hidden"><HeroLog data={hero} listClass="max-h-36" /></div>
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0">
+              <div role="tablist" aria-label="Bereiche der Heldenreise" className="wow-tabs mb-4 flex gap-1 overflow-x-auto">
+                {TABS.map((t) => (
+                  <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} id={`tab-${t.key}`}
+                          aria-controls={`panel-${t.key}`} onClick={() => choose(t.key)}
+                          className={`wow-tab shrink-0 ${tab === t.key ? "wow-tab-active" : ""}`}>
+                    {t.label}
+                    {hints[t.key] && <span className="wow-tab-hint" aria-label="Neues">{hints[t.key]}</span>}
+                  </button>
+                ))}
+              </div>
+              <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} key={tab} className="@container ach-fade space-y-4">
+                {tab === "charakter" && <>
+                  <HeroCharacter data={hero} gear={gear} />
+                  <HeroBags items={hero.inventory} gear={gear} />
+                </>}
+                {tab === "abenteuer" && <>
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
+                    <HeroVaultCard data={hero} onClaim={claim} />
+                    <HeroQuestLog data={hero} />
+                  </div>
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
+                    <HeroRaid data={hero} />
+                    <HeroDungeons data={hero} />
+                  </div>
+                </>}
+                {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
+                {tab === "chronik" && <>
+                  <HeroChronicle data={hero} />
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
+                    <HeroReputation data={hero} />
+                    <HeroRules data={hero} />
+                  </div>
+                </>}
+                {tab === "erfolge" && (ach
+                  ? <><AchievementsSummary data={ach} showLevel={false} /><AchievementsGrid data={ach} /></>
+                  : <Loading />)}
+              </div>
             </div>
+            <aside className="hidden xl:sticky xl:top-4 xl:block" aria-label="Kampflog">
+              <HeroLog data={hero} listClass="max-h-[calc(100vh-9rem)]" />
+            </aside>
           </div>
-          <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-            <HeroRaid data={hero} />
-            <HeroDungeons data={hero} />
-          </div>
-          <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />
-          <HeroBags items={hero.inventory} gear={gear} />
-          <HeroChronicle data={hero} />
-          <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-            <HeroReputation data={hero} />
-            <HeroRules data={hero} />
-          </div>
-          <div>
-            <HeroLog data={hero} />
-          </div>
-          <section id="erfolge" className="scroll-mt-20" aria-label="Erfolge">
-            {ach ? <><AchievementsSummary data={ach} showLevel={false} /><div className="mt-4"><AchievementsGrid data={ach} /></div></> : <Loading />}
-          </section>
         </div>
       )}
     </div>
   );
 }
+
+type TabKey = "charakter" | "abenteuer" | "talente" | "chronik" | "erfolge";
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "charakter", label: "Charakter" },
+  { key: "abenteuer", label: "Abenteuer" },
+  { key: "talente", label: "Talente" },
+  { key: "chronik", label: "Chronik" },
+  { key: "erfolge", label: "Erfolge" },
+];
