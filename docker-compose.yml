@@ -47,3 +47,12 @@ services:
       server:
         condition: service_started
     # mem_limit: 256m
+
+  # Statischer Bericht zur Heldenreise (report/), später auf Cloudflare Pages.
+  report:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./report:/usr/share/nginx/html:ro
+    ports:
+      - "${REPORT_PORT:-8090}:80"
+    restart: unless-stopped
