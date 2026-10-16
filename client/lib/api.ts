@@ -185,7 +185,7 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
-  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran"; reason: string; date: string;
+  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag"; reason: string; date: string;
   lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
 };
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
@@ -204,16 +204,19 @@ export type Hero = {
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege", number>;
+  talents: { level: number; name: string; unlocked: boolean; chosen: string | null; options: { key: string; name: string; effect: string; icon: string }[] }[];
+  quests: { week: string; halved: boolean; sick_days: number; complete: boolean; complete_on: string | null;
+    quests: { id: string; category: string; title: string; goal: string; target: number; unit: string; progress: number; done: boolean; done_on: string | null; xp: number }[] } | null;
   buffs: HeroBuff[];
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; xp: number; level: number }[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {
@@ -432,6 +435,7 @@ export const api = {
   heroUnequip: (slot: string) => post<{ slot: string }>("/hero/unequip", { slot }),
   heroEquipBest: () => post<{ equipped: Record<string, string> }>("/hero/equip-best"),
   heroSpec: (spec: string | null) => post<{ spec: string | null }>("/hero/spec", { spec }),
+  heroTalent: (row: number, choice: string | null) => post<{ row: number; choice: string | null }>("/hero/talent", { row, choice }),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),

@@ -62,7 +62,7 @@ const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
 function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
-  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe" };
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute" };
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
@@ -497,6 +497,7 @@ function LogLine({ e }: { e: Hero["log"][number] }) {
     case "klasse": return <span style={{ color: "#ff7d0a" }}>Ihr folgt nun dem Pfad: {e.name}.</span>;
     case "erfolg": return <span style={{ color: "#ffff00" }}>Ihr habt den Erfolg {name("#ffff00")} errungen!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "beute": return <span style={{ color: "#00aa00" }}>Ihr erhaltet Beute: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
+    case "auftrag": return <span style={{ color: "#ffd100" }}>Auftrag abgeschlossen: {name("#ffd100")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
     default: return <span>{e.text}</span>;
   }
@@ -517,7 +518,7 @@ export function HeroLog({ data }: { data: Hero }) {
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />
@@ -533,6 +534,7 @@ export function HeroRules({ data }: { data: Hero }) {
         <li>Alltag: Schritte über 5.000, Rad und Gehen. Erfolge zählen mit ihren Punkten.</li>
         <li>Buffs: Protein-Ziel am Vortag (Wohlgenährt) und eine Nacht ab 7 h (Erholt) geben je +5 % Trainings-EP.</li>
         <li>Fokus: Läufe passend zur gewählten Spezialisierung geben ab dem Tag der Wahl +10 %.</li>
+        <li>Talente wirken ab dem Tag der Wahl; Wochenaufträge geben je 150 EP.</li>
       </ul>
     </Card>
   );

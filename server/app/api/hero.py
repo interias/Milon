@@ -22,6 +22,11 @@ class SpecInput(BaseModel):
     spec: str | None = Field(default=None, max_length=20)
 
 
+class TalentInput(BaseModel):
+    row: int = Field(ge=10, le=80)
+    choice: str | None = Field(default=None, max_length=30)
+
+
 class UnequipInput(BaseModel):
     slot: str = Field(min_length=2, max_length=20)
 
@@ -71,3 +76,14 @@ def choose_spec(body: SpecInput) -> dict:
     except KeyError as exc:
         raise HTTPException(status_code=422, detail="Unbekannte Spezialisierung.") from exc
     return {"spec": body.spec}
+
+
+@router.post("/talent")
+def choose_talent(body: TalentInput) -> dict:
+    try:
+        hero.choose_talent(body.row, body.choice)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail="Unbekanntes Talent.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"row": body.row, "choice": body.choice}

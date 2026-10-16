@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
+from . import hero_quests
 from .checkins import local_today
 from .db import engine
 
@@ -211,6 +212,34 @@ def start_date(today: date) -> date:
         return date.fromisoformat(row.value)
 
 
+# Talentreihen wie in WoW: alle 10 Stufen eine Reihe, je eine von drei Optionen. Wirkung ab dem
+# Tag der Wahl (datierte Historie je Reihe), jederzeit umwählbar.
+TALENT_ROWS = [
+    (10, "Rhythmus", [
+        ("morgen", "Morgenläufer", "+10 % EP für Läufe vor 9 Uhr", "sun"),
+        ("abend", "Feierabendläufer", "+10 % EP für Läufe ab 17 Uhr", "sunset"),
+        ("wochenende", "Wochenendkrieger", "+10 % EP für Läufe am Wochenende", "calendar")]),
+    (20, "Eisen", [
+        ("eisenwille", "Eisenwille", "+10 % EP für Krafttraining", "dumbbell"),
+        ("ausgleich", "Ausgleich", "+15 % Kraft-EP an Tagen ohne Lauf", "scale"),
+        ("doppelschlag", "Doppelschlag", "+10 % EP für Lauf und Kraft am selben Tag", "swords")]),
+    (30, "Erholung", [
+        ("tiefschlaf", "Tiefschlaf", "Erholt gibt +10 % statt +5 %", "moon"),
+        ("langer_atem", "Langer Atem", "Ruhebonus-Vorrat bis 360 statt 240 EP", "bed"),
+        ("feinschmecker", "Feinschmecker", "Wohlgenährt gibt +10 % statt +5 %", "food")]),
+    (40, "Aufträge", [
+        ("pfadfinder", "Pfadfinder", "+1 Lauf-Auftrag pro Woche", "map"),
+        ("schmied", "Schmied", "+1 Kraft-Auftrag pro Woche", "anvil"),
+        ("hueter", "Hüter", "+1 Pflege-Auftrag pro Woche", "leaf")]),
+    (50, "Glück", [
+        ("schatzsucher", "Schatzsucher", "Glücksfund-Chance 15 % statt 8 %", "gem"),
+        ("truhenmeister", "Truhenmeister", "Truhen-Slots: 30 % statt 15 % Chance auf +1 Seltenheit", "chest"),
+        ("bossjaeger", "Bossjäger", "+50 % EP für besiegte Bosse", "skull")]),
+]
+TALENT_LOCKED = [60, 70, 80]
+QUEST_EXTRA = {"pfadfinder": "lauf", "schmied": "kraft", "hueter": "pflege"}
+
+
 def _state_get(key: str) -> str | None:
     with Session(engine) as session:
         row = session.get(HeroState, key)
@@ -283,15 +312,51 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege"]
+
+
 class Mods:
     """Zeitabhängige Wirkungen auf Trainings-EP: Daten-Buffs und gewählte Spezialisierung."""
 
-    def __init__(self, buffs: dict[date, set[str]] | None = None, spec_hist: list[dict] | None = None):
+    def __init__(self, buffs: dict[date, set[str]] | None = None, spec_hist: list[dict] | None = None,
+                 talents: dict[int, list[dict]] | None = None):
         self.buffs = buffs or {}
         self.spec_hist = spec_hist or []
+        self.talents = talents or {}
+
+    def talent(self, row: int, d: date) -> str | None:
+        return _active(self.talents.get(row, []), d)
 
     def training(self, d: date) -> float:
-        return BUFF_PCT * len(self.buffs.get(d, set()) & {"wohlgenaehrt", "erholt"})
+        have = self.buffs.get(d, set())
+        pct = 0.0
+        if "wohlgenaehrt" in have:
+            pct += 2 * BUFF_PCT if self.talent(30, d) == "feinschmecker" else BUFF_PCT
+        if "erholt" in have:
+            pct += 2 * BUFF_PCT if self.talent(30, d) == "tiefschlaf" else BUFF_PCT
+        return pct
+
+    def run_talent(self, d: date, run, lifted: bool) -> float:
+        t, hour = self.talent(10, d), run.started_at.hour
+        pct = 0.10 if (t == "morgen" and hour < 9) or (t == "abend" and hour >= 17) \
+            or (t == "wochenende" and d.weekday() >= 5) else 0.0
+        return pct + (0.10 if lifted and self.talent(20, d) == "doppelschlag" else 0.0)
+
+    def workout_talent(self, d: date, ran: bool) -> float:
+        t = self.talent(20, d)
+        return {"eisenwille": 0.10, "ausgleich": 0.0 if ran else 0.15, "doppelschlag": 0.10 if ran else 0.0}.get(t or "", 0.0)
+
+    def rest_cap(self, d: date) -> float:
+        return 360.0 if self.talent(30, d) == "langer_atem" else REST_CAP
+
+    def luck(self, d: date) -> float:
+        return 0.15 if self.talent(50, d) == "schatzsucher" else 0.08
+
+    def vault_bonus(self, d: date) -> float:
+        return 0.30 if self.talent(50, d) == "truhenmeister" else 0.15
+
+    def quest_extra(self, d: date) -> str | None:
+        return QUEST_EXTRA.get(self.talent(40, d) or "")
 
     def focus(self, d: date, run, week_index: int) -> float:
         return FOCUS_PCT if matches_spec(_active(self.spec_hist, d), run, week_index) else 0.0
@@ -307,7 +372,8 @@ def step_xp(steps: int) -> int:
     return min(45, max(0, (steps - 5000) // 1000) * 3)
 
 
-def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | None = None) -> dict:
+def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | None = None,
+           quests: list[tuple[date, int, str]] | None = None) -> dict:
     """Chronologisches XP-Buch mit Ruhebonus und Wochen-Abschwächung."""
     entries: list[dict] = []
     by_day_runs: dict[date, list] = {}
@@ -320,6 +386,9 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
     if not days:
         return {"entries": [], "pool": 0, "totals": {}, "daily": {}}
     first = min(days)
+    quest_by_day: dict[date, list] = {}
+    for d, xp, name in quests or []:
+        quest_by_day.setdefault(d, []).append((xp, name))
     ach_by_day: dict[date, list] = {}
     for d, pts, name in ach:
         ach_by_day.setdefault(min(d, today) if d else first, []).append((pts, name))
@@ -327,39 +396,42 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
     pool = 0.0
     week_runs: dict[date, int] = {}
     week_wo: dict[date, int] = {}
-    totals = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0, "buffs": 0.0, "fokus": 0.0}
+    totals = {k: 0.0 for k in XP_KEYS}
     daily: dict[date, dict] = {}
     d = first
     while d <= today:
         wk = _monday(d)
         trained = False
-        day_xp = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0, "buffs": 0.0, "fokus": 0.0}
+        day_xp = {k: 0.0 for k in XP_KEYS}
         buff_pct = mods.training(d)
+        ran, lifted = bool(by_day_runs.get(d)), bool(by_day_wo.get(d))
         for r in by_day_runs.get(d, []):
             week_runs[wk] = week_runs.get(wk, 0) + 1
             xp = run_xp(r) * (1.0 if week_runs[wk] <= RUNS_FULL_XP else 0.5)
             bonus = min(pool, xp)
             pool -= bonus
-            buff, focus = xp * buff_pct, xp * mods.focus(d, r, week_runs[wk])
+            buff, focus, tal = xp * buff_pct, xp * mods.focus(d, r, week_runs[wk]), xp * mods.run_talent(d, r, lifted)
             trained = True
-            entries.append({"date": d, "kind": "lauf", "xp": xp + buff + focus, "bonus": bonus, "ref": r.key,
+            entries.append({"date": d, "kind": "lauf", "xp": xp + buff + focus + tal, "bonus": bonus, "ref": r.key,
                             "label": f"Lauf {r.distance_km:.1f} km"})
             day_xp["laufen"] += xp
             day_xp["ruhebonus"] += bonus
             day_xp["buffs"] += buff
             day_xp["fokus"] += focus
+            day_xp["talente"] += tal
         for w in by_day_wo.get(d, []):
             week_wo[wk] = week_wo.get(wk, 0) + 1
             xp = min(WORKOUT_XP_CAP, w.sets * SET_XP) * (1.0 if week_wo[wk] <= WORKOUTS_FULL_XP else 0.5)
             bonus = min(pool, xp)
             pool -= bonus
-            buff = xp * buff_pct
+            buff, tal = xp * buff_pct, xp * mods.workout_talent(d, ran)
             trained = True
-            entries.append({"date": d, "kind": "kraft", "xp": xp + buff, "bonus": bonus, "ref": str(w.id),
+            entries.append({"date": d, "kind": "kraft", "xp": xp + buff + tal, "bonus": bonus, "ref": str(w.id),
                             "label": f"Krafttraining {w.sets} Sätze"})
             day_xp["kraft"] += xp
             day_xp["ruhebonus"] += bonus
             day_xp["buffs"] += buff
+            day_xp["talente"] += tal
         everyday = step_xp(steps.get(d, 0)) + min(30.0, other.get(d, 0.0) * 0.5)
         if everyday:
             entries.append({"date": d, "kind": "alltag", "xp": everyday, "bonus": 0.0, "ref": None,
@@ -369,8 +441,12 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
             entries.append({"date": d, "kind": "erfolg", "xp": float(pts), "bonus": 0.0, "ref": None,
                             "label": f"Erfolg „{name}“", "name": name})
             day_xp["erfolge"] += pts
+        for xp, name in quest_by_day.get(d, []):
+            entries.append({"date": d, "kind": "auftrag", "xp": float(xp), "bonus": 0.0, "ref": None,
+                            "label": f"Auftrag „{name}“", "name": name})
+            day_xp["auftraege"] += xp
         if d in sick or not trained:
-            pool = min(REST_CAP, pool + REST_PER_DAY)
+            pool = min(mods.rest_cap(d), pool + REST_PER_DAY)
         for k, v in day_xp.items():
             totals[k] += v
         daily[d] = day_xp
@@ -572,6 +648,7 @@ _FLAVOR = {
 _CHEST_FLAVOR = {
     "truhe": "Aus der Wochentruhe gehoben – der Lohn einer treuen Laufwoche.",
     "veteran": "Ein Erbstück deiner bisherigen Reise, lange vor dem ersten Drop verdient.",
+    "auftrag": "Belohnung des Auftragsbretts – für eine Woche, in der alles erledigt wurde.",
 }
 
 
@@ -634,7 +711,7 @@ def _level_at(entries: list[dict], d: date) -> int:
     return level_for(sum(e["xp"] + e["bonus"] for e in entries if e["date"] <= d))["level"]
 
 
-def drops(runs: pd.DataFrame, entries: list[dict], start: date) -> list[dict]:
+def drops(runs: pd.DataFrame, entries: list[dict], start: date, mods: Mods | None = None) -> list[dict]:
     efforts = _best_efforts()
     out = []
     for i, r in enumerate(runs.itertuples()):
@@ -642,7 +719,7 @@ def drops(runs: pd.DataFrame, entries: list[dict], start: date) -> list[dict]:
             continue
         rarity, reason = drop_rarity(r, runs.iloc[:i], efforts)
         rng = _rng("drop", r.key)
-        lucky = rarity not in ("orange", "rot") and rng.random() < 0.08
+        lucky = rarity not in ("orange", "rot") and rng.random() < (mods or Mods()).luck(r.day)
         if lucky:
             rarity = RARITIES[RARITIES.index(rarity) + 1]
             reason += " · Glücksfund"
@@ -660,13 +737,14 @@ def _claims() -> dict[str, HeroClaim]:
         return {c.week: c for c in session.exec(select(HeroClaim)).all()}
 
 
-def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date], entries, today: date) -> dict:
+def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date], entries, today: date,
+               mods: Mods | None = None) -> dict:
     end = week + timedelta(days=6)
     n = int(((runs["day"] >= week) & (runs["day"] <= end)).sum()) if not runs.empty else 0
     sick_n = sum(1 for i in range(7) if week + timedelta(days=i) in sick)
     relief = sick_n // 2
     thresholds = [max(1, t - relief) for t in VAULT_THRESHOLDS]
-    week_items = [it for it in items if week.isoformat() <= it["date"] <= end.isoformat()]
+    week_items = [it for it in items if it["source"] == "beute" and week.isoformat() <= it["date"] <= end.isoformat()]
     base = max((RARITIES.index(it["rarity"]) for it in week_items), default=RARITIES.index("weiss"))
     base = min(base, RARITIES.index("orange"))
     level = _level_at(entries, min(end, today))
@@ -674,7 +752,7 @@ def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date
     for i, t in enumerate(thresholds):
         # Mehr Läufe = mehr Auswahl (wie die Great Vault), Qualität = beste Leistung der Woche.
         rng = _rng("vault", week.isoformat(), i)
-        bump = 1 if rng.random() < 0.15 else 0
+        bump = 1 if rng.random() < (mods or Mods()).vault_bonus(min(end, today)) else 0
         rarity = RARITIES[min(RARITIES.index("orange"), base + bump)]
         item = make_item(rng, rarity, datetime.combine(end, datetime.min.time()).replace(hour=8), None, level,
                          "truhe", f"Wochentruhe · Slot {i + 1}")
@@ -693,16 +771,16 @@ def veteran_chest(level: int, today: date) -> dict:
     return {"week": "veteran", "runs": 0, "sick_days": 0, "slots": slots, "complete": True}
 
 
-def vault(runs, items, sick, entries, start: date, today: date, level: int) -> dict:
+def vault(runs, items, sick, entries, start: date, today: date, level: int, mods: Mods | None = None) -> dict:
     claims = _claims()
     def with_claim(v):
         c = claims.get(v["week"])
         return {**v, "claimed_slot": c.slot if c else None}
-    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today))
+    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today, mods))
     claimable = []
     w = _monday(start)
     while w < _monday(today):
-        v = with_claim(vault_week(w, runs, items, sick, entries, today))
+        v = with_claim(vault_week(w, runs, items, sick, entries, today, mods))
         if v["claimed_slot"] is None and any(s["unlocked"] for s in v["slots"]):
             claimable.append(v)
         w += timedelta(days=7)
@@ -723,7 +801,7 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
         monday = date.fromisoformat(week)
         if monday.weekday() != 0 or monday < _monday(data["start"]) or monday >= _monday(today):
             raise ValueError("Diese Woche ist noch nicht abgeschlossen oder liegt vor dem Start.")
-        chest = vault_week(monday, data["runs"], data["drops"], data["sick"], data["entries"], today)
+        chest = vault_week(monday, data["runs"], data["drops"], data["sick"], data["entries"], today, data["mods"])
     picked = next((s for s in chest["slots"] if s["slot"] == slot), None)
     if picked is None or not picked["unlocked"]:
         raise ValueError("Slot nicht freigeschaltet.")
@@ -790,6 +868,41 @@ def equip_best(today: date | None = None) -> dict[str, str]:
             _set_slot(session, slot, it["id"])
         session.commit()
     return {slot: it["id"] for slot, it in best.items()}
+
+
+# --- Aufträge & Talente --------------------------------------------------------------
+def quest_loot(weeks: list[dict], entries: list[dict]) -> list[dict]:
+    out = []
+    for wk in weeks:
+        if not wk["complete"]:
+            continue
+        rng = _rng("questloot", wk["week"])
+        rarity = rng.choices(["gruen", "blau", "lila"], weights=[60, 35, 5])[0]
+        done = date.fromisoformat(wk["complete_on"])
+        item = make_item(rng, rarity, datetime.combine(done, datetime.min.time()).replace(hour=18), None,
+                         _level_at(entries, done), "auftrag", "Alle Wochenaufträge erfüllt")
+        out.append({**item, "id": f"quest:{wk['week']}"})
+    return out
+
+
+def talents_view(mods: Mods, level: int, today: date) -> list[dict]:
+    rows = []
+    for lvl, name, options in TALENT_ROWS:
+        rows.append({"level": lvl, "name": name, "unlocked": level >= lvl, "chosen": mods.talent(lvl, today),
+                     "options": [{"key": k, "name": n, "effect": e, "icon": i} for k, n, e, i in options]})
+    rows += [{"level": lvl, "name": "Noch verborgen", "unlocked": False, "chosen": None, "options": []} for lvl in TALENT_LOCKED]
+    return rows
+
+
+def choose_talent(row: int, choice: str | None, today: date | None = None) -> None:
+    """Wählt ein Talent einer freigeschalteten Reihe (None = abwählen); wirkt ab heute."""
+    today = today or local_today()
+    spec = next((r for r in TALENT_ROWS if r[0] == row), None)
+    if spec is None or (choice is not None and choice not in {k for k, *_ in spec[2]}):
+        raise KeyError(f"{row}:{choice}")
+    if choice is not None and _load(today)["level"] < row:
+        raise ValueError(f"Talentreihe {row} ist erst ab Stufe {row} frei.")
+    _choose(f"talent_{row}", choice, today)
 
 
 # --- Buffs & Debuffs (heute) ---------------------------------------------------------
@@ -871,13 +984,27 @@ def _load(today: date) -> dict:
     sleep = _safe(_sleep_minutes, {})
     buffs = day_buffs(protein, target, sleep)
     spec_hist = _history("spec_history")
-    book = ledger(runs, workouts, steps, other, sick, ach, today, Mods(buffs, spec_hist))
+    talents = {lvl: _history(f"talent_{lvl}") for lvl, _, _ in TALENT_ROWS}
+    mods = Mods(buffs, spec_hist, talents)
     start = start_date(today)
+    base = {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "protein": protein,
+            "protein_target": target, "sleep": sleep}
+    weeks = []
+    w = _monday(start)
+    while w <= _monday(today):
+        weeks.append(_safe(lambda w=w: hero_quests.week_quests(
+            w, _active(spec_hist, w), mods.quest_extra(min(w + timedelta(days=6), today)), base, today), None))
+        w += timedelta(days=7)
+    weeks = [x for x in weeks if x]
+    quest_xp = [(date.fromisoformat(q["done_on"]), q["xp"], q["title"]) for wk in weeks for q in wk["quests"] if q["done"]]
+    book = ledger(runs, workouts, steps, other, sick, ach, today, mods, quest_xp)
     total = sum(e["xp"] + e["bonus"] for e in book["entries"])
     level = level_for(total)["level"]
-    loot = _safe(lambda: drops(runs, book["entries"], start), [])
+    loot = _safe(lambda: drops(runs, book["entries"], start, mods), [])
+    loot += _safe(lambda: quest_loot(weeks, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
+            "mods": mods, "talents": talents, "quest_weeks": weeks,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -898,6 +1025,8 @@ def overview(today: date | None = None) -> dict:
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
+    log_events += [{"date": e["date"], "kind": "auftrag", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
+                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] == "auftrag"]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -929,7 +1058,9 @@ def overview(today: date | None = None) -> dict:
         "buffs": buffs_today(data, today, book["pool"], chosen),
         "specs": [{"key": k, **v, "focus": FOCUS_TEXT[k], "score": cls["spec_scores"].get(k)} for k, v in SPECS.items()],
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
-        "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"]),
+        "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"]),
+        "talents": talents_view(data["mods"], lv["level"], today),
+        "quests": data["quest_weeks"][-1] if data["quest_weeks"] else None,
         "inventory": inventory,
         "equipment": equipment,
         "ilvl_avg": round(sum(it["ilvl"] for it in equipment.values()) / len(equipment)) if equipment else None,

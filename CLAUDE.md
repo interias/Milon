@@ -231,3 +231,18 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Buffs: Wohlgenährt, Erholt, Ausgeruht, Energiegeladen (Check-in ≥ 4), Feuereifer (Serie ≥ 7 Tage), Fokus.
     - Debuffs ohne Malus: Übermüdet (< 6 h), Erschöpft (Check-in ≤ 2), Krank.
     - WoW-Tooltip beim Überfahren, Antippen pinnt ihn.
+- **Etappe 2b (2026-10-16): Talentbaum + Wochenaufträge.**
+  - **Talente** (`TALENT_ROWS`): eine Reihe je 10 Stufen, je 1 von 3 Optionen.
+    - Stufe 10 Rhythmus: Morgen-, Feierabend- oder Wochenendläufer.
+    - Stufe 20 Eisen: Eisenwille, Ausgleich oder Doppelschlag.
+    - Stufe 30 Erholung: Tiefschlaf, Langer Atem (Vorrat 360) oder Feinschmecker.
+    - Stufe 40 Aufträge: +1 Auftrag Lauf, Kraft oder Pflege.
+    - Stufe 50 Glück: Schatzsucher, Truhenmeister oder Bossjäger.
+    - Stufen 60–80 verborgen.
+    - Gespeichert als datierte Historie `hero_state.talent_<stufe>`; Wirkung über `Mods` ab dem Tag der Wahl. API `POST /hero/talent {row, choice|null}` (409 = Reihe noch gesperrt, 422 = unbekannt).
+  - **Wochenaufträge** (`app/hero_quests.py`):
+    - Je ISO-Woche ab Starttag ein Lauf-, Kraft- und Pflege-Auftrag, per Seed stabil; Lauf-Aufträge nach gewählter Spezialisierung gewichtet.
+    - Fortschritt aus Rohdaten; ab 3 Krankheitstagen halbe Ziele.
+    - 150 EP am Erfüllungstag (Quelle `auftraege`); alle erfüllt → Auftragsbeute (`quest:<woche>`, Quelle `auftrag`, zählt nicht zur Truhenqualität).
+  - **UI:** Auftragslog im Quest-Tracker-Stil neben der Truhe; Talentbaum mit Container-Query (`@container`, schmal untereinander, breit 3 Spalten).
+  - **Fix:** Die Artefakt-Vorschau der Erfolge erzwang die Seitenbreite → `w-0 min-w-full`.
