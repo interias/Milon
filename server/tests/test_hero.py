@@ -21,6 +21,9 @@ def hero_db(tmp_path, monkeypatch):
     monkeypatch.setattr(hero, "engine", engine)
     monkeypatch.setattr(hero, "_achievement_xp", lambda: [])
     monkeypatch.setattr(hero, "_strength_series", lambda: [])
+    monkeypatch.setattr(hero, "_protein_days", lambda: {})
+    monkeypatch.setattr(hero, "_protein_target", lambda: None)
+    monkeypatch.setattr(hero, "_streak", lambda: 0)
     yield engine
     engine.dispose()
 
@@ -165,3 +168,39 @@ def test_equip_unequip_and_best(hero_db, monkeypatch):
     assert client.post("/hero/unequip", json={"slot": first["slot"]}).status_code == 200
     assert first["slot"] not in hero.overview(TODAY)["equipment"]
     assert client.post("/hero/unequip", json={"slot": "flügel"}).status_code == 404
+
+
+def test_day_buffs_and_focus_bonus():
+    buffs = hero.day_buffs({date(2026, 10, 5): 150.0, date(2026, 10, 6): 80.0}, 140.0,
+                           {date(2026, 10, 6): 450.0, date(2026, 10, 7): 300.0})
+    assert buffs == {date(2026, 10, 6): {"wohlgenaehrt", "erholt"}}  # Protein vom Vortag, Nacht ≥ 7 h
+    runs = runs_frame([{"external_id": "a", "started_at": datetime(2026, 10, 6, 7), "distance_km": 5.0, "dur_min": 30.0, "zone": 1},
+                       {"external_id": "b", "started_at": datetime(2026, 10, 8, 7), "distance_km": 5.0, "dur_min": 30.0, "zone": 1}])
+    empty = pd.DataFrame(columns=["id", "started_at", "sets", "day"])
+    mods = hero.Mods(buffs, [{"from": "2026-10-07", "value": "ausdauer"}])
+    book = hero.ledger(runs, empty, {}, {}, set(), [], date(2026, 10, 8), mods)
+    a, b = book["entries"]
+    assert round(a["xp"], 1) == round(72 * 1.10, 1)  # zwei Daten-Buffs, Fokus erst ab 07.10.
+    assert round(b["xp"], 1) == round(72 * 1.10, 1) and b["bonus"] > 0  # Fokus +10 %, dazu Ruhebonus
+    assert round(book["totals"]["buffs"], 1) == 7.2 and round(book["totals"]["fokus"], 1) == 7.2
+
+
+def test_choose_spec_and_buffs(hero_db, monkeypatch):
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        for day in range(1, 15):
+            add_run(session, datetime(2026, 10, day, 7))
+        session.add(CheckIn(day=TODAY, sick=True, updated_at=datetime(2026, 10, 16)))
+        session.commit()
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    assert client.post("/hero/spec", json={"spec": "zauberei"}).status_code == 422
+    assert client.post("/hero/spec", json={"spec": "tempo"}).status_code == 200
+    o = hero.overview(TODAY)
+    assert o["hero"]["spec"] == "tempo" and o["hero"]["spec_chosen"] == "tempo"
+    keys = {b["key"] for b in o["buffs"]}
+    assert {"krank", "fokus"} <= keys
+    client.post("/hero/spec", json={"spec": None})
+    o = hero.overview(TODAY)
+    assert o["hero"]["spec_chosen"] is None and o["hero"]["spec"] == o["hero"]["spec_auto"]

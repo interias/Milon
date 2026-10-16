@@ -192,6 +192,7 @@ export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean
 export type HeroVault = {
   week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
 };
+export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
 export type Hero = {
   today: string; start: string;
@@ -201,10 +202,13 @@ export type Hero = {
     spec: string | null; spec_label: string | null; spec_desc: string;
     spec_scores: Record<string, number>; shares: { laufen: number; kraft: number; alltag: number };
     rested: number; rested_cap: number; week_xp: number;
+    spec_auto: string | null; spec_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus", number>;
+  buffs: HeroBuff[];
+  specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; xp: number; level: number }[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
@@ -427,6 +431,7 @@ export const api = {
   heroEquip: (itemId: string) => post<{ item: HeroItem }>("/hero/equip", { item_id: itemId }),
   heroUnequip: (slot: string) => post<{ slot: string }>("/hero/unequip", { slot }),
   heroEquipBest: () => post<{ equipped: Record<string, string> }>("/hero/equip-best"),
+  heroSpec: (spec: string | null) => post<{ spec: string | null }>("/hero/spec", { spec }),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),

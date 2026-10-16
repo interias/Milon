@@ -57,7 +57,7 @@ export default function Heldenreise() {
       <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
       {err ? <ApiError error={err} /> : !hero ? <Loading /> : (
         <div className="space-y-4">
-          <HeroHeader data={hero} />
+          <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} />
           <LevelUpBanner level={hero.hero.level} title={hero.hero.title} />
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">

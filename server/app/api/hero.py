@@ -18,6 +18,10 @@ class EquipInput(BaseModel):
     item_id: str = Field(min_length=3, max_length=200)
 
 
+class SpecInput(BaseModel):
+    spec: str | None = Field(default=None, max_length=20)
+
+
 class UnequipInput(BaseModel):
     slot: str = Field(min_length=2, max_length=20)
 
@@ -58,3 +62,12 @@ def unequip_slot(body: UnequipInput) -> dict:
 @router.post("/equip-best")
 def equip_best() -> dict:
     return {"equipped": hero.equip_best()}
+
+
+@router.post("/spec")
+def choose_spec(body: SpecInput) -> dict:
+    try:
+        hero.choose_spec(body.spec)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail="Unbekannte Spezialisierung.") from exc
+    return {"spec": body.spec}

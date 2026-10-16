@@ -72,6 +72,8 @@ RUNS_FULL_XP = 4          # ab dem 5. Lauf einer ISO-Woche halbe XP
 WORKOUTS_FULL_XP = 3      # ab dem 4. Krafttraining halbe XP
 REST_PER_DAY = 60
 REST_CAP = 240
+BUFF_PCT = 0.05          # je aktivem Daten-Buff (Wohlgenährt, Erholt) auf Trainings-EP
+FOCUS_PCT = 0.10         # passender Lauf zur gewählten Spezialisierung
 LEVEL_BASE = 1000
 LEVEL_STEP = 25
 MAX_LEVEL = 80
@@ -209,6 +211,92 @@ def start_date(today: date) -> date:
         return date.fromisoformat(row.value)
 
 
+def _state_get(key: str) -> str | None:
+    with Session(engine) as session:
+        row = session.get(HeroState, key)
+        return row.value if row else None
+
+
+def _state_set(key: str, value: str) -> None:
+    with Session(engine) as session:
+        row = session.get(HeroState, key) or HeroState(key=key, value=value)
+        row.value = value
+        session.add(row)
+        session.commit()
+
+
+def _history(key: str) -> list[dict]:
+    """Datierte Wahl-Historie [{from, value}] — Wirkungen gelten ab dem Tag der Wahl."""
+    try:
+        return json.loads(_state_get(key) or "[]")
+    except ValueError:
+        return []
+
+
+def _active(hist: list[dict], d: date):
+    value = None
+    for h in hist:
+        if h["from"] <= d.isoformat():
+            value = h["value"]
+    return value
+
+
+def _choose(key: str, value, today: date) -> list[dict]:
+    hist = [h for h in _history(key) if h["from"] != today.isoformat()]
+    hist.append({"from": today.isoformat(), "value": value})
+    _state_set(key, json.dumps(hist))
+    return hist
+
+
+def _protein_days() -> dict[date, float]:
+    from .metrics import nutrition
+    df = nutrition._daily()
+    return {} if df.empty else {d.date(): float(p) for d, p in zip(df["day"], df["protein_g"]) if pd.notna(p)}
+
+
+def _protein_target() -> float | None:
+    from .metrics import nutrition
+    return nutrition.protein_target()
+
+
+def _sleep_minutes() -> dict[date, float]:
+    df = _read("SELECT day, asleep_minutes FROM sleep_sessions WHERE main_sleep = 1", parse_dates=["day"])
+    return {d.date(): float(m) for d, m in zip(df["day"], df["asleep_minutes"]) if pd.notna(m)}
+
+
+def day_buffs(protein: dict[date, float], target: float | None, sleep: dict[date, float]) -> dict[date, set[str]]:
+    """Daten-Buffs je Tag: Wohlgenährt = Protein-Ziel am Vortag (≥ 90 %), Erholt = Nacht ≥ 7 h."""
+    out: dict[date, set[str]] = {}
+    if target:
+        for d, g in protein.items():
+            if g >= 0.9 * target:
+                out.setdefault(d + timedelta(days=1), set()).add("wohlgenaehrt")
+    for d, m in sleep.items():
+        if m >= 420:
+            out.setdefault(d, set()).add("erholt")
+    return out
+
+
+def matches_spec(spec: str | None, run, week_index: int) -> bool:
+    zone = run.zone if run.zone is not None and pd.notna(run.zone) else None
+    return {"ausdauer": zone is not None and zone <= 1, "tempo": zone is not None and zone >= 2,
+            "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
+
+
+class Mods:
+    """Zeitabhängige Wirkungen auf Trainings-EP: Daten-Buffs und gewählte Spezialisierung."""
+
+    def __init__(self, buffs: dict[date, set[str]] | None = None, spec_hist: list[dict] | None = None):
+        self.buffs = buffs or {}
+        self.spec_hist = spec_hist or []
+
+    def training(self, d: date) -> float:
+        return BUFF_PCT * len(self.buffs.get(d, set()) & {"wohlgenaehrt", "erholt"})
+
+    def focus(self, d: date, run, week_index: int) -> float:
+        return FOCUS_PCT if matches_spec(_active(self.spec_hist, d), run, week_index) else 0.0
+
+
 # --- XP-Buch ----------------------------------------------------------------------------
 def run_xp(row) -> float:
     factor = ZONE_FACTOR[min(3, int(row.zone))] if row.zone is not None and pd.notna(row.zone) else NO_HR_FACTOR
@@ -219,7 +307,7 @@ def step_xp(steps: int) -> int:
     return min(45, max(0, (steps - 5000) // 1000) * 3)
 
 
-def ledger(runs, workouts, steps, other, sick, ach, today: date) -> dict:
+def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | None = None) -> dict:
     """Chronologisches XP-Buch mit Ruhebonus und Wochen-Abschwächung."""
     entries: list[dict] = []
     by_day_runs: dict[date, list] = {}
@@ -235,36 +323,43 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date) -> dict:
     ach_by_day: dict[date, list] = {}
     for d, pts, name in ach:
         ach_by_day.setdefault(min(d, today) if d else first, []).append((pts, name))
+    mods = mods or Mods()
     pool = 0.0
     week_runs: dict[date, int] = {}
     week_wo: dict[date, int] = {}
-    totals = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0}
+    totals = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0, "buffs": 0.0, "fokus": 0.0}
     daily: dict[date, dict] = {}
     d = first
     while d <= today:
         wk = _monday(d)
         trained = False
-        day_xp = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0}
+        day_xp = {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0, "buffs": 0.0, "fokus": 0.0}
+        buff_pct = mods.training(d)
         for r in by_day_runs.get(d, []):
             week_runs[wk] = week_runs.get(wk, 0) + 1
             xp = run_xp(r) * (1.0 if week_runs[wk] <= RUNS_FULL_XP else 0.5)
             bonus = min(pool, xp)
             pool -= bonus
+            buff, focus = xp * buff_pct, xp * mods.focus(d, r, week_runs[wk])
             trained = True
-            entries.append({"date": d, "kind": "lauf", "xp": xp, "bonus": bonus, "ref": r.key,
+            entries.append({"date": d, "kind": "lauf", "xp": xp + buff + focus, "bonus": bonus, "ref": r.key,
                             "label": f"Lauf {r.distance_km:.1f} km"})
             day_xp["laufen"] += xp
             day_xp["ruhebonus"] += bonus
+            day_xp["buffs"] += buff
+            day_xp["fokus"] += focus
         for w in by_day_wo.get(d, []):
             week_wo[wk] = week_wo.get(wk, 0) + 1
             xp = min(WORKOUT_XP_CAP, w.sets * SET_XP) * (1.0 if week_wo[wk] <= WORKOUTS_FULL_XP else 0.5)
             bonus = min(pool, xp)
             pool -= bonus
+            buff = xp * buff_pct
             trained = True
-            entries.append({"date": d, "kind": "kraft", "xp": xp, "bonus": bonus, "ref": str(w.id),
+            entries.append({"date": d, "kind": "kraft", "xp": xp + buff, "bonus": bonus, "ref": str(w.id),
                             "label": f"Krafttraining {w.sets} Sätze"})
             day_xp["kraft"] += xp
             day_xp["ruhebonus"] += bonus
+            day_xp["buffs"] += buff
         everyday = step_xp(steps.get(d, 0)) + min(30.0, other.get(d, 0.0) * 0.5)
         if everyday:
             entries.append({"date": d, "kind": "alltag", "xp": everyday, "bonus": 0.0, "ref": None,
@@ -287,7 +382,7 @@ def progression(entries: list[dict], daily: dict[date, dict]) -> list[dict]:
     """Wochenweise: EP je Quelle, kumulierte EP und Stufe (mit Bruchteil) am Wochenende."""
     weeks: dict[date, dict] = {}
     for d, v in daily.items():
-        w = weeks.setdefault(_monday(d), {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0})
+        w = weeks.setdefault(_monday(d), {k: 0.0 for k in v})
         for k in w:
             w[k] += v[k]
     out, total = [], 0.0
@@ -697,6 +792,70 @@ def equip_best(today: date | None = None) -> dict[str, str]:
     return {slot: it["id"] for slot, it in best.items()}
 
 
+# --- Buffs & Debuffs (heute) ---------------------------------------------------------
+FOCUS_TEXT = {
+    "ausdauer": "+10 % EP für Läufe in Zone 1–2",
+    "tempo": "+10 % EP für Läufe in Zone 3–4",
+    "strecke": "+10 % EP für Läufe ab 10 km",
+    "last": "+10 % EP ab dem 3. Lauf einer Woche",
+}
+
+
+def _checkin(today: date) -> dict:
+    try:
+        with engine.connect() as con:
+            row = con.exec_driver_sql("SELECT energy, sick FROM checkins WHERE day = ?", (today.isoformat(),)).fetchone()
+    except Exception:  # noqa: BLE001
+        return {}
+    return {"energy": row[0], "sick": bool(row[1])} if row else {}
+
+
+def _streak() -> int:
+    from .metrics import activity
+    return int(activity.consistency(365).get("streak") or 0)
+
+
+def buffs_today(data: dict, today: date, rested: float, chosen: str | None) -> list[dict]:
+    out = []
+
+    def add(key, name, kind, icon, effect, source):
+        out.append({"key": key, "name": name, "kind": kind, "icon": icon, "effect": effect, "source": source})
+
+    target = data["protein_target"]
+    yesterday = data["protein"].get(today - timedelta(days=1))
+    if "wohlgenaehrt" in data["buffs"].get(today, set()):
+        add("wohlgenaehrt", "Wohlgenährt", "buff", "food", "+5 % Trainings-EP heute",
+            f"Gestern {yesterday:.0f} g Protein (Ziel {target:.0f} g)" if yesterday and target else "Protein-Ziel gestern erreicht")
+    night = data["sleep"].get(today)
+    if night is not None and night >= 420:
+        add("erholt", "Erholt", "buff", "moon", "+5 % Trainings-EP heute", f"{night / 60:.1f} h geschlafen".replace(".", ","))
+    elif night is not None and night < 360:
+        add("uebermuedet", "Übermüdet", "debuff", "eye", "Kein Malus – nur ein Hinweis, heute locker zu bleiben",
+            f"nur {night / 60:.1f} h geschlafen".replace(".", ","))
+    if rested > 0:
+        add("ausgeruht", "Ausgeruht", "buff", "bed", f"Verdoppelt die nächsten {rested:.0f} Trainings-EP", "Ruhe- und Krankheitstage")
+    ci = _checkin(today)
+    if ci.get("sick") or today in data["sick"]:
+        add("krank", "Krank", "debuff", "thermo", "Serie, Truhe und Aufträge pausieren; Ruhebonus lädt", "Check-in: krank")
+    elif ci.get("energy") is not None and ci["energy"] >= 4:
+        add("energie", "Energiegeladen", "buff", "zap", "Gute Voraussetzung für einen harten Lauf", f"Check-in: Energie {ci['energy']}/5")
+    elif ci.get("energy") is not None and ci["energy"] <= 2:
+        add("erschoepft", "Erschöpft", "debuff", "battery", "Kein Malus – heute lieber Erholung", f"Check-in: Energie {ci['energy']}/5")
+    streak = _safe(_streak, 0)
+    if streak >= 7:
+        add("feuereifer", "Feuereifer", "buff", "flame", "Nur Ehre – halte die Serie am Leben", f"{streak} Tage Trainingsserie")
+    if chosen:
+        add("fokus", f"Fokus: {SPECS[chosen]['label']}", "buff", "target", FOCUS_TEXT[chosen], "Gewählte Spezialisierung")
+    return out
+
+
+def choose_spec(spec: str | None, today: date | None = None) -> None:
+    """Wählt die Spezialisierung (None = automatisch nach Neigung); wirkt ab heute."""
+    if spec is not None and spec not in SPECS:
+        raise KeyError(spec)
+    _choose("spec_history", spec, today or local_today())
+
+
 # --- Gesamtbild -------------------------------------------------------------------------
 def _load(today: date) -> dict:
     runs = _safe(_runs, pd.DataFrame())
@@ -707,12 +866,18 @@ def _load(today: date) -> dict:
     other = _safe(_other_minutes, {})
     sick = _sick()
     ach = _safe(_achievement_xp, [])
-    book = ledger(runs, workouts, steps, other, sick, ach, today)
+    protein = _safe(_protein_days, {})
+    target = _safe(_protein_target, None)
+    sleep = _safe(_sleep_minutes, {})
+    buffs = day_buffs(protein, target, sleep)
+    spec_hist = _history("spec_history")
+    book = ledger(runs, workouts, steps, other, sick, ach, today, Mods(buffs, spec_hist))
     start = start_date(today)
     total = sum(e["xp"] + e["bonus"] for e in book["entries"])
     level = level_for(total)["level"]
     loot = _safe(lambda: drops(runs, book["entries"], start), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
+            "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -722,6 +887,8 @@ def overview(today: date | None = None) -> dict:
     book, runs, entries = data["book"], data["runs"], data["entries"]
     lv = level_for(data["total"])
     cls = classify(book["daily"], runs, today)
+    chosen = _active(data["spec_hist"], today)
+    spec = chosen or cls["spec"]
     week_start = _monday(today)
     claims = _claims()
     worn = _equipment()
@@ -751,13 +918,16 @@ def overview(today: date | None = None) -> dict:
             **lv,
             "class": cls["class"], "class_label": CLASSES[cls["class"]]["label"],
             "class_color": CLASSES[cls["class"]]["color"], "class_desc": CLASSES[cls["class"]]["desc"],
-            "spec": cls["spec"], "spec_label": SPECS[cls["spec"]]["label"] if cls["spec"] else None,
-            "spec_desc": SPECS[cls["spec"]]["desc"] if cls["spec"] else "Mindestens 4 Läufe in 90 Tagen nötig.",
+            "spec": spec, "spec_label": SPECS[spec]["label"] if spec else None,
+            "spec_desc": SPECS[spec]["desc"] if spec else "Mindestens 4 Läufe in 90 Tagen nötig.",
+            "spec_auto": cls["spec"], "spec_chosen": chosen,
             "spec_scores": cls["spec_scores"], "shares": cls["shares"],
             "rested": round(book["pool"]), "rested_cap": REST_CAP, "week_xp": round(week_xp),
         },
         "xp_sources": {k: round(v) for k, v in book["totals"].items()},
         "progression": progression(entries, book["daily"]),
+        "buffs": buffs_today(data, today, book["pool"], chosen),
+        "specs": [{"key": k, **v, "focus": FOCUS_TEXT[k], "score": cls["spec_scores"].get(k)} for k, v in SPECS.items()],
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"]),
         "inventory": inventory,
