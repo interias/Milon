@@ -8,6 +8,7 @@ import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard,
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
 import { HeroQuestLog, HeroTalentTree } from "@/components/HeroTalents";
 import { HeroDungeons, HeroRaid } from "@/components/HeroBosses";
+import { HeroReputation, HeroTitleChooser } from "@/components/HeroSocial";
 import { AchievementsGrid, AchievementsSummary } from "@/components/Achievements";
 
 const cinzel = Cinzel({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-cinzel" });
@@ -44,11 +45,15 @@ export default function Heldenreise() {
     return next;
   }), []);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [titles, setTitles] = useState(false);
   const gear = useMemo<Gear>(() => ({
     equipment: hero?.equipment ?? {},
     equip: async (itemId) => { await api.heroEquip(itemId); await load(); },
     unequip: async (slot) => { await api.heroUnequip(slot); await load(); },
     equipBest: async () => { await api.heroEquipBest(); await load(); },
+    disenchant: async (itemId) => { await api.heroDisenchant(itemId); await load(); },
+    upgrade: async (itemId) => { await api.heroUpgrade(itemId); await load(); },
+    dust: hero?.dust ?? 0,
     dragging, setDragging,
     isNew: (id) => !!seen && !seen.has(id),
     markSeen,
@@ -59,7 +64,8 @@ export default function Heldenreise() {
       <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
       {err ? <ApiError error={err} /> : !hero ? <Loading /> : (
         <div className="space-y-4">
-          <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} />
+          <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} onTitle={() => setTitles(true)} />
+          {titles && <HeroTitleChooser data={hero} onChoose={async (key) => { await api.heroTitle(key); await load(); }} onClose={() => setTitles(false)} />}
           <LevelUpBanner level={hero.hero.level} title={hero.hero.title} />
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
@@ -77,8 +83,11 @@ export default function Heldenreise() {
           <HeroBags items={hero.inventory} gear={gear} />
           <HeroChronicle data={hero} />
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-            <HeroLog data={hero} />
+            <HeroReputation data={hero} />
             <HeroRules data={hero} />
+          </div>
+          <div>
+            <HeroLog data={hero} />
           </div>
           <section id="erfolge" className="scroll-mt-20" aria-label="Erfolge">
             {ach ? <><AchievementsSummary data={ach} showLevel={false} /><div className="mt-4"><AchievementsGrid data={ach} /></div></> : <Loading />}

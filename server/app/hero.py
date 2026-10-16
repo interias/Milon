@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_quests
+from . import hero_bosses, hero_quests, hero_social
 from .checkins import local_today
 from .db import engine
 
@@ -57,6 +57,16 @@ class HeroEquip(SQLModel, table=True):
     slot: str = Field(primary_key=True)
     item_id: str
     equipped_at: datetime
+
+
+class HeroItemMod(SQLModel, table=True):
+    """Entzaubert (Staub gutgeschrieben) oder aufgewertet (je +4 Stufen) — je Gegenstand."""
+    __tablename__ = "hero_item_mods"
+
+    item_id: str = Field(primary_key=True)
+    disenchanted: bool = False
+    dust: int = 0
+    upgrades: int = 0
 
 
 RARITIES = ["grau", "weiss", "gruen", "blau", "lila", "orange", "rot"]
@@ -673,9 +683,10 @@ def make_item(rng: random.Random, rarity: str, when: datetime, zone, level: int,
         candidates.append(_ZONE_SUFFIX[min(3, int(zone))])
     if RARITIES.index(rarity) >= RARITIES.index("lila"):
         candidates = _EPIC_SUFFIX
-    name = f"{rng.choice(bases)} {rng.choice(candidates)}"
+    base, suffix = rng.choice(bases), rng.choice(candidates)
+    name = f"{base} {suffix}"
     ilvl = 100 + 2 * level + 8 * RARITIES.index(rarity) + rng.randint(0, 3)
-    return {"name": name, "slot": slot, "slot_label": slot_label, "rarity": rarity,
+    return {"name": name, "set": suffix, "slot": slot, "slot_label": slot_label, "rarity": rarity,
             "rarity_label": RARITY_LABEL[rarity], "ilvl": ilvl, "flavor": flavor(rarity, source),
             "source": source, "reason": reason, "date": when.date().isoformat()}
 
@@ -818,10 +829,113 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
 
 
 # --- Ausrüstung ------------------------------------------------------------------------
+DUST = {"grau": 1, "weiss": 2, "gruen": 5, "blau": 10, "lila": 25, "orange": 60, "rot": 150}
+UPGRADE_ILVL = 4
+MAX_UPGRADES = 3
+
+
+def _set_suffix(item: dict) -> str | None:
+    if item.get("set"):
+        return item["set"]
+    base = next((b for b in SLOTS.get(item["slot"], ("", []))[1] if item["name"].startswith(b + " ")), None)
+    return item["name"][len(base) + 1:] if base else None
+
+
+def _item_mods() -> dict[str, HeroItemMod]:
+    with Session(engine) as session:
+        return {m.item_id: m for m in session.exec(select(HeroItemMod)).all()}
+
+
+def upgrade_cost(upgrades: int) -> int:
+    return 10 * (upgrades + 1)
+
+
+def dust_balance(mods: dict[str, HeroItemMod]) -> int:
+    spent = sum(10 * m.upgrades * (m.upgrades + 1) // 2 for m in mods.values())
+    return sum(m.dust for m in mods.values() if m.disenchanted) - spent
+
+
 def _inventory(drops_: list[dict], claims: dict[str, HeroClaim]) -> list[dict]:
     claimed = [{**(it := json.loads(c.item_json)), "flavor": flavor(it["rarity"], it["source"]),
                 "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
-    return sorted(drops_ + claimed, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
+    mods = _item_mods()
+    out = []
+    for it in drops_ + claimed:
+        m = mods.get(it["id"])
+        if m and m.disenchanted:
+            continue
+        ups = m.upgrades if m else 0
+        out.append({**it, "set": _set_suffix(it), "upgrades": ups, "ilvl": it["ilvl"] + UPGRADE_ILVL * ups,
+                    "upgrade_cost": upgrade_cost(ups) if ups < MAX_UPGRADES else None, "dust": DUST[it["rarity"]]})
+    return sorted(out, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
+
+
+def _find_item(item_id: str) -> dict:
+    items = _inventory(_load(local_today())["drops"], _claims())
+    item = next((it for it in items if it["id"] == item_id), None)
+    if item is None:
+        raise KeyError(item_id)
+    return item
+
+
+def disenchant(item_id: str) -> int:
+    """Zerlegt einen nicht angelegten Gegenstand in Arkanstaub. KeyError/ValueError bei Ungültigem."""
+    item = _find_item(item_id)
+    if _equipment().get(item["slot"]) == item_id:
+        raise ValueError("Angelegte Gegenstände können nicht entzaubert werden.")
+    with Session(engine) as session:
+        row = session.get(HeroItemMod, item_id) or HeroItemMod(item_id=item_id)
+        row.disenchanted, row.dust = True, DUST[item["rarity"]]
+        session.add(row)
+        session.commit()
+    return DUST[item["rarity"]]
+
+
+def upgrade(item_id: str) -> dict:
+    item = _find_item(item_id)
+    mods = _item_mods()
+    ups = mods[item_id].upgrades if item_id in mods else 0
+    if ups >= MAX_UPGRADES:
+        raise ValueError("Bereits voll aufgewertet.")
+    if dust_balance(mods) < upgrade_cost(ups):
+        raise ValueError(f"Zu wenig Arkanstaub – {upgrade_cost(ups)} nötig.")
+    with Session(engine) as session:
+        row = session.get(HeroItemMod, item_id) or HeroItemMod(item_id=item_id)
+        row.upgrades = ups + 1
+        session.add(row)
+        session.commit()
+    return {**item, "upgrades": ups + 1, "ilvl": item["ilvl"] + UPGRADE_ILVL}
+
+
+def choose_title(key: str | None, today: date | None = None) -> None:
+    if key is not None:
+        t = next((t for t in overview(today)["titles"] if t["key"] == key), None)
+        if t is None:
+            raise KeyError(key)
+        if not t["earned"]:
+            raise ValueError("Titel noch nicht freigeschaltet.")
+    _state_set("title", key or "")
+
+
+def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> dict:
+    runs, target = data["runs"], data["protein_target"]
+    months: dict[str, int] = {}
+    for b in data["bosses"]:
+        months[b["month"]] = months.get(b["month"], 0) + (1 if b["defeated"] else 0)
+    stats = {
+        "runs": int(len(runs)), "km": float(runs["distance_km"].sum()) if not runs.empty else 0.0,
+        "early_runs": int((runs["started_at"].dt.hour < 8).sum()) if not runs.empty else 0,
+        "workouts": int(len(data["workouts"])), "streak": _safe(_streak, 0),
+        "quests_done": sum(q["done"] for wk in data["quest_weeks"] for q in wk["quests"]),
+        "bosses_down": sum(months.values()), "full_raids": sum(1 for v in months.values() if v >= 4),
+        "dungeons_cleared": sum(1 for d in data["dungeons"] if d["cleared"]),
+        "items": len(inventory), "legendaries": sum(1 for it in inventory if it["rarity"] in ("orange", "rot")),
+        "level": level, "laufen": totals.get("laufen", 0.0), "kraft": totals.get("kraft", 0.0),
+        "protein_days": sum(1 for g in data["protein"].values() if target and g >= 0.9 * target),
+        "sleep_nights": sum(1 for m in data["sleep"].values() if m >= 420),
+    }
+    stats["exalted"] = sum(1 for f in hero_social.reputation(stats) if f["standing"] == "Ehrfürchtig")
+    return stats
 
 
 def _equipment() -> dict[str, str]:
@@ -1061,6 +1175,10 @@ def overview(today: date | None = None) -> dict:
     worn = _equipment()
     inventory = [{**it, "equipped": worn.get(it["slot"]) == it["id"]} for it in _inventory(data["drops"], claims)]
     equipment = {it["slot"]: it for it in inventory if it["equipped"]}
+    stats = _hero_stats(data, inventory, lv["level"], book["totals"])
+    chosen_title = _state_get("title") or None
+    title_list = hero_social.titles(stats, chosen_title)
+    title_name = next((t["name"] for t in title_list if t["chosen"] and t["earned"]), None)
 
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
@@ -1092,6 +1210,7 @@ def overview(today: date | None = None) -> dict:
             "spec_auto": cls["spec"], "spec_chosen": chosen,
             "spec_scores": cls["spec_scores"], "shares": cls["shares"],
             "rested": round(book["pool"]), "rested_cap": REST_CAP, "week_xp": round(week_xp),
+            "title_chosen": title_name,
         },
         "xp_sources": {k: round(v) for k, v in book["totals"].items()},
         "progression": progression(entries, book["daily"]),
@@ -1105,6 +1224,10 @@ def overview(today: date | None = None) -> dict:
         "dungeons": data["dungeons"][::-1][:10],
         "inventory": inventory,
         "equipment": equipment,
+        "dust": dust_balance(_item_mods()),
+        "sets": hero_social.sets(inventory),
+        "titles": title_list,
+        "reputation": hero_social.reputation(stats),
         "ilvl_avg": round(sum(it["ilvl"] for it in equipment.values()) / len(equipment)) if equipment else None,
         "log": [{**e, "date": e["date"].isoformat()} for e in log_events[:40]],
         "rules": {"runs_full_xp": RUNS_FULL_XP, "workouts_full_xp": WORKOUTS_FULL_XP,

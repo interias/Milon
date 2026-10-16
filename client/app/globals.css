@@ -182,3 +182,7 @@ body {
   .wow-sheen::after, .wow-new, .wow-figure, .wow-rays, .wow-pop, .wow-rise { animation: none; }
   .wow-banner { animation: none; transform: translateX(-50%); }
 }
+
+.wow-aura-pulse { animation: wowAura 2.6s ease-in-out infinite; }
+@keyframes wowAura { 0%, 100% { opacity: .45; transform: scale(.96) } 50% { opacity: .85; transform: scale(1.04) } }
+@media (prefers-reduced-motion: reduce) { .wow-aura-pulse { animation: none } }
