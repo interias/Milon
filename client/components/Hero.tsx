@@ -56,6 +56,23 @@ export function Money({ copper, className = "" }: { copper: number; className?: 
   return <span className={`inline-flex items-center gap-1.5 font-semibold text-white ${className}`} title={`${g} Gold ${sv} Silber ${c} Kupfer`}>{neg ? "−" : ""}{parts}</span>;
 }
 
+function ItemIcon({ slot, size }: { slot: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Icon size={size * 0.5}>{SLOT_ICON[slot]}</Icon>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={`/img/hero/items/${slot}.png`} alt="" width={size - 6} height={size - 6} draggable={false}
+              className="pointer-events-none select-none object-contain" onError={() => setFailed(true)} />;
+}
+
+// Porträt im Einheitenrahmen: gemaltes Klassenbild, sonst Wappen.
+function Portrait({ cls, color }: { cls: string; color: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Icon size={38}>{CLASS_ICON[cls]}</Icon>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={`/img/hero/portraits/${cls}.png`} alt="" className="h-full w-full rounded-full object-cover object-top"
+              style={{ filter: `drop-shadow(0 0 6px ${color})` }} onError={() => setFailed(true)} />;
+}
+
 export function Icon({ children, size = 20 }: { children: React.ReactNode; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
@@ -187,7 +204,7 @@ export function Slot({ item, slot, bind, size = 44, upgrade = false, isNew = fal
   return <button type="button" {...bind} aria-label={item.name}
                  className={`wow-slot wow-slot-filled relative shrink-0 focus:outline-none focus-visible:ring-2 ${SHEEN.has(item.rarity) ? "wow-sheen" : ""} ${isNew ? "wow-new" : ""}`}
                  style={{ width: size, height: size, color: col, ["--glow" as string]: col }}>
-    <Icon size={size * 0.5}>{SLOT_ICON[item.slot]}</Icon>
+    <ItemIcon slot={item.slot} size={size} />
     {upgrade && <span className="absolute left-0.5 top-0 text-[11px] font-bold leading-none text-[#1eff00]" style={{ textShadow: "0 1px 1px #000" }} title="Verbesserung">▲</span>}
   </button>;
 }
@@ -313,7 +330,7 @@ export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSp
           <div className="grid h-20 w-20 place-items-center rounded-full"
                style={{ color: h.class_color, background: `radial-gradient(circle at 50% 35%, ${h.class_color}55, #0b0907 72%)`,
                         boxShadow: `0 0 0 2px #000, 0 0 0 4px ${h.class_color}, 0 0 0 5px #000, 0 0 0 7px var(--wow-gold), 0 0 18px ${h.class_color}66` }}>
-            <Icon size={38}>{CLASS_ICON[h.class]}</Icon>
+            <Portrait cls={h.class} color={h.class_color} />
           </div>
           <span className="absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full border-2 bg-[#120e0a] font-display text-sm font-bold"
                 style={{ borderColor: GOLD, color: TIP_YELLOW }} title="Level">{h.level}</span>
@@ -400,6 +417,7 @@ export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear;
   const { bind, node } = useItemTip(gear);
   const [busy, setBusy] = useState(false);
   const [radar, setRadar] = useState(false);
+  const [posed, setPosed] = useState(false);
   const upgrades = data.inventory.filter((it) => !it.equipped && it.ilvl > (gear.equipment[it.slot]?.ilvl ?? 0));
   const upgradeSlots = new Set(upgrades.map((it) => it.slot)).size;
   function target(slot: string) {
@@ -444,7 +462,10 @@ export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear;
             return m ? <span className="pet-stolz absolute bottom-2 right-3 z-10 text-[34px] leading-none" title={`${m.name} – dein Reittier`}
                              style={{ filter: "drop-shadow(0 0 6px rgba(255,209,0,.45))" }}>{m.glyph}</span> : null;
           })()}
-          <div className="relative h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment}
+          <button type="button" onClick={() => setPosed((v) => !v)} className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded border border-[#4b3a22] bg-black/50 px-2 py-0.5 text-[10px] text-muted hover:text-[#ffd100]">
+            {posed ? "Ausrüstung zeigen" : "Pose zeigen"}
+          </button>
+          <div className="relative h-[244px] px-2 pb-5 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment} pose={posed ? data.hero.class : null}
             aura={(() => { const s = data.sets.find((x) => x.bonus); return s ? { color: s.color, pulse: s.equipped >= 4 } : null; })()} /></div>
         </div>
         {column(RIGHT_SLOTS)}
@@ -740,6 +761,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
     case "tasche": return <span style={{ color: "#00aa00" }}>Ihr erhaltet eine Tasche: {name("#ffffff")}.</span>;
+    case "erkundung": return <span style={{ color: "#d9c08a" }}>Neues Gebiet entdeckt: {name("#d9c08a")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
     default: return <span>{e.text}</span>;
   }
@@ -760,7 +782,7 @@ export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClas
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />
