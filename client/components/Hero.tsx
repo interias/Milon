@@ -6,9 +6,12 @@ import { Card, CardTitle } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de0, dm } from "@/lib/format";
 
+// Farben/Tokens kommen aus dem .wow-Thema in globals.css.
 const rc = (r: Rarity) => `var(--rar-${r})`;
+const GOLD = "var(--wow-gold)";
+const TIP_YELLOW = "#ffd100";
 
-// Linien-Icons (lucide-Pfade, currentColor) für Ausrüstungs-Slots und Klassen-Wappen.
+// Linien-Icons (lucide-Pfade, currentColor) für Ausrüstungs-Plätze und Klassen-Wappen.
 const SLOT_ICON: Record<string, React.ReactNode> = {
   kopf: <><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" /><path d="M5 21h14" /></>,
   schultern: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
@@ -27,63 +30,123 @@ const CLASS_ICON: Record<string, React.ReactNode> = {
   jaeger: <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>,
   moench: SLOT_ICON.fuesse,
 };
+const CHEST = <><rect x="3" y="8" width="18" height="12" rx="2" /><path d="M3 12h18" /><path d="M12 12v3" /><path d="M7 8V6a5 5 0 0 1 10 0v2" /></>;
+const LOCK = <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>;
+const LEFT_SLOTS = ["kopf", "hals", "schultern", "brust", "handgelenk"];
+const RIGHT_SLOTS = ["haende", "beine", "fuesse", "ring", "schmuck"];
+const SLOT_NAME: Record<string, string> = {
+  kopf: "Kopf", hals: "Hals", schultern: "Schultern", brust: "Brust", handgelenk: "Handgelenk",
+  haende: "Hände", beine: "Beine", fuesse: "Füße", ring: "Finger", schmuck: "Schmuckstück",
+};
 
 export function Icon({ children, size = 20 }: { children: React.ReactNode; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
 }
 
-function Bar({ value, color, rested }: { value: number; color: string; rested?: number }) {
+// --- Tooltip (WoW-Stil): beim Überfahren schwebend, beim Klicken als Dialog -----------------
+function ItemTooltipBody({ item }: { item: HeroItem }) {
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe" };
+  return <>
+    <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
+    <p style={{ color: TIP_YELLOW }}>Gegenstandsstufe {item.ilvl}</p>
+    <p className="flex justify-between gap-6"><span>{item.slot_label}</span><span>{item.rarity_label}</span></p>
+    <p style={{ color: "#1eff00" }}>Verdient: {item.reason}</p>
+    {item.lucky && <p style={{ color: "#1eff00" }}>Glücksfund: eine Stufe besser als verdient</p>}
+    <p className="mt-1 italic" style={{ color: TIP_YELLOW }}>„{item.flavor}“</p>
+    <p className="mt-1 text-[12px] text-[#9d9d9d]">{SOURCE[item.source]} · {dm(item.date)}{item.run_km ? ` · ${item.run_km.toLocaleString("de-DE")} km` : ""}</p>
+  </>;
+}
+
+function useItemTip() {
+  const [tip, setTip] = useState<{ item: HeroItem; x: number; y: number } | null>(null);
+  const [open, setOpen] = useState<HeroItem | null>(null);
+  const bind = (item: HeroItem) => ({
+    onMouseEnter: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
+    onMouseMove: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
+    onMouseLeave: () => setTip(null),
+    onClick: () => { setTip(null); setOpen(item); },
+  });
+  const node = <>
+    {tip && typeof window !== "undefined" && (
+      <div className="wow-tip pointer-events-none fixed z-50 w-72 max-w-[calc(100vw-24px)]"
+           style={{ left: Math.max(12, Math.min(tip.x + 16, window.innerWidth - 300)), top: Math.max(12, Math.min(tip.y + 16, window.innerHeight - 220)) }}>
+        <ItemTooltipBody item={tip.item} />
+      </div>
+    )}
+    {open && <RunAnalysisDialog title={open.name} onClose={() => setOpen(null)}>
+      <div className="wow-tip mx-auto max-w-sm"><ItemTooltipBody item={open} /></div>
+    </RunAnalysisDialog>}
+  </>;
+  return { bind, node };
+}
+
+function Slot({ item, slot, bind, size = 44 }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number }) {
+  if (!item) {
+    return <span className="wow-slot text-[#4b3a22]" style={{ width: size, height: size }} title={slot ? `${SLOT_NAME[slot]} – leer` : undefined}>
+      {slot && <Icon size={size * 0.45}>{SLOT_ICON[slot]}</Icon>}
+    </span>;
+  }
+  const col = rc(item.rarity);
+  return <button type="button" {...bind} aria-label={item.name}
+                 className="wow-slot wow-slot-filled shrink-0 focus:outline-none focus-visible:ring-2"
+                 style={{ width: size, height: size, color: col, ["--glow" as string]: col }}>
+    <Icon size={size * 0.5}>{SLOT_ICON[item.slot]}</Icon>
+  </button>;
+}
+
+// --- Einheitenrahmen ----------------------------------------------------------------------
+function XpBar({ data }: { data: Hero }) {
+  const h = data.hero;
+  const span = h.next - h.floor;
+  const rested = Math.min(1 - h.progress, h.rested / span);
   return (
-    <div className="relative h-3 w-full overflow-hidden rounded-full bg-surface-alt" style={{ boxShadow: "inset 0 0 0 1px var(--color-line)" }}>
-      {rested != null && rested > 0 && (
-        <div className="absolute inset-y-0 rounded-full" title="Ruhebonus"
-             style={{ left: `${value * 100}%`, width: `${Math.min(1 - value, rested) * 100}%`,
-                      background: `repeating-linear-gradient(135deg, ${color}55 0 4px, ${color}22 4px 8px)` }} />
-      )}
-      <div className="relative h-full rounded-full transition-[width] duration-700" style={{ width: `${value * 100}%`, background: color }} />
+    <div className="relative h-4 w-full overflow-hidden rounded-[3px] border border-[#000] bg-[#0a0807]" style={{ boxShadow: "0 0 0 1px #5b4526" }}>
+      {rested > 0 && <div className="absolute inset-y-0" style={{ left: `${h.progress * 100}%`, width: `${rested * 100}%`, background: "var(--wow-rested)", opacity: .55 }} />}
+      <div className="absolute inset-y-0 left-0 transition-[width] duration-700"
+           style={{ width: `${h.progress * 100}%`, background: "linear-gradient(180deg, #b36cf0, var(--wow-xp) 55%, #5c2391)" }} />
+      <div className="absolute inset-0" style={{ background: "repeating-linear-gradient(90deg, transparent 0 calc(5% - 1px), rgba(0,0,0,.65) calc(5% - 1px) 5%)" }} />
+      <p className="absolute inset-0 grid place-items-center text-[11px] font-semibold text-white" style={{ textShadow: "0 1px 2px #000" }}>
+        EP {de0(h.xp - h.floor)} / {de0(span)}{h.rested > 0 ? ` · Ausgeruht +${de0(h.rested)}` : ""}
+      </p>
     </div>
   );
 }
 
-// --- Charakterbogen ---------------------------------------------------------------------
 export function HeroHeader({ data }: { data: Hero }) {
   const h = data.hero;
-  const span = h.next - h.floor;
   const shares: [string, number, string][] = [
-    ["Laufen", h.shares.laufen, "var(--color-accent)"], ["Kraft", h.shares.kraft, "#a07a52"], ["Alltag", h.shares.alltag, "var(--color-accent-2)"],
+    ["Laufen", h.shares.laufen, "#aad372"], ["Kraft", h.shares.kraft, "#c69b6d"], ["Alltag", h.shares.alltag, "#00ff98"],
   ];
   return (
-    <Card className="overflow-hidden">
-      <div className="-m-4 mb-0 p-4 sm:-m-5 sm:p-5" style={{ background: `linear-gradient(180deg, ${h.class_color}1c, transparent)` }}>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-xl" style={{ color: h.class_color, background: `${h.class_color}1f`, boxShadow: `inset 0 0 0 2px ${h.class_color}` }}>
-            <Icon size={34}>{CLASS_ICON[h.class]}</Icon>
+    <Card>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative shrink-0">
+          <div className="grid h-20 w-20 place-items-center rounded-full"
+               style={{ color: h.class_color, background: `radial-gradient(circle at 50% 35%, ${h.class_color}55, #0b0907 72%)`,
+                        boxShadow: `0 0 0 2px #000, 0 0 0 4px ${h.class_color}, 0 0 0 5px #000, 0 0 0 7px var(--wow-gold), 0 0 18px ${h.class_color}66` }}>
+            <Icon size={38}>{CLASS_ICON[h.class]}</Icon>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Level {h.level} · {h.title}</p>
-            <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ color: h.class_color }}>{h.class_label}</h2>
-            <p className="text-sm text-muted">{h.spec_label ?? "Ohne Spezialisierung"} · <span className="text-xs">{h.class_desc}</span></p>
-          </div>
-          <div className="text-right tabular-nums">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Diese Woche</p>
-            <p className="font-display text-2xl font-extrabold text-accent">+{de0(h.week_xp)} XP</p>
-          </div>
+          <span className="absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full border-2 bg-[#120e0a] font-display text-sm font-bold"
+                style={{ borderColor: GOLD, color: TIP_YELLOW }} title="Level">{h.level}</span>
         </div>
-        <div className="mt-4">
-          <div className="mb-1 flex flex-wrap justify-between gap-2 text-[11px] text-muted tabular-nums">
-            <span>{de0(h.xp - h.floor)} / {de0(span)} XP · noch {de0(h.next - h.xp)} bis Level {h.level + 1}</span>
-            <span title="Ruhe- und Krankheitstage laden den Bonus; er verdoppelt die nächsten Trainings-XP.">
-              Ruhebonus <b className="text-ink">{de0(h.rested)}</b> / {de0(h.rested_cap)} XP
-            </span>
-          </div>
-          <Bar value={h.progress} color={h.class_color} rested={h.rested / span} />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-3xl font-bold leading-none" style={{ color: h.class_color, textShadow: "0 2px 6px #000" }}>{h.class_label}</h2>
+          <p className="mt-1 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>&lt;{h.title}&gt; · Stufe {h.level}</p>
+          <p className="text-xs text-muted">{h.spec_label ?? "Ohne Spezialisierung"} — {h.class_desc}</p>
+        </div>
+        <div className="text-right tabular-nums">
+          <p className="font-display text-[11px] uppercase tracking-wider text-muted">Diese Woche</p>
+          <p className="font-display text-2xl font-bold" style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</p>
+          <p className="text-[11px] text-muted">noch {de0(h.next - h.xp)} bis Stufe {h.level + 1}</p>
         </div>
       </div>
-      <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+      <div className="mt-4"><XpBar data={data} /></div>
+      <div className="wow-rule my-4" />
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Klasse · Anteil der XP (90 T)</p>
-          <div className="flex h-2.5 overflow-hidden rounded-full">
+          <p className="mb-1.5 font-display text-[11px] uppercase tracking-wider text-muted">Klasse · Anteil der EP (90 T)</p>
+          <div className="flex h-2.5 overflow-hidden rounded-full border border-black">
             {shares.map(([k, v, c]) => <div key={k} style={{ width: `${v * 100}%`, background: c }} title={`${k} ${Math.round(v * 100)} %`} />)}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-muted">
@@ -91,14 +154,14 @@ export function HeroHeader({ data }: { data: Hero }) {
           </div>
         </div>
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Lauf-Spezialisierung · Neigung</p>
+          <p className="mb-1.5 font-display text-[11px] uppercase tracking-wider text-muted">Spezialisierung · Neigung</p>
           {Object.keys(h.spec_scores).length ? (
             <div className="space-y-1">
               {Object.entries(h.spec_scores).map(([k, v]) => (
                 <div key={k} className="flex items-center gap-2 text-[11px]">
-                  <span className={`w-16 shrink-0 ${k === h.spec ? "font-bold text-ink" : "text-muted"}`}>{SPEC_SHORT[k] ?? k}</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-alt">
-                    <div className="h-full rounded-full" style={{ width: `${v * 100}%`, background: k === h.spec ? h.class_color : "var(--color-line)" }} />
+                  <span className={`w-16 shrink-0 ${k === h.spec ? "font-bold" : "text-muted"}`} style={k === h.spec ? { color: TIP_YELLOW } : undefined}>{SPEC_SHORT[k] ?? k}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#0a0807]">
+                    <div className="h-full rounded-full" style={{ width: `${v * 100}%`, background: k === h.spec ? h.class_color : "#4b3a22" }} />
                   </div>
                   <span className="w-8 text-right tabular-nums text-muted">{Math.round(v * 100)}</span>
                 </div>
@@ -112,142 +175,116 @@ export function HeroHeader({ data }: { data: Hero }) {
 }
 const SPEC_SHORT: Record<string, string> = { ausdauer: "Ausdauer", tempo: "Tempo", last: "Last", strecke: "Strecke" };
 
-// --- Attribute --------------------------------------------------------------------------
-export function HeroAttributes({ items }: { items: HeroAttribute[] }) {
+// --- Charakterfenster: Ausrüstung links/rechts, Werte in der Mitte --------------------------
+function StatRow({ a }: { a: HeroAttribute }) {
+  return (
+    <div className="py-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[13px]" style={{ color: TIP_YELLOW }}>{a.label}</span>
+        <span className="font-display text-[15px] font-bold tabular-nums text-white">
+          {a.score ?? "–"}
+          {a.delta != null && a.delta !== 0 && <span className={`ml-1.5 text-[11px] ${a.delta > 0 ? "text-good" : "text-bad"}`}>{a.delta > 0 ? "+" : "−"}{Math.abs(a.delta)}</span>}
+        </span>
+      </div>
+      <p className="truncate text-[10.5px] text-muted" title={a.source}>{a.value}</p>
+    </div>
+  );
+}
+
+export function HeroCharacter({ data }: { data: Hero }) {
+  const { bind, node } = useItemTip();
+  const best: Record<string, HeroItem> = {};
+  for (const it of data.inventory) if (!best[it.slot] || it.ilvl > best[it.slot].ilvl) best[it.slot] = it;
+  const equipped = Object.values(best);
+  const avg = equipped.length ? Math.round(equipped.reduce((s, it) => s + it.ilvl, 0) / equipped.length) : null;
+  const column = (slots: string[]) => <div className="flex flex-col gap-1.5">{slots.map((s) => <Slot key={s} slot={s} item={best[s]} bind={best[s] && bind(best[s])} />)}</div>;
   return (
     <Card>
-      <CardTitle title="Attribute" sub="Aus deinen Messwerten abgeleitet · 0–100 · Δ zu vor 30 Tagen" />
-      <div className="space-y-3">
-        {items.map((a) => (
-          <div key={a.key}>
-            <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-              <span className="font-semibold">{a.label}</span>
-              <span className="text-[11px] text-muted tabular-nums">
-                {a.value}
-                {a.delta != null && a.delta !== 0 && (
-                  <b className={`ml-2 ${a.delta > 0 ? "text-good" : "text-bad"}`}>{a.delta > 0 ? "▲" : "▼"} {Math.abs(a.delta)}</b>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-alt">
-                {a.score != null && <div className="h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${a.score}%` }} />}
-              </div>
-              <span className="w-7 text-right font-display text-sm font-extrabold tabular-nums">{a.score ?? "–"}</span>
-            </div>
-            <p className="text-[10px] text-muted">{a.source}</p>
-          </div>
-        ))}
+      <CardTitle title="Charakter" sub="Beste Ausrüstung je Platz · Werte aus deinen Messdaten (0–100, ± zu vor 30 T)" />
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
+        {column(LEFT_SLOTS)}
+        <div className="min-w-0 rounded-md border border-[#2c2216] bg-black/30 px-3 py-2">
+          <p className="mb-1 text-center font-display text-[11px] uppercase tracking-wider text-muted">
+            Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{avg ?? "–"}</b>
+          </p>
+          <div className="wow-rule mb-1" />
+          {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
+        </div>
+        {column(RIGHT_SLOTS)}
       </div>
+      {node}
     </Card>
   );
 }
 
-// --- Gegenstände ------------------------------------------------------------------------
-export function ItemTile({ item, onClick, dim = false }: { item: HeroItem; onClick?: () => void; dim?: boolean }) {
-  const col = rc(item.rarity);
-  return (
-    <button type="button" onClick={onClick} title={item.name}
-            className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-surface p-2 text-left transition hover:brightness-[1.03] focus:outline-none focus-visible:ring-2"
-            style={{ borderColor: col, boxShadow: `inset 3px 0 0 ${col}`, opacity: dim ? 0.55 : 1 }}>
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md" style={{ color: col, background: `color-mix(in srgb, ${col} 12%, transparent)`, boxShadow: `inset 0 0 0 1.5px ${col}` }}>
-        <Icon size={20}>{SLOT_ICON[item.slot]}</Icon>
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12.5px] font-semibold" style={{ color: col }}>{item.name}</span>
-        <span className="block truncate text-[10px] text-muted">{item.slot_label} · Stufe {item.ilvl} · {dm(item.date)}</span>
-      </span>
-    </button>
-  );
-}
-
-export function ItemDetail({ item, onClose }: { item: HeroItem; onClose: () => void }) {
-  const col = rc(item.rarity);
-  return (
-    <RunAnalysisDialog title={item.name} onClose={onClose}>
-      <div className="w-full max-w-md overflow-hidden rounded-xl border bg-surface shadow-2xl" style={{ borderColor: col }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-4 p-5" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${col} 14%, transparent), transparent)` }}>
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg" style={{ color: col, boxShadow: `inset 0 0 0 2px ${col}` }}>
-            <Icon size={34}>{SLOT_ICON[item.slot]}</Icon>
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: col }}>{item.rarity_label} · {item.slot_label}</p>
-            <h3 className="font-display text-xl font-extrabold leading-tight" style={{ color: col }}>{item.name}</h3>
-            <p className="mt-0.5 text-[11px] text-muted">Gegenstandsstufe {item.ilvl}</p>
-          </div>
-        </div>
-        <div className="space-y-3 px-5 pb-5 text-sm">
-          <p className="border-l-2 pl-3 italic text-muted" style={{ borderColor: col }}>„{item.flavor}“</p>
-          <p><span className="text-muted">Herkunft: </span>{SOURCE[item.source]} am {dm(item.date)}{item.run_km ? ` · Lauf ${item.run_km.toLocaleString("de-DE")} km` : ""}</p>
-          <p><span className="text-muted">Warum diese Seltenheit: </span>{item.reason}</p>
-          {item.lucky && <p className="text-xs font-semibold" style={{ color: col }}>✦ Glücksfund – eine Stufe besser als verdient</p>}
-        </div>
-      </div>
-    </RunAnalysisDialog>
-  );
-}
-const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Wochentruhe", veteran: "Veteranentruhe" };
-
-// --- Wochentruhe ------------------------------------------------------------------------
+// --- Wochentruhe --------------------------------------------------------------------------
 function VaultChoice({ vault, title, onClaim }: { vault: HeroVault; title: string; onClaim: (week: string, slot: number) => Promise<void> }) {
+  const { bind, node } = useItemTip();
   const [pending, setPending] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [detail, setDetail] = useState<HeroItem | null>(null);
   async function take(slot: number) {
     if (pending !== slot) { setPending(slot); return; }
     setBusy(true); setErr(null);
     try { await onClaim(vault.week, slot); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setBusy(false); }
   }
   return (
-    <div className="rounded-lg border border-line p-3">
-      <p className="mb-2 text-sm font-semibold">{title} <span className="text-xs font-normal text-muted">· wähle einen Gegenstand</span></p>
+    <div className="rounded-md border border-[#3a2d1a] bg-black/25 p-3">
+      <p className="mb-2 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>{title}</p>
       <div className="space-y-2">
         {vault.slots.map((s) => (
-          <div key={s.slot} className="flex min-w-0 items-center gap-2">
+          <div key={s.slot} className="flex min-w-0 items-center gap-2.5">
             {s.unlocked ? <>
-              <div className="min-w-0 flex-1"><ItemTile item={s.item} onClick={() => setDetail(s.item)} /></div>
+              <Slot item={s.item} bind={bind(s.item)} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold" style={{ color: rc(s.item.rarity) }}>{s.item.name}</span>
+                <span className="block text-[11px] text-muted">{s.item.slot_label} · Stufe {s.item.ilvl}</span>
+              </span>
               <button type="button" disabled={busy} onClick={() => take(s.slot)}
-                      className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-xs font-semibold ${pending === s.slot ? "border-accent bg-accent text-white" : "border-line hover:border-accent"}`}>
-                {pending === s.slot ? "Sicher? Nehmen" : "Wählen"}
+                      className="w-24 shrink-0 rounded border px-2 py-1.5 font-display text-xs font-bold"
+                      style={pending === s.slot
+                        ? { background: "linear-gradient(180deg, #b8131a, #6e0b0f)", borderColor: GOLD, color: TIP_YELLOW }
+                        : { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW }}>
+                {pending === s.slot ? "Sicher?" : "Wählen"}
               </button>
-            </> : <div className="grid h-[52px] flex-1 place-items-center rounded-lg border border-dashed border-line text-[11px] text-muted">gesperrt · ab {s.threshold} Läufen</div>}
+            </> : <>
+              <span className="wow-slot text-[#4b3a22]"><Icon size={20}>{LOCK}</Icon></span>
+              <span className="text-[11px] text-muted">gesperrt · ab {s.threshold} Läufen</span>
+            </>}
           </div>
         ))}
       </div>
       {err && <p className="mt-2 text-xs text-bad">{err}</p>}
-      {detail && <ItemDetail item={detail} onClose={() => setDetail(null)} />}
+      {node}
     </div>
   );
 }
 
 export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: string, slot: number) => Promise<void> }) {
   const cur = data.vault.current;
-  const max = Math.max(...cur.slots.map((s) => s.threshold));
   return (
     <Card>
-      <CardTitle title="Wochentruhe" sub="Slots öffnen sich bei 1 · 3 · 4 Läufen · Wahl ab Montag · Krankheitstage senken die Schwellen" />
-      <div className="flex items-center gap-3">
-        <div className="flex-1"><Bar value={Math.min(1, cur.runs / max)} color="var(--color-accent)" /></div>
-        <span className="text-sm font-semibold tabular-nums">{cur.runs} / {max} Läufe</span>
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <CardTitle title="Wochentruhe" sub="Slots bei 1 · 3 · 4 Läufen · Wahl ab Montag · Krankheitstage senken die Schwellen" />
+      <div className="grid grid-cols-3 gap-2">
         {cur.slots.map((s) => {
           const col = rc(s.item.rarity);
           return (
-            <div key={s.slot} className="grid h-20 place-items-center rounded-lg border text-center"
-                 style={s.unlocked ? { borderColor: col, background: `color-mix(in srgb, ${col} 10%, transparent)`, color: col } : { borderStyle: "dashed", borderColor: "var(--color-line)" }}>
+            <div key={s.slot} className={`grid h-28 place-items-center rounded-md border text-center ${s.unlocked ? "wow-pulse" : ""}`}
+                 style={s.unlocked
+                   ? { borderColor: col, background: `radial-gradient(circle at 50% 40%, color-mix(in srgb, ${col} 28%, transparent), #0b0907 75%)`, color: col, ["--glow" as string]: col }
+                   : { borderColor: "#3a2d1a", background: "radial-gradient(circle at 50% 40%, #1d1712, #0b0907 75%)", color: "#5b4526" }}>
               <div>
-                <Icon size={22}>{s.unlocked ? <><rect x="3" y="8" width="18" height="12" rx="2" /><path d="M3 12h18" /><path d="M12 12v3" /><path d="M7 8V6a5 5 0 0 1 10 0v2" /></> : <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>}</Icon>
-                <p className="mt-1 text-[10px] font-semibold">{s.unlocked ? s.item.rarity_label : `ab ${s.threshold} Läufen`}</p>
+                <Icon size={30}>{s.unlocked ? CHEST : LOCK}</Icon>
+                <p className="mt-1 font-display text-[11px] font-bold">{s.unlocked ? s.item.rarity_label : `${Math.min(cur.runs, s.threshold)} / ${s.threshold}`}</p>
+                <p className="text-[10px] text-muted">{s.threshold} {s.threshold === 1 ? "Lauf" : "Läufe"}</p>
               </div>
             </div>
           );
         })}
       </div>
-      {cur.sick_days > 0 && <p className="mt-2 text-[11px] text-muted">{cur.sick_days} Krankheitstage diese Woche – Schwellen gesenkt.</p>}
+      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}</p>
       {(data.vault.veteran || data.vault.claimable.length > 0) && (
-        <div className="mt-4 space-y-3 border-t border-line pt-4">
+        <div className="mt-4 space-y-3">
           {data.vault.veteran && <VaultChoice vault={data.vault.veteran} title="Veteranentruhe · für deine bisherige Reise" onClaim={onClaim} />}
           {data.vault.claimable.map((v) => <VaultChoice key={v.week} vault={v} title={`Woche vom ${dm(v.week)} · ${v.runs} Läufe`} onClaim={onClaim} />)}
         </div>
@@ -256,35 +293,43 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
   );
 }
 
-// --- Inventar & Kampflog ----------------------------------------------------------------
-export function HeroInventory({ items }: { items: HeroItem[] }) {
-  const [sel, setSel] = useState<HeroItem | null>(null);
+// --- Taschen ------------------------------------------------------------------------------
+export function HeroBags({ items }: { items: HeroItem[] }) {
+  const { bind, node } = useItemTip();
+  const size = Math.max(16, Math.ceil(items.length / 8) * 8);
   return (
     <Card>
-      <CardTitle title={`Inventar · ${items.length} ${items.length === 1 ? "Gegenstand" : "Gegenstände"}`} sub="Jeder Lauf droppt Beute: Seltenheit verdient, Gegenstand zufällig" />
-      {items.length ? (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((it) => <ItemTile key={it.id} item={it} onClick={() => setSel(it)} />)}
-        </div>
-      ) : <p className="text-xs text-muted">Noch leer – dein nächster Lauf bringt die erste Beute.</p>}
-      {sel && <ItemDetail item={sel} onClose={() => setSel(null)} />}
+      <CardTitle title={`Taschen · ${items.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. Überfahren oder antippen für Details." />
+      <div className="flex flex-wrap gap-1.5">
+        {Array.from({ length: size }, (_, i) => items[i]
+          ? <Slot key={items[i].id} item={items[i]} bind={bind(items[i])} />
+          : <span key={`empty-${i}`} className="wow-slot" />)}
+      </div>
+      {node}
     </Card>
   );
 }
 
-const LOG_ICON: Record<string, string> = { level: "⬆", klasse: "⚔", erfolg: "🏆", beute: "✦", truhe: "🗝" };
+// --- Kampflog im Chat-Stil ----------------------------------------------------------------
+function LogLine({ e }: { e: Hero["log"][number] }) {
+  const name = (color: string) => <span style={{ color }}>[{e.name}]</span>;
+  switch (e.kind) {
+    case "level": return <span style={{ color: TIP_YELLOW }}>Glückwunsch! Ihr habt Stufe {e.level} erreicht{e.name ? ` – ${e.name}` : ""}.</span>;
+    case "klasse": return <span style={{ color: "#ff7d0a" }}>Ihr folgt nun dem Pfad: {e.name}.</span>;
+    case "erfolg": return <span style={{ color: "#ffff00" }}>Ihr habt den Erfolg {name("#ffff00")} errungen!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "beute": return <span style={{ color: "#00aa00" }}>Ihr erhaltet Beute: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
+    case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
+    default: return <span>{e.text}</span>;
+  }
+}
 
 export function HeroLog({ data }: { data: Hero }) {
   return (
     <Card>
-      <CardTitle title="Kampflog" sub="Level-Aufstiege, Klassenwechsel, Beute und Erfolge" />
-      <ol className="max-h-96 space-y-1.5 overflow-y-auto pr-1 text-sm">
+      <CardTitle title="Kampflog" sub="Stufenaufstiege, Klassenwechsel, Beute und Erfolge" />
+      <ol className="wow-chat max-h-96 space-y-0.5 overflow-y-auto p-2.5">
         {data.log.map((e, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="w-12 shrink-0 text-[11px] tabular-nums text-muted">{dm(e.date)}</span>
-            <span className="w-4 shrink-0 text-center" aria-hidden="true">{LOG_ICON[e.kind]}</span>
-            <span className="min-w-0" style={e.rarity ? { color: rc(e.rarity) } : undefined}>{e.text}</span>
-          </li>
+          <li key={i}><span className="mr-1.5 tabular-nums text-[#8a8a8a]">[{dm(e.date)}]</span><LogLine e={e} /></li>
         ))}
       </ol>
     </Card>
@@ -293,18 +338,19 @@ export function HeroLog({ data }: { data: Hero }) {
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ruhebonus", x.ruhebonus]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus]];
   return (
     <Card>
-      <CardTitle title="So entstehen XP" sub={`Gesamt ${de0(data.hero.xp)} XP seit Beginn deiner Daten`} />
+      <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums">
-        {rows.map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="text-right font-semibold">{de0(v)}</dd></div>)}
+        {rows.map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="text-right font-semibold" style={{ color: TIP_YELLOW }}>{de0(v)}</dd></div>)}
       </dl>
-      <ul className="mt-3 list-disc space-y-1 border-t border-line pl-4 pt-3 text-[11px] text-muted">
-        <li>Lauf: 2 XP je Minute × Puls-Zone (Z1 1,0 · Z2 1,2 · Z3 1,5 · Z4 1,8).</li>
-        <li>Kraft: 6 XP je Arbeitssatz, höchstens 180 je Training.</li>
-        <li>Ab dem {data.rules.runs_full_xp + 1}. Lauf bzw. {data.rules.workouts_full_xp + 1}. Krafttraining einer Woche nur halbe XP – Erholung zählt.</li>
-        <li>Ruhe- und Krankheitstage laden {data.rules.rest_per_day} XP Ruhebonus, der die nächsten Trainings-XP verdoppelt.</li>
+      <div className="wow-rule my-3" />
+      <ul className="list-disc space-y-1 pl-4 text-[11px] text-muted">
+        <li>Lauf: 2 EP je Minute × Puls-Zone (Z1 1,0 · Z2 1,2 · Z3 1,5 · Z4 1,8).</li>
+        <li>Kraft: 6 EP je Arbeitssatz, höchstens 180 je Training.</li>
+        <li>Ab dem {data.rules.runs_full_xp + 1}. Lauf bzw. {data.rules.workouts_full_xp + 1}. Krafttraining einer Woche nur halbe EP – Erholung zählt.</li>
+        <li>Ruhe- und Krankheitstage laden {data.rules.rest_per_day} EP „Ausgeruht“, das die nächsten Trainings-EP verdoppelt.</li>
         <li>Alltag: Schritte über 5.000, Rad und Gehen. Erfolge zählen mit ihren Punkten.</li>
       </ul>
     </Card>

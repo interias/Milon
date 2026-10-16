@@ -95,3 +95,65 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wx-reveal, .wx-bar, .wx-fade, .wx-pulse, .wx-anim * { animation: none !important; }
 }
+
+/* Heldenreise: dunkles WoW-Thema, nur innerhalb von .wow. Überschreibt die Theme-Tokens,
+   damit vorhandene Komponenten (Card, Erfolge, Dialoge) automatisch mitziehen. */
+.wow {
+  --color-bg: #0d0b09;
+  --color-surface: #17130f;
+  --color-surface-alt: #241d16;
+  --color-ink: #efe3c8;
+  --color-muted: #a99c80;
+  --color-line: #4b3a22;
+  --color-accent: #e3b64f;
+  --color-accent-2: #9c7a33;
+  --color-good: #4fd36b;
+  --color-warn: #ffb84d;
+  --color-bad: #ff6a5c;
+  --rar-grau: #9d9d9d;
+  --rar-weiss: #f4f4f4;
+  --rar-gruen: #1eff00;
+  --rar-blau: #3d95ff;
+  --rar-lila: #b552f7;
+  --rar-orange: #ff8000;
+  --rar-rot: #ff4b3a;
+  --wow-gold: #e3b64f;
+  --wow-gold-soft: #f0c96a;
+  --wow-xp: #8f3fd6;
+  --wow-rested: #3d7bd9;
+  color: var(--color-ink);
+  background:
+    radial-gradient(900px 420px at 50% -8%, rgba(120, 82, 28, .45), transparent 65%),
+    linear-gradient(180deg, #120e0a, #0b0907);
+  border: 1px solid #5a4424;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 60px rgba(0, 0, 0, .6), 0 10px 30px rgba(0, 0, 0, .25);
+  padding: 14px;
+}
+@media (min-width: 640px) { .wow { padding: 22px; } }
+.wow h1, .wow h2, .wow h3, .wow .font-display { font-family: var(--font-cinzel), Georgia, serif; letter-spacing: .02em; }
+.wow h3 { color: var(--wow-gold-soft); }
+.wow .rounded-card {
+  background: linear-gradient(180deg, #1e1813, #13100c);
+  border-color: #5b4526;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .65), inset 0 1px 0 rgba(255, 215, 130, .08), 0 4px 14px rgba(0, 0, 0, .45);
+}
+.wow-rule { height: 1px; background: linear-gradient(90deg, transparent, var(--wow-gold) 20%, var(--wow-gold) 80%, transparent); opacity: .5; }
+.wow-slot {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 6px;
+  background: radial-gradient(circle at 50% 35%, #2a2118, #0b0907 75%);
+  border: 1px solid #3a2d1a;
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 10px rgba(0, 0, 0, .8);
+}
+.wow-slot-filled { box-shadow: inset 0 0 0 1px #000, inset 0 0 12px rgba(0, 0, 0, .7), 0 0 8px var(--glow); border-color: var(--glow); }
+.wow-tip {
+  background: linear-gradient(180deg, rgba(14, 18, 40, .97), rgba(8, 10, 24, .97));
+  border: 1px solid #5c6378; border-radius: 5px; color: #fff;
+  box-shadow: 0 0 0 1px #000, 0 8px 24px rgba(0, 0, 0, .6);
+  font-size: 13px; line-height: 1.45; padding: 9px 11px;
+}
+.wow-chat { background: rgba(0, 0, 0, .38); border: 1px solid #2c2216; border-radius: 6px; font-size: 13px; line-height: 1.5; text-shadow: 0 1px 1px #000; }
+.wow dialog { border-color: #5b4526; }
+@keyframes wowGlow { 0%, 100% { box-shadow: 0 0 6px var(--glow) } 50% { box-shadow: 0 0 14px var(--glow) } }
+.wow-pulse { animation: wowGlow 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .wow-pulse { animation: none } }
