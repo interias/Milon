@@ -64,6 +64,10 @@ def _run_migrations() -> None:
         for col in ("max_hr", "hr_drift_pct"):
             if col not in ex_cols:
                 con.exec_driver_sql(f"ALTER TABLE exercise_sessions ADD COLUMN {col} REAL")
+        mod_cols = cols("hero_item_mods")
+        if mod_cols and "sold" not in mod_cols:
+            con.exec_driver_sql("ALTER TABLE hero_item_mods ADD COLUMN sold BOOLEAN NOT NULL DEFAULT 0")
+            con.exec_driver_sql("ALTER TABLE hero_item_mods ADD COLUMN gold INTEGER NOT NULL DEFAULT 0")
         checkin_cols = cols("checkins")
         if checkin_cols and "sick" not in checkin_cols:
             con.exec_driver_sql("ALTER TABLE checkins ADD COLUMN sick BOOLEAN")

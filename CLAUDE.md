@@ -328,3 +328,12 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Erfolge über den Namen → Erfolgsdaten der Seite (`HeroLinkContext`).
     - Aufträge, Bosse, Instanzen, Events, Duelle und Reittiere über `log[].tip` (Zeilen, im Backend gebaut: `data["tips"]`).
   - Der Log-Ticker oben verlinkt bewusst nicht (er öffnet den Log-Tab).
+- **Wirtschaft I (2026-10-16): Gold, Händler, Taschen, Briefkasten** (`app/hero_economy.py`).
+  - **Gold** in Kupfer (1 g = 100 s = 10.000 k), live ab Starttag aus Ereignissen:
+    - 10 s je Lauf-km, 50 s je Krafttraining, 50 s je Tagesaufgabe.
+    - 2 g je Auftrag, 3 g je Instanz, 10 g je Boss, 15 g je Event, 1 g je Duell.
+    - 25 g Startkapital.
+  - **Verkauf** an den Händler (`POST /hero/sell`, nicht angelegt): Preis = Seltenheitsbasis × Stufe/200. Gespeichert in `hero_item_mods.sold/gold` (Migration in `db.py`).
+  - **Taschen:** Rucksack 16 + die besten 4 Taschen (automatisch). Drop-Chance: bezwungene Instanz 25 %, besiegter Boss 40 % (geseedet). Namen: Leinenbeutel 4 … Netherstoff-Tasche 12.
+  - **Briefkasten:** Nicht angelegte Gegenstände jenseits der Kapazität (älteste bleiben in den Taschen) erhalten `mail: true` und rücken automatisch nach. Es geht nichts verloren.
+  - **UI:** `Money` (Münzen), Verkaufspreis im Tooltip, „Verkaufen“ zweistufig, Taschenleiste, Briefkasten, Karte „Geldbörse“ im Chronik-Tab.

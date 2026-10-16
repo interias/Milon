@@ -42,6 +42,20 @@ const SLOT_NAME: Record<string, string> = {
   haende: "Hände", beine: "Beine", fuesse: "Füße", ring: "Finger", schmuck: "Schmuckstück",
 };
 
+// Geld wie in WoW: Gold / Silber / Kupfer mit farbigen Münzen.
+export function Money({ copper, className = "" }: { copper: number; className?: string }) {
+  const neg = copper < 0;
+  const v = Math.abs(Math.round(copper));
+  const g = Math.floor(v / 10000), sv = Math.floor((v % 10000) / 100), c = v % 100;
+  const coin = (n: number, col: string, key: string) => (
+    <span key={key} className="inline-flex items-center gap-0.5 tabular-nums">
+      {n}<span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `radial-gradient(circle at 35% 35%, #fff8, ${col} 60%)`, boxShadow: "0 0 0 1px #0008" }} />
+    </span>
+  );
+  const parts = [g ? coin(g, "#e8b923", "g") : null, g || sv ? coin(sv, "#c7c7cf", "s") : null, coin(c, "#c8763a", "c")].filter(Boolean);
+  return <span className={`inline-flex items-center gap-1.5 font-semibold text-white ${className}`} title={`${g} Gold ${sv} Silber ${c} Kupfer`}>{neg ? "−" : ""}{parts}</span>;
+}
+
 export function Icon({ children, size = 20 }: { children: React.ReactNode; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
@@ -55,6 +69,7 @@ export type Gear = {
   equipBest: () => Promise<void>;
   disenchant: (itemId: string) => Promise<void>;
   upgrade: (itemId: string) => Promise<void>;
+  sell: (itemId: string) => Promise<void>;
   dust: number;
   dragging: string | null;
   setDragging: (slot: string | null) => void;
@@ -78,6 +93,7 @@ function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolea
     {item.set && <p className="mt-1" style={{ color: TIP_YELLOW }}>Garnitur {item.set}</p>}
     <p className="mt-1 italic" style={{ color: TIP_YELLOW }}>„{item.flavor}“</p>
     <p className="mt-1 text-[12px] text-[#9d9d9d]">{SOURCE[item.source]} · {dm(item.date)}{item.run_km ? ` · ${item.run_km.toLocaleString("de-DE")} km` : ""}</p>
+    {item.price != null && <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-white">Verkaufspreis: <Money copper={item.price} /></p>}
   </>;
 }
 
@@ -94,13 +110,14 @@ function useItemTip(gear?: Gear) {
   const [open, setOpen] = useState<HeroItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDe, setConfirmDe] = useState(false);
+  const [confirmSell, setConfirmSell] = useState(false);
   const worn = (item: HeroItem) => gear?.equipment[item.slot];
   const canEquip = (item: HeroItem) => !!gear && !item.equipped;
   const bind = (item: HeroItem) => ({
     onMouseEnter: (e: React.MouseEvent) => { setTip({ item, x: e.clientX, y: e.clientY }); gear?.markSeen(item.id); },
     onMouseMove: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => setTip(null),
-    onClick: () => { setTip(null); setOpen(item); setConfirmDe(false); gear?.markSeen(item.id); },
+    onClick: () => { setTip(null); setOpen(item); setConfirmDe(false); setConfirmSell(false); gear?.markSeen(item.id); },
     // Rechtsklick legt an wie in WoW.
     onContextMenu: canEquip(item) ? (e: React.MouseEvent) => { e.preventDefault(); setTip(null); gear!.equip(item.id); } : undefined,
     draggable: canEquip(item),
@@ -138,6 +155,13 @@ function useItemTip(gear?: Gear) {
           <button type="button" disabled={busy || gear.dust < open.upgrade_cost} className={BTN} style={{ ...BTN_STYLE, color: "#1eff00" }}
                   title={gear.dust < open.upgrade_cost ? `Du hast ${gear.dust} Arkanstaub` : undefined}
                   onClick={() => act(() => gear.upgrade(open.id))}>Aufwerten +4 · {open.upgrade_cost} Staub</button>
+        )}
+        {!open.equipped && open.price != null && (
+          <button type="button" disabled={busy} className={BTN}
+                  style={confirmSell ? { background: "linear-gradient(180deg, #b8131a, #6e0b0f)", borderColor: GOLD, color: TIP_YELLOW } : { ...BTN_STYLE, color: "#e8b923" }}
+                  onClick={() => confirmSell ? act(() => gear.sell(open.id)) : setConfirmSell(true)}>
+            {confirmSell ? <>Wirklich verkaufen? <Money copper={open.price} /></> : <>Verkaufen · <Money copper={open.price} /></>}
+          </button>
         )}
         {!open.equipped && (
           <button type="button" disabled={busy} className={BTN}
@@ -311,11 +335,12 @@ export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSp
           <p className="font-display text-[11px] uppercase tracking-wider text-muted">Diese Woche</p>
           <p className="font-display text-2xl font-bold" style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</p>
           <p className="text-[11px] text-muted">noch {de0(h.next - h.xp)} bis Stufe {h.level + 1}</p>
+          {data.gold && <p className="mt-1 flex justify-end"><Money copper={data.gold.balance} className="text-[13px]" /></p>}
         </div>
       </div>
       <div className="mt-3 sm:mt-4"><XpBar data={data} fromXp={fromXp} /></div>
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-muted sm:hidden">
-        <span><b style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</b> diese Woche · noch {de0(h.next - h.xp)} bis {h.level + 1}</span>
+        <span className="flex flex-wrap items-center gap-x-2"><span><b style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</b> diese Woche</span>{data.gold && <Money copper={data.gold.balance} />}</span>
         <button type="button" onClick={() => setDetails((v) => !v)} aria-expanded={details} className="shrink-0 underline decoration-dotted underline-offset-4">
           {details ? "weniger ▴" : "Klasse ▾"}
         </button>
@@ -530,22 +555,77 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
 }
 
 // --- Taschen ------------------------------------------------------------------------------
-export function HeroBags({ items, gear }: { items: HeroItem[]; gear: Gear }) {
+const BAG_ICON = <><path d="M6 8V6a6 6 0 0 1 12 0v2" /><path d="M4 8h16l-1.5 12.5a2 2 0 0 1-2 1.5h-9a2 2 0 0 1-2-1.5Z" /></>;
+
+export function HeroBags({ items, gear, data }: { items: HeroItem[]; gear: Gear; data?: Hero }) {
   const { bind, node } = useItemTip(gear);
-  const loose = items.filter((it) => !it.equipped);
-  const size = Math.max(16, Math.ceil(loose.length / 8) * 8);
+  const loose = items.filter((it) => !it.equipped && !it.mail);
+  const mail = items.filter((it) => it.mail);
+  const bags = data?.bags;
+  const size = bags?.capacity ?? Math.max(16, Math.ceil(loose.length / 8) * 8);
   return (
     <Card>
       <div className="flex items-start justify-between gap-2">
         <CardTitle title={`Taschen · ${loose.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. ▲ = besser als angelegt." />
-        <span className="shrink-0 rounded border border-[#3a2d1a] px-2 py-1 text-[11px]" style={{ color: "#b552f7" }} title="Aus entzauberten Gegenständen; wertet Gegenstände auf">✦ {gear.dust} Arkanstaub</span>
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          {data?.gold && <Money copper={data.gold.balance} className="text-[12px]" />}
+          <span className="rounded border border-[#3a2d1a] px-2 py-0.5 text-[11px]" style={{ color: "#b552f7" }} title="Aus entzauberten Gegenständen; wertet Gegenstände auf">✦ {gear.dust} Staub</span>
+        </span>
       </div>
+      {bags && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" aria-label="Taschenplätze">
+          <span className="flex items-center gap-1 rounded border border-[#6b5230] bg-black/30 px-2 py-1 text-[11px]" title="Rucksack">
+            <Icon size={14}>{BAG_ICON}</Icon> Rucksack {bags.backpack}
+          </span>
+          {Array.from({ length: bags.max_bags }, (_, i) => {
+            const b = bags.used[i];
+            return b
+              ? <span key={b.id} className="flex items-center gap-1 rounded border px-2 py-1 text-[11px]" style={{ borderColor: "#6b5230", color: TIP_YELLOW }}
+                      title={`${b.name} · ${b.slots} Plätze · ${b.source}`}><Icon size={14}>{BAG_ICON}</Icon>+{b.slots}</span>
+              : <span key={`leer-${i}`} className="rounded border border-dashed border-[#3a2d1a] px-2 py-1 text-[11px] text-[#5b4526]"
+                      title="Leerer Taschenplatz – Taschen findest du in Instanzen und bei Bossen">leer</span>;
+          })}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {Array.from({ length: size }, (_, i) => loose[i]
           ? <Slot key={loose[i].id} item={loose[i]} bind={bind(loose[i])} upgrade={loose[i].ilvl > (gear.equipment[loose[i].slot]?.ilvl ?? 0)} isNew={gear.isNew(loose[i].id)} />
           : <span key={`empty-${i}`} className="wow-slot" />)}
       </div>
+      {mail.length > 0 && (
+        <div className="mt-4 rounded-md border border-[#6b5230] bg-black/30 p-3">
+          <p className="font-display text-sm font-bold" style={{ color: TIP_YELLOW }}>✉ Briefkasten · {mail.length}</p>
+          <p className="mb-2 text-[11px] text-muted">Deine Taschen sind voll. Verkaufe oder entzaubere etwas – dann rückt die Post automatisch nach.</p>
+          <div className="flex flex-wrap gap-1.5">{mail.map((it) => <Slot key={it.id} item={it} bind={bind(it)} />)}</div>
+        </div>
+      )}
       {node}
+    </Card>
+  );
+}
+
+// --- Geldbörse ----------------------------------------------------------------------------
+export function HeroPurse({ data }: { data: Hero }) {
+  const g = data.gold;
+  if (!g) return null;
+  const rates: [string, string][] = [["km", "je Lauf-km"], ["kraft", "je Krafttraining"], ["taeglich", "je Tagesaufgabe"], ["auftrag", "je Auftrag"],
+    ["instanz", "je Instanz"], ["boss", "je Boss"], ["event", "je Event"], ["duell", "je Duell"]];
+  return (
+    <Card>
+      <CardTitle title="Geldbörse" sub="Gold verdienst du ab deinem Starttag durch Training und Abenteuer" />
+      <p className="font-display text-2xl"><Money copper={g.balance} className="text-xl" /></p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[12px] text-muted">
+        <span>diese Woche +<Money copper={g.week} /></span><span>verkauft <Money copper={g.sold} /></span><span>ausgegeben <Money copper={g.spent} /></span>
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+        {Object.entries(g.sources).map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="text-right"><Money copper={v} /></dd></div>)}
+      </dl>
+      <details className="mt-3 border-t border-[#3a2d1a] pt-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-muted">Was bringt wie viel? ▾</summary>
+        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+          {rates.map(([k, label]) => <div key={k} className="contents"><dt className="text-muted">{label}</dt><dd className="text-right"><Money copper={g.rates[k]} /></dd></div>)}
+        </dl>
+      </details>
     </Card>
   );
 }
@@ -658,6 +738,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
+    case "tasche": return <span style={{ color: "#00aa00" }}>Ihr erhaltet eine Tasche: {name("#ffffff")}.</span>;
     case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
     default: return <span>{e.text}</span>;
   }

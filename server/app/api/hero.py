@@ -148,3 +148,13 @@ def write_saga() -> dict:
         return {"saga": hero_saga.generate(hero.overview(), hero.local_today())}
     except Exception as exc:  # noqa: BLE001 -- LLM/Netz/fehlender Key
         raise HTTPException(status_code=502, detail=f"Saga konnte nicht geschrieben werden: {exc}") from exc
+
+
+@router.post("/sell")
+def sell_item(body: EquipInput) -> dict:
+    try:
+        return {"gold": hero.sell(body.item_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
