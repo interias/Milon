@@ -8,7 +8,7 @@ import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
-import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
+import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroLogTicker, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
 import { HeroQuestLog, HeroTalentTree } from "@/components/HeroTalents";
 import { HeroDungeons, HeroRaid } from "@/components/HeroBosses";
@@ -71,7 +71,8 @@ export default function Heldenreise() {
   const [tab, setTab] = useState<TabKey>("charakter");
   useEffect(() => {
     const read = () => {
-      const h = window.location.hash.slice(1) as TabKey;
+      const raw = window.location.hash.slice(1);
+      const h = (raw === "erfolge" ? "sammlung" : raw) as TabKey;  // alter Link der Laufen-Seite
       if (TABS.some((t) => t.key === h)) setTab(h);
     };
     read();
@@ -82,6 +83,12 @@ export default function Heldenreise() {
     setTab(key);
     play("click");
     history.replaceState(null, "", `#${key}`);
+    // Auf dem Handy beginnt der neue Tab direkt unter der (klebenden) Tab-Leiste.
+    const bar = document.querySelector<HTMLElement>("[role=tablist]");
+    if (bar && window.innerWidth < 640) {
+      const top = bar.getBoundingClientRect().top + window.scrollY - 68;
+      if (window.scrollY > top) window.scrollTo({ top });
+    }
   };
 
   const hints: Partial<Record<TabKey, string>> = {};
@@ -94,7 +101,8 @@ export default function Heldenreise() {
 
   return (
     <div className={`wow ${cinzel.variable}`}>
-      <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
+      <div className="hidden sm:block"><PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" /></div>
+      <h1 className="mb-3 font-display text-xl font-bold sm:hidden" style={{ color: "#ffd100" }}>Heldenreise</h1>
       {err ? <ApiError error={err} /> : !hero ? <Loading /> : (
         <div className="space-y-4">
           <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} onTitle={() => setTitles(true)} fromXp={visit?.fromXp} />
@@ -102,15 +110,18 @@ export default function Heldenreise() {
           {titles && <HeroTitleChooser data={hero} onChoose={async (key) => { await api.heroTitle(key); await load(); }} onClose={() => setTitles(false)} />}
           <LevelUpBanner level={hero.hero.level} title={hero.hero.title} />
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
-          <div className="xl:hidden"><HeroLog data={hero} listClass="max-h-36" /></div>
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <HeroLogTicker data={hero} onOpen={() => choose("log")} />
+          <div>
             <div className="min-w-0">
-              <div role="tablist" aria-label="Bereiche der Heldenreise" className="wow-tabs mb-4 flex gap-1 overflow-x-auto overflow-y-hidden pr-2 pt-2">
+              <div role="tablist" aria-label="Bereiche der Heldenreise"
+                   className="wow-tabs sticky top-[61px] z-20 -mx-1 mb-4 grid grid-cols-6 gap-1 px-1 pt-2 sm:static sm:mx-0 sm:flex sm:overflow-x-auto sm:overflow-y-hidden sm:px-0 sm:pr-2">
                 {TABS.map((t) => (
                   <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} id={`tab-${t.key}`}
                           aria-controls={`panel-${t.key}`} onClick={() => choose(t.key)}
                           className={`wow-tab shrink-0 ${tab === t.key ? "wow-tab-active" : ""}`}>
-                    {t.label}
+                    <span className="sm:hidden"><Icon size={18}>{TAB_ICON[t.key]}</Icon></span>
+                    <span className="sm:hidden">{t.short}</span>
+                    <span className="hidden sm:inline">{t.label}</span>
                     {hints[t.key] && <span className="wow-tab-hint" aria-label="Neues">{hints[t.key]}</span>}
                   </button>
                 ))}
@@ -119,22 +130,31 @@ export default function Heldenreise() {
                 {tab === "charakter" && <>
                   <HeroCharacter data={hero} gear={gear} weather={weather} />
                   <HeroBags items={hero.inventory} gear={gear} />
-                  <HeroMounts data={hero} onChoose={async (key) => { await api.heroMount(key); play("equip"); await load(); }} />
                 </>}
                 {tab === "abenteuer" && <>
-                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
-                    <HeroTrainer data={hero} />
-                    <HeroEvent data={hero} />
+                  <nav aria-label="Abschnitte" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:hidden">
+                    {JUMPS.map(([id, label]) => (
+                      <a key={id} href={`#${id}`} onClick={(e) => {
+                           e.preventDefault();
+                           const el = document.getElementById(id);
+                           if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 128 });
+                         }}
+                         className="shrink-0 rounded-full border border-[#4b3a22] bg-black/30 px-2.5 py-1 text-[11px] text-[#cfc3a8]">{label}</a>
+                    ))}
+                  </nav>
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0 [&>*]:scroll-mt-32">
+                    <div id="ab-gorm"><HeroTrainer data={hero} /></div>
+                    <div id="ab-event"><HeroEvent data={hero} /></div>
                   </div>
-                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
-                    <HeroVaultCard data={hero} onClaim={claim} />
-                    <HeroQuestLog data={hero} />
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0 [&>*]:scroll-mt-32">
+                    <div id="ab-truhe"><HeroVaultCard data={hero} onClaim={claim} /></div>
+                    <div id="ab-auftraege"><HeroQuestLog data={hero} /></div>
                   </div>
-                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
-                    <HeroRaid data={hero} />
-                    <HeroDungeons data={hero} />
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0 [&>*]:scroll-mt-32">
+                    <div id="ab-bosse"><HeroRaid data={hero} /></div>
+                    <div id="ab-instanzen"><HeroDungeons data={hero} /></div>
                   </div>
-                  <HeroDuel data={hero} />
+                  <div id="ab-duell" className="scroll-mt-32"><HeroDuel data={hero} /></div>
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
                 {tab === "chronik" && <>
@@ -145,14 +165,13 @@ export default function Heldenreise() {
                     <HeroRules data={hero} />
                   </div>
                 </>}
-                {tab === "erfolge" && (ach
-                  ? <><AchievementsSummary data={ach} showLevel={false} /><AchievementsGrid data={ach} /></>
-                  : <Loading />)}
+                {tab === "sammlung" && <>
+                  <HeroMounts data={hero} onChoose={async (key) => { await api.heroMount(key); play("equip"); await load(); }} />
+                  {ach ? <><AchievementsSummary data={ach} showLevel={false} /><AchievementsGrid data={ach} collapsible /></> : <Loading />}
+                </>}
+                {tab === "log" && <HeroLog data={hero} listClass="max-h-[70vh]" />}
               </div>
             </div>
-            <aside className="hidden xl:sticky xl:top-4 xl:block" aria-label="Kampflog">
-              <HeroLog data={hero} listClass="max-h-[calc(100vh-9rem)]" />
-            </aside>
           </div>
         </div>
       )}
@@ -160,11 +179,22 @@ export default function Heldenreise() {
   );
 }
 
-type TabKey = "charakter" | "abenteuer" | "talente" | "chronik" | "erfolge";
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "charakter", label: "Charakter" },
-  { key: "abenteuer", label: "Abenteuer" },
-  { key: "talente", label: "Talente" },
-  { key: "chronik", label: "Chronik" },
-  { key: "erfolge", label: "Erfolge" },
+const JUMPS: [string, string][] = [["ab-gorm", "Gorm"], ["ab-event", "Event"], ["ab-truhe", "Truhe"], ["ab-auftraege", "Aufträge"],
+  ["ab-bosse", "Bosse"], ["ab-instanzen", "Instanzen"], ["ab-duell", "Duell"]];
+type TabKey = "charakter" | "abenteuer" | "talente" | "chronik" | "sammlung" | "log";
+const TABS: { key: TabKey; label: string; short: string }[] = [
+  { key: "charakter", label: "Charakter", short: "Held" },
+  { key: "abenteuer", label: "Abenteuer", short: "Reise" },
+  { key: "talente", label: "Talente", short: "Talente" },
+  { key: "chronik", label: "Chronik", short: "Chronik" },
+  { key: "sammlung", label: "Sammlung", short: "Erfolge" },
+  { key: "log", label: "Kampflog", short: "Log" },
 ];
+const TAB_ICON: Record<TabKey, React.ReactNode> = {
+  charakter: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+  abenteuer: <><circle cx="12" cy="12" r="10" /><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" /></>,
+  talente: <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />,
+  chronik: <><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></>,
+  log: <><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /><path d="m3 15 2 2 4-4" /></>,
+  sammlung: <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>,
+};

@@ -207,7 +207,7 @@ export function AchievementsSummary({ data, showLevel = true }: { data: AchData;
   );
 }
 
-export function AchievementsGrid({ data }: { data: AchData }) {
+export function AchievementsGrid({ data, collapsible = false }: { data: AchData; collapsible?: boolean }) {
   const [onlyEarned, setOnlyEarned] = useState(false);
   const [fRarity, setFRarity] = useState<Rarity | "alle">("alle");
   const [sel, setSel] = useState<Achievement | null>(null);
@@ -254,7 +254,7 @@ export function AchievementsGrid({ data }: { data: AchData }) {
         })}
       </div>
 
-      <div className="space-y-5">
+      <div className={collapsible ? "space-y-2" : "space-y-5"}>
         {CATS.map((cat) => {
           const group = items
             .filter((a) => a.category === cat.key)
@@ -263,6 +263,26 @@ export function AchievementsGrid({ data }: { data: AchData }) {
           if (!group.length) return null;
           const all = data.achievements.filter((a) => a.category === cat.key);
           const done = all.filter((a) => a.earned).length;
+          if (collapsible) {
+            const filtered = onlyEarned || fRarity !== "alle";
+            return (
+              <details key={`${cat.key}-${filtered}`} open={filtered} className="group rounded-lg border border-line">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold">
+                  <span>{cat.icon}</span> {cat.label}
+                  <span className="ml-auto flex items-center gap-2 text-[11px] font-normal tabular-nums text-muted">
+                    <span className="hidden h-1.5 w-20 overflow-hidden rounded-full bg-surface-alt sm:block">
+                      <span className="block h-full rounded-full bg-accent" style={{ width: `${(done / all.length) * 100}%` }} />
+                    </span>
+                    {done}/{all.length}
+                    <span className="transition group-open:rotate-180">▾</span>
+                  </span>
+                </summary>
+                <div className="grid grid-cols-1 gap-2 px-3 pb-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {group.map((a) => <Tile key={a.id} a={a} onClick={() => setSel(a)} />)}
+                </div>
+              </details>
+            );
+          }
           return (
             <div key={cat.key}>
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">

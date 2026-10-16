@@ -67,10 +67,12 @@ const CAT: Record<string, string> = { lauf: "Laufen", kraft: "Kraft", pflege: "P
 // --- Talentbaum: eine Reihe je 10 Stufen, je eine von drei Optionen ------------------------
 export function HeroTalentTree({ data, onChoose }: { data: Hero; onChoose: (row: number, choice: string | null) => Promise<void> }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggle = (lvl: number) => setExpanded((prev) => { const n = new Set(prev); if (n.has(lvl)) n.delete(lvl); else n.add(lvl); return n; });
   const color = data.hero.class_color;
   async function pick(row: number, choice: string | null) {
     setBusy(`${row}:${choice}`);
-    try { await onChoose(row, choice); } finally { setBusy(null); }
+    try { await onChoose(row, choice); setExpanded((prev) => { const n = new Set(prev); n.delete(row); return n; }); } finally { setBusy(null); }
   }
   return (
     <Card>
@@ -89,14 +91,22 @@ export function HeroTalentTree({ data, onChoose }: { data: Hero; onChoose: (row:
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-1.5 @xl:grid-cols-3">
+                {!expanded.has(row.level) && !row.chosen && (
+                  <button type="button" onClick={() => toggle(row.level)} disabled={!row.unlocked}
+                          className="flex h-12 items-center justify-between rounded-md border border-dashed px-3 text-[12px] @xl:hidden"
+                          style={{ borderColor: row.unlocked ? "var(--wow-gold)" : "#3a2d1a", color: row.unlocked ? TIP_YELLOW : "#6b5a40" }}>
+                    {row.unlocked ? "Talent wählen" : `Ab Stufe ${row.level}`} <span>{row.unlocked ? "▾" : "🔒"}</span>
+                  </button>
+                )}
                 {row.options.map((o) => {
                   const chosen = row.chosen === o.key;
                   const dim = !row.unlocked || (row.chosen != null && !chosen);
+                  const narrowHidden = !expanded.has(row.level) && !chosen;
                   return (
                     <button key={o.key} type="button" disabled={!row.unlocked || busy != null}
                             onClick={() => pick(row.level, chosen ? null : o.key)}
                             title={row.unlocked ? (chosen ? "Klicken zum Abwählen" : "Klicken zum Wählen") : `Ab Stufe ${row.level}`}
-                            className={`flex min-w-0 items-center gap-2 rounded-md border p-1.5 text-left transition sm:p-2 ${chosen ? "wow-pulse" : ""}`}
+                            className={`min-w-0 items-center gap-2 rounded-md border p-1.5 text-left transition sm:p-2 ${chosen ? "wow-pulse" : ""} ${narrowHidden ? "hidden @xl:flex" : "flex"}`}
                             style={{ borderColor: chosen ? "var(--wow-gold)" : "#3a2d1a", opacity: dim ? 0.5 : 1,
                                      background: chosen ? `radial-gradient(circle at 20% 50%, color-mix(in srgb, ${color} 25%, transparent), #120e0a 70%)` : "#120e0a",
                                      ["--glow" as string]: "var(--wow-gold)", filter: row.unlocked ? undefined : "grayscale(1)" }}>
@@ -104,13 +114,18 @@ export function HeroTalentTree({ data, onChoose }: { data: Hero; onChoose: (row:
                             style={{ color: chosen ? TIP_YELLOW : "#a99c80", background: "#0b0907" }}>
                         <Icon size={17}>{row.unlocked ? TALENT_ICON[o.icon] : LOCK}</Icon>
                       </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block text-[12px] font-semibold leading-tight" style={{ color: chosen ? TIP_YELLOW : "var(--color-ink)" }}>{o.name}</span>
                         <span className="block text-[10px] leading-tight text-muted">{o.effect}</span>
                       </span>
                     </button>
                   );
                 })}
+                {row.chosen && row.unlocked && (
+                  <button type="button" onClick={() => toggle(row.level)} className="justify-self-start text-[11px] text-muted underline decoration-dotted underline-offset-4 @xl:hidden">
+                    {expanded.has(row.level) ? "zuklappen ▴" : "ändern ▾"}
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -71,8 +71,10 @@ const fmt = (key: string, v: number | null) => v == null ? "–" : key === "pace
 // --- Reittiere ----------------------------------------------------------------------------
 export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: string | null) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const [all, setAll] = useState(false);
   if (!data.mounts) return null;
   const owned = data.mounts.filter((m) => m.unlocked).length;
+  const shown = all ? data.mounts : [...data.mounts.filter((m) => m.unlocked), ...data.mounts.filter((m) => !m.unlocked).slice(0, 2)];
   async function pick(key: string | null) {
     setBusy(true);
     try { await onChoose(key); } finally { setBusy(false); }
@@ -80,17 +82,17 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
   return (
     <Card>
       <CardTitle title={`Reittiere · ${owned}/${data.mounts.length}`} sub="Freigeschaltet über deine Gesamt-km bzw. Arbeitssätze · eines reitet neben deiner Figur" />
-      <div className="grid gap-2 @lg:grid-cols-2 @3xl:grid-cols-3">
-        {data.mounts.map((m) => (
+      <div className="grid grid-cols-2 gap-2 @3xl:grid-cols-3">
+        {shown.map((m) => (
           <button key={m.key} type="button" disabled={!m.unlocked || busy} onClick={() => pick(m.chosen ? null : m.key)}
-                  className={`flex items-center gap-3 rounded-md border p-2 text-left transition hover:brightness-110 ${m.chosen ? "wow-pulse" : ""}`}
+                  className={`flex min-w-0 items-center gap-2 rounded-md border p-1.5 text-left transition hover:brightness-110 sm:gap-3 sm:p-2 ${m.chosen ? "wow-pulse" : ""}`}
                   style={{ borderColor: m.chosen ? "var(--wow-gold)" : m.unlocked ? "#6b5230" : "#2c2216", background: "#120e0a",
                            ["--glow" as string]: "var(--wow-gold)", opacity: m.unlocked ? 1 : 0.6 }}>
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-2xl" style={{ background: "#0b0907", filter: m.unlocked ? undefined : "grayscale(1) brightness(.5)" }}>{m.glyph}</span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-xl sm:h-11 sm:w-11 sm:text-2xl" style={{ background: "#0b0907", filter: m.unlocked ? undefined : "grayscale(1) brightness(.5)" }}>{m.glyph}</span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold" style={{ color: m.unlocked ? TIP_YELLOW : "#9d9d9d" }}>{m.name}</span>
+              <span className="block truncate text-[12px] font-semibold sm:text-[13px]" style={{ color: m.unlocked ? TIP_YELLOW : "#9d9d9d" }}>{m.name}</span>
               {m.unlocked
-                ? <span className="block text-[11px] text-muted">{m.chosen ? "Reitet mit dir · Klick zum Absteigen" : `seit ${dm(m.unlocked_on!)} · Klick zum Reiten`}</span>
+                ? <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
                 : <>
                     <span className="block text-[11px] text-muted">{de0(m.value)}/{de0(m.need)} {m.unit}</span>
                     <span className="mt-1 block h-1 overflow-hidden rounded-full bg-[#0a0807]"><span className="block h-full rounded-full bg-[#b36cf0]" style={{ width: `${(m.value / m.need) * 100}%` }} /></span>
@@ -99,6 +101,11 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
           </button>
         ))}
       </div>
+      {data.mounts.length > shown.length || all ? (
+        <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 text-[11px] text-muted underline decoration-dotted underline-offset-4">
+          {all ? "weniger zeigen ▴" : `alle ${data.mounts.length} anzeigen ▾`}
+        </button>
+      ) : null}
     </Card>
   );
 }
@@ -109,6 +116,7 @@ export function HeroSagaCard() {
   const [week, setWeek] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [more, setMore] = useState(false);
   useEffect(() => { api.heroSaga().then((r) => { setSaga(r.saga); setWeek(r.week); }).catch(() => {}); }, []);
   async function write() {
     setBusy(true); setErr(null);
@@ -127,7 +135,11 @@ export function HeroSagaCard() {
       {err && <p className="text-xs text-bad">{err}</p>}
       {saga ? (
         <div className="rounded-md border border-[#3a2d1a] bg-black/30 px-4 py-3 [&_h2]:font-display [&_h2]:text-[#ffd100]">
-          <Markdown>{saga.content}</Markdown>
+          <div className={`relative ${more ? "" : "max-h-44 overflow-hidden sm:max-h-none"}`}>
+            <Markdown>{saga.content}</Markdown>
+            {!more && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 sm:hidden" style={{ background: "linear-gradient(transparent, #120e0a)" }} />}
+          </div>
+          {!more && <button type="button" onClick={() => setMore(true)} className="mt-1 text-[12px] underline decoration-dotted underline-offset-4 sm:hidden" style={{ color: TIP_YELLOW }}>Weiterlesen ▾</button>}
           <p className="mt-2 text-[10px] text-muted">
             {current ? "Diese Woche" : `Woche ab ${saga.week ? dm(saga.week) : "?"}`} · geschrieben {new Date(saga.created_at).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
             {saga.cost_usd != null ? ` · ${saga.cost_usd.toFixed(4).replace(".", ",")} $` : ""}

@@ -243,3 +243,11 @@ body {
 .hero-spark { top: auto !important; bottom: -5%; animation: heroSpark 4s ease-out infinite; text-shadow: 0 0 6px currentColor; }
 @keyframes heroSpark { from { transform: translateY(0); opacity: 1 } to { transform: translateY(-300px); opacity: 0 } }
 @media (prefers-reduced-motion: reduce) { .hero-leaf, .hero-firefly, .hero-spark { animation: none; display: none; } }
+
+/* Heldenreise-Tabs auf dem Handy: klebende App-Leiste mit Symbol + Kurztext */
+@media (max-width: 639px) {
+  .wow-tabs { background: linear-gradient(180deg, #120e0a 85%, rgba(18, 14, 10, 0)); }
+  .wow-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 1px 5px; font-size: 9px; letter-spacing: 0; min-width: 0; overflow: hidden; }
+  .wow-tab-active { padding-bottom: 6px; }
+  .wow-tab-hint { top: -4px; right: 2px; }
+}
