@@ -204,6 +204,7 @@ export type Hero = {
   };
   xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus", number>;
   attributes: HeroAttribute[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; xp: number; level: number }[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;

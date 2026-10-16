@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Hero, HeroAttribute, HeroItem, HeroVault, Rarity } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de0, dm } from "@/lib/format";
+import { AttributeRadar, HeroFigure } from "@/components/HeroVisuals";
 
 // Farben/Tokens kommen aus dem .wow-Thema in globals.css.
 const rc = (r: Rarity) => `var(--rar-${r})`;
@@ -52,8 +53,11 @@ export type Gear = {
   equipBest: () => Promise<void>;
   dragging: string | null;
   setDragging: (slot: string | null) => void;
+  isNew: (itemId: string) => boolean;
+  markSeen: (itemId: string) => void;
 };
 const DRAG_TYPE = "application/x-hero-item";
+const SHEEN = new Set<Rarity>(["lila", "orange", "rot"]);
 const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
@@ -86,10 +90,10 @@ function useItemTip(gear?: Gear) {
   const worn = (item: HeroItem) => gear?.equipment[item.slot];
   const canEquip = (item: HeroItem) => !!gear && !item.equipped;
   const bind = (item: HeroItem) => ({
-    onMouseEnter: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
+    onMouseEnter: (e: React.MouseEvent) => { setTip({ item, x: e.clientX, y: e.clientY }); gear?.markSeen(item.id); },
     onMouseMove: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => setTip(null),
-    onClick: () => { setTip(null); setOpen(item); },
+    onClick: () => { setTip(null); setOpen(item); gear?.markSeen(item.id); },
     // Rechtsklick legt an wie in WoW.
     onContextMenu: canEquip(item) ? (e: React.MouseEvent) => { e.preventDefault(); setTip(null); gear!.equip(item.id); } : undefined,
     draggable: canEquip(item),
@@ -129,7 +133,7 @@ function useItemTip(gear?: Gear) {
   return { bind, node };
 }
 
-function Slot({ item, slot, bind, size = 44, upgrade = false }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number; upgrade?: boolean }) {
+function Slot({ item, slot, bind, size = 44, upgrade = false, isNew = false }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number; upgrade?: boolean; isNew?: boolean }) {
   if (!item) {
     return <span className="wow-slot text-[#4b3a22]" style={{ width: size, height: size }} title={slot ? `${SLOT_NAME[slot]} – leer` : undefined}>
       {slot && <Icon size={size * 0.45}>{SLOT_ICON[slot]}</Icon>}
@@ -137,7 +141,7 @@ function Slot({ item, slot, bind, size = 44, upgrade = false }: { item?: HeroIte
   }
   const col = rc(item.rarity);
   return <button type="button" {...bind} aria-label={item.name}
-                 className="wow-slot wow-slot-filled relative shrink-0 focus:outline-none focus-visible:ring-2"
+                 className={`wow-slot wow-slot-filled relative shrink-0 focus:outline-none focus-visible:ring-2 ${SHEEN.has(item.rarity) ? "wow-sheen" : ""} ${isNew ? "wow-new" : ""}`}
                  style={{ width: size, height: size, color: col, ["--glow" as string]: col }}>
     <Icon size={size * 0.5}>{SLOT_ICON[item.slot]}</Icon>
     {upgrade && <span className="absolute left-0.5 top-0 text-[11px] font-bold leading-none text-[#1eff00]" style={{ textShadow: "0 1px 1px #000" }} title="Verbesserung">▲</span>}
@@ -273,16 +277,26 @@ export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
           </button>
         )}
       </div>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-3">
         {column(LEFT_SLOTS)}
-        <div className="min-w-0 rounded-md border border-[#2c2216] bg-black/30 px-3 py-2">
-          <p className="mb-1 text-center font-display text-[11px] uppercase tracking-wider text-muted">
+        <div className="relative min-w-0 rounded-md border border-[#2c2216]"
+             style={{ background: `radial-gradient(ellipse at 50% 85%, color-mix(in srgb, ${data.hero.class_color} 22%, transparent), rgba(0,0,0,.35) 70%)` }}>
+          <p className="absolute inset-x-0 top-1.5 z-10 text-center font-display text-[11px] uppercase tracking-wider text-muted">
             Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{data.ilvl_avg ?? "–"}</b>
           </p>
-          <div className="wow-rule mb-1" />
-          {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
+          <div className="h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment} /></div>
         </div>
         {column(RIGHT_SLOTS)}
+      </div>
+      <div className="wow-rule my-4" />
+      <div className="grid items-center gap-3 sm:grid-cols-2">
+        <div>
+          <AttributeRadar items={data.attributes} color={data.hero.class_color} />
+          <p className="text-center text-[10px] text-muted">gestrichelt: vor 30 Tagen</p>
+        </div>
+        <div className="rounded-md border border-[#2c2216] bg-black/30 px-3 py-1">
+          {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
+        </div>
       </div>
       {node}
     </Card>
@@ -375,7 +389,7 @@ export function HeroBags({ items, gear }: { items: HeroItem[]; gear: Gear }) {
       <CardTitle title={`Taschen · ${loose.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. ▲ = besser als angelegt." />
       <div className="flex flex-wrap gap-1.5">
         {Array.from({ length: size }, (_, i) => loose[i]
-          ? <Slot key={loose[i].id} item={loose[i]} bind={bind(loose[i])} upgrade={loose[i].ilvl > (gear.equipment[loose[i].slot]?.ilvl ?? 0)} />
+          ? <Slot key={loose[i].id} item={loose[i]} bind={bind(loose[i])} upgrade={loose[i].ilvl > (gear.equipment[loose[i].slot]?.ilvl ?? 0)} isNew={gear.isNew(loose[i].id)} />
           : <span key={`empty-${i}`} className="wow-slot" />)}
       </div>
       {node}
@@ -427,5 +441,32 @@ export function HeroRules({ data }: { data: Hero }) {
         <li>Alltag: Schritte über 5.000, Rad und Gehen. Erfolge zählen mit ihren Punkten.</li>
       </ul>
     </Card>
+  );
+}
+
+// --- Truhe öffnen: Lichtstrahlen, Gegenstand springt heraus --------------------------------
+export function LootReveal({ item, onClose }: { item: HeroItem; onClose: () => void }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onClose]);
+  const col = rc(item.rarity);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Beute: ${item.name}`} onClick={onClose}
+         className="ach-fade fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black/75 p-4">
+      <div className="relative grid w-full max-w-sm place-items-center" onClick={(e) => e.stopPropagation()}>
+        <div className="wow-rays pointer-events-none absolute left-1/2 top-[48px] h-[420px] w-[420px] -ml-[210px] -mt-[210px] rounded-full"
+             style={{ ["--ray" as string]: `color-mix(in srgb, ${col} 45%, transparent)` }} />
+        <div className="wow-pop relative"><Slot item={item} size={96} /></div>
+        <div className="wow-rise relative mt-5 w-full">
+          <p className="mb-2 text-center font-display text-xs uppercase tracking-[.3em] text-muted">Ihr erhaltet Beute</p>
+          <div className="wow-tip"><ItemTooltipBody item={item} /></div>
+          <div className="mt-4 text-center">
+            <button type="button" autoFocus onClick={onClose} className={BTN} style={BTN_STYLE}>Einsacken</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

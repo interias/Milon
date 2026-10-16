@@ -283,6 +283,22 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date) -> dict:
     return {"entries": entries, "pool": pool, "totals": totals, "daily": daily}
 
 
+def progression(entries: list[dict], daily: dict[date, dict]) -> list[dict]:
+    """Wochenweise: EP je Quelle, kumulierte EP und Stufe (mit Bruchteil) am Wochenende."""
+    weeks: dict[date, dict] = {}
+    for d, v in daily.items():
+        w = weeks.setdefault(_monday(d), {"laufen": 0.0, "kraft": 0.0, "alltag": 0.0, "erfolge": 0.0, "ruhebonus": 0.0})
+        for k in w:
+            w[k] += v[k]
+    out, total = [], 0.0
+    for wk in sorted(weeks):
+        total += sum(weeks[wk].values())
+        lv = level_for(total)
+        out.append({"week": wk.isoformat(), **{k: round(v) for k, v in weeks[wk].items()},
+                    "xp": round(total), "level": round(lv["level"] + lv["progress"], 2)})
+    return out
+
+
 def _level_events(entries: list[dict]) -> list[dict]:
     events, xp, level = [], 0.0, 1
     for e in entries:
@@ -458,6 +474,15 @@ _FLAVOR = {
     "rot": "Ein Artefakt. Darüber wird man in den Tavernen singen.",
 }
 
+_CHEST_FLAVOR = {
+    "truhe": "Aus der Wochentruhe gehoben – der Lohn einer treuen Laufwoche.",
+    "veteran": "Ein Erbstück deiner bisherigen Reise, lange vor dem ersten Drop verdient.",
+}
+
+
+def flavor(rarity: str, source: str) -> str:
+    return _CHEST_FLAVOR.get(source) or _FLAVOR[rarity]
+
 
 def _season(m: int) -> str:
     return "Winter" if m in (12, 1, 2) else "Frühling" if m in (3, 4, 5) else "Sommer" if m in (6, 7, 8) else "Herbst"
@@ -475,7 +500,7 @@ def make_item(rng: random.Random, rarity: str, when: datetime, zone, level: int,
     name = f"{rng.choice(bases)} {rng.choice(candidates)}"
     ilvl = 100 + 2 * level + 8 * RARITIES.index(rarity) + rng.randint(0, 3)
     return {"name": name, "slot": slot, "slot_label": slot_label, "rarity": rarity,
-            "rarity_label": RARITY_LABEL[rarity], "ilvl": ilvl, "flavor": _FLAVOR[rarity],
+            "rarity_label": RARITY_LABEL[rarity], "ilvl": ilvl, "flavor": flavor(rarity, source),
             "source": source, "reason": reason, "date": when.date().isoformat()}
 
 
@@ -617,7 +642,8 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
 
 # --- Ausrüstung ------------------------------------------------------------------------
 def _inventory(drops_: list[dict], claims: dict[str, HeroClaim]) -> list[dict]:
-    claimed = [{**json.loads(c.item_json), "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
+    claimed = [{**(it := json.loads(c.item_json)), "flavor": flavor(it["rarity"], it["source"]),
+                "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
     return sorted(drops_ + claimed, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
 
 
@@ -731,6 +757,7 @@ def overview(today: date | None = None) -> dict:
             "rested": round(book["pool"]), "rested_cap": REST_CAP, "week_xp": round(week_xp),
         },
         "xp_sources": {k: round(v) for k, v in book["totals"].items()},
+        "progression": progression(entries, book["daily"]),
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"]),
         "inventory": inventory,
