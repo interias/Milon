@@ -6,6 +6,7 @@ import { api, type Achievements, type Hero, type HeroItem } from "@/lib/api";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
+import { HeroQuestLog, HeroTalentTree } from "@/components/HeroTalents";
 import { AchievementsGrid, AchievementsSummary } from "@/components/Achievements";
 
 const cinzel = Cinzel({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-cinzel" });
@@ -62,8 +63,12 @@ export default function Heldenreise() {
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
             <HeroCharacter data={hero} gear={gear} />
-            <HeroVaultCard data={hero} onClaim={claim} />
+            <div className="space-y-4">
+              <HeroVaultCard data={hero} onClaim={claim} />
+              <HeroQuestLog data={hero} />
+            </div>
           </div>
+          <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />
           <HeroBags items={hero.inventory} gear={gear} />
           <HeroChronicle data={hero} />
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">

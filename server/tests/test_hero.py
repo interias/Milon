@@ -204,3 +204,41 @@ def test_choose_spec_and_buffs(hero_db, monkeypatch):
     client.post("/hero/spec", json={"spec": None})
     o = hero.overview(TODAY)
     assert o["hero"]["spec_chosen"] is None and o["hero"]["spec"] == o["hero"]["spec_auto"]
+
+
+def test_week_quests_progress_halving_and_pick():
+    from app import hero_quests
+    week = date(2026, 10, 12)
+    assert hero_quests.pick(week, "tempo", None) == hero_quests.pick(week, "tempo", None)
+    assert len(hero_quests.pick(week, None, "kraft")) == 4
+    runs = runs_frame([{"external_id": f"r{i}", "started_at": datetime(2026, 10, 12 + i, 7), "distance_km": 11.0,
+                        "dur_min": 66.0, "zone": 1} for i in range(3)])
+    data = {"runs": runs, "workouts": pd.DataFrame(columns=["id", "started_at", "sets", "day"]), "steps": {},
+            "sick": set(), "protein": {}, "protein_target": None, "sleep": {}}
+    monkey = hero_quests.pick
+    try:
+        hero_quests.pick = lambda w, s, e: ["lang1", "km20", "laeufe3"]
+        wk = hero_quests.week_quests(week, None, None, data, date(2026, 10, 16))
+        assert [q["done_on"] for q in wk["quests"]] == ["2026-10-12", "2026-10-13", "2026-10-14"] and wk["complete"]
+        sick = {**data, "sick": {date(2026, 10, d) for d in (15, 16, 17)}}
+        wk = hero_quests.week_quests(week, None, None, {**sick, "runs": runs.iloc[:1]}, date(2026, 10, 16))
+        assert wk["halved"] and [q["target"] for q in wk["quests"]] == [1, 10, 2]
+    finally:
+        hero_quests.pick = monkey
+
+
+def test_talent_effects_and_api(hero_db, monkeypatch):
+    mods = hero.Mods(talents={10: [{"from": "2026-10-01", "value": "morgen"}], 30: [{"from": "2026-10-01", "value": "langer_atem"}]})
+    early = pd.Series({"started_at": pd.Timestamp("2026-10-06 07:00")})
+    late = pd.Series({"started_at": pd.Timestamp("2026-10-06 19:00")})
+    assert mods.run_talent(date(2026, 10, 6), early, False) == 0.10 and mods.run_talent(date(2026, 10, 6), late, False) == 0.0
+    assert mods.rest_cap(date(2026, 10, 6)) == 360 and mods.rest_cap(date(2026, 9, 30)) == hero.REST_CAP
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    assert client.post("/hero/talent", json={"row": 10, "choice": "flugmodus"}).status_code == 422
+    assert client.post("/hero/talent", json={"row": 10, "choice": "morgen"}).status_code == 409  # Stufe 1
+    monkeypatch.setattr(hero, "_load", lambda today: {"level": 12})
+    assert client.post("/hero/talent", json={"row": 10, "choice": "morgen"}).status_code == 200
+    assert hero._active(hero._history("talent_10"), TODAY) == "morgen"

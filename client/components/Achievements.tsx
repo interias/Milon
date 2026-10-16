@@ -186,7 +186,7 @@ export function AchievementsSummary({ data, showLevel = true }: { data: AchData;
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: rc("rot") }}>
             🔴 Artefakt-Vorschau · Fernziele
           </p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="flex w-0 min-w-full gap-2 overflow-x-auto pb-1">
             {artifacts.map((a) => (
               <button
                 key={a.id} type="button" onClick={() => setSel(a)} title={`${a.name} — ${a.desc}`}
