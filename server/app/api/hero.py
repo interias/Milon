@@ -133,3 +133,18 @@ def choose_mount(body: TitleInput) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"key": body.key}
+
+
+@router.get("/saga")
+def get_saga() -> dict:
+    from .. import hero_saga
+    return {"saga": hero_saga.latest(), "week": hero_saga.saga_week(hero.local_today()).isoformat()}
+
+
+@router.post("/saga")
+def write_saga() -> dict:
+    from .. import hero_saga
+    try:
+        return {"saga": hero_saga.generate(hero.overview(), hero.local_today())}
+    except Exception as exc:  # noqa: BLE001 -- LLM/Netz/fehlender Key
+        raise HTTPException(status_code=502, detail=f"Saga konnte nicht geschrieben werden: {exc}") from exc

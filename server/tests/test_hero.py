@@ -369,3 +369,23 @@ def test_duels_shadows_and_mounts():
     mounts = {m["key"]: m for m in hero_extras.mounts(many, wo, "schlachtross")}
     assert mounts["schlachtross"]["unlocked_on"] == "2026-08-17" and mounts["schlachtross"]["chosen"]
     assert mounts["kriegsbaer"]["unlocked"] and not mounts["mammut"]["unlocked"] and mounts["nebelwolf"]["value"] == 600
+
+
+def test_saga_week_facts_and_storage(hero_db, monkeypatch):
+    from app import hero_saga
+    from app.coach import client
+    assert hero_saga.saga_week(date(2026, 10, 13)) == date(2026, 10, 5)  # Dienstag → Vorwoche
+    assert hero_saga.saga_week(TODAY) == date(2026, 10, 12)
+    monkeypatch.setattr(hero_saga, "engine", hero_db)
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        add_run(session, datetime(2026, 10, 13, 7), km=10.5)
+        session.commit()
+    o = hero.overview(TODAY)
+    f = hero_saga.facts(o, date(2026, 10, 12), TODAY)
+    assert f["zeitraum"] == "2026-10-12 bis 2026-10-16" and f["begleiter"]["name"] and any("Beute" in e or "Instanz" in e for e in f["ereignisse"])
+    seen = {}
+    monkeypatch.setattr(client, "complete", lambda messages, temperature=0.4: (seen.setdefault("m", messages) and "## Saga\nText", {"cost": 0.002}))
+    saga = hero_saga.generate(o, TODAY)
+    assert saga["content"].startswith("## Saga") and saga["week"] == "2026-10-12" and saga["cost_usd"] == 0.002
+    assert "ZEITRAUM: 2026-10-12" in seen["m"][1]["content"] and hero_saga.latest()["content"] == saga["content"]

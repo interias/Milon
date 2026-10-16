@@ -195,6 +195,7 @@ export type HeroVault = {
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
 export type HeroDaily = { date: string; key: string; title: string; goal: string; done: boolean; sick: boolean };
+export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
 export type Hero = {
   today: string; start: string;
@@ -456,6 +457,8 @@ export const api = {
   heroTalent: (row: number, choice: string | null) => post<{ row: number; choice: string | null }>("/hero/talent", { row, choice }),
   heroTitle: (key: string | null) => post<{ key: string | null }>("/hero/title", { key }),
   heroMount: (key: string | null) => post<{ key: string | null }>("/hero/mount", { key }),
+  heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
+  heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),
   heroUpgrade: (itemId: string) => post<{ item: HeroItem }>("/hero/upgrade", { item_id: itemId }),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
