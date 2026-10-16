@@ -18,6 +18,14 @@ def _pace(p: float | None) -> str:
     return f"{m}:{s:02d} min/km"
 
 
+def _hero() -> dict:
+    from .. import hero
+    try:
+        return hero.coach_summary()
+    except Exception:  # noqa: BLE001 -- Spiel-Ebene darf den Coach nie sperren
+        return {}
+
+
 def build_snapshot() -> dict:
     from .. import garmin_daily
 
@@ -41,6 +49,7 @@ def build_snapshot() -> dict:
         "checkins": checkins.summary(30),
         "wochenmassnahmen": coach_actions.coach_context(),
         "garmin_erholung": garmin_daily.coach_summary(14),
+        "heldenreise": _hero(),
     }
 
 
@@ -117,6 +126,14 @@ def snapshot_text() -> str:
     if snap.get("garmin_erholung"):
         lines.append("GARMIN ERHOLUNG (Schätzungen, Messdaten beachten): "
                      + json.dumps(snap["garmin_erholung"], ensure_ascii=False, allow_nan=False))
+    if snap.get("heldenreise"):
+        hr = snap["heldenreise"]
+        lines.append(f"HELDENREISE (Spiel-Ebene, nur beiläufig erwähnen): {hr['klasse']}"
+                     + (f" / {hr['spezialisierung']}" if hr.get("spezialisierung") else "")
+                     + f", Level {hr['level']} ({hr['titel']}), noch {hr['xp_bis_level']} XP; "
+                     f"Wochentruhe: {hr['truhe_laeufe_diese_woche']} Läufe"
+                     + (f", nächster Slot bei {hr['truhe_naechster_slot_bei']}" if hr.get("truhe_naechster_slot_bei") else ", alle Slots offen")
+                     + ".")
     if snap.get("wochenmassnahmen"):
         lines.append("ÜBERNOMMENE WOCHENMASSNAHMEN (Nutzerentscheidung und Rückmeldung; "
                      "beobachtete Unterschiede sind kein Wirkungsnachweis): "

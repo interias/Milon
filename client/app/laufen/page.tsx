@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, type RunWeekOverview, type VolPoint, type BestEfforts, type Achievements } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
 import { Bars } from "@/components/charts";
-import { AchievementsSummary, AchievementsGrid } from "@/components/Achievements";
 import { StandardizedRunHr } from "@/components/StandardizedRunHr";
 import { RunAnalysisSettings } from "@/components/RunAnalysisSettings";
 import { RunningFitness } from "@/components/RunningFitness";
@@ -16,7 +16,7 @@ import { RunReferenceCard } from "@/components/RunReference";
 import { RunningLoad } from "@/components/RunningLoad";
 import { de, de0, dm, dur } from "@/lib/format";
 
-type Panel = "analyses" | "achievements" | "records" | null;
+type Panel = "analyses" | "records" | null;
 const linkClass = "py-2 text-xs text-muted underline underline-offset-4";
 const delta = (current: number, previous: number, digits = 0) => `${current > previous ? "+" : ""}${de(current - previous, digits)}`;
 
@@ -135,14 +135,13 @@ export default function Laufen() {
         </> : <p className="text-xs text-muted">Noch keine Bestzeiten verfügbar.</p>}
         <p className="mt-2 text-[11px] text-muted">Schnellster Abschnitt innerhalb eines Laufs</p>
         {ach && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-          <p className="text-sm"><strong>{ach.summary.earned} Erfolge</strong><span className="text-muted"> · {ach.summary.title} · {de0(ach.summary.points)} Punkte</span></p>
-          <button className={linkClass} onClick={() => setPanel("achievements")}>Alle Erfolge</button>
+          <p className="text-sm"><strong>{ach.summary.earned} Erfolge</strong><span className="text-muted"> · {de0(ach.summary.points)} Punkte · Level, Beute & Truhe in der Heldenreise</span></p>
+          <Link className={linkClass} href="/heldenreise#erfolge">Zur Heldenreise</Link>
         </div>}
       </Card>
     </section>
     {extrasError && <p role="status" className="mt-3 text-xs text-muted">Einige Zusatzdaten konnten nicht geladen werden. Bitte die Seite neu laden.</p>}
     {panel === "analyses" && <RunAnalysisDialog title="Weitere Laufanalysen" onClose={() => setPanel(null)}><RunningMoreAnalyses /></RunAnalysisDialog>}
-    {panel === "achievements" && ach && <RunAnalysisDialog title="Alle Erfolge" onClose={() => setPanel(null)}><AchievementsSummary data={ach} /><div className="mt-5"><AchievementsGrid data={ach} /></div></RunAnalysisDialog>}
     {panel === "records" && <RunAnalysisDialog title="Rekorddetails" onClose={() => setPanel(null)}>
       <dl className="space-y-4 text-sm">
         <div><dt className="text-muted">Längster Lauf</dt><dd>{best?.records?.longest_run ? `${de(best.records.longest_run.km, 1)} km · ${dm(best.records.longest_run.date)}` : "Noch kein Wert"}</dd></div>

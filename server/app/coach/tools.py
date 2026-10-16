@@ -94,7 +94,11 @@ TOOLS = [
     _fn("get_run_achievements", "Lauf-Achievements (sammelbare Trophaeen, WoW-Style): summary "
         "(Gesamtpunkte, erreichte/gesamte Trophaeen, Laeufer-Level+Titel), Liste der erreichten "
         "Erfolge und 'almost' (fast geschafft, hoechster Fortschritt) — gut zum Motivieren."),
-    _fn("get_strength_summary", "Kraft-Ueberblick: Hauptuebungen mit e1RM/Peak/Saetzen, Wochen-Tonnage, Durchschnitts-RPE."),
+    _fn("get_hero", "Heldenreise (Gamification, WoW-Stil): Klasse/Spezialisierung, Level, XP bis "
+        "zum naechsten Level, Ruhebonus, Wochentruhe (Laeufe diese Woche, naechster Slot bei N "
+        "Laeufen) und Attribute 0-100. Nur beilaeufig erwaehnen, wenn es motiviert — sachliche "
+        "Analyse geht vor."),
+    _fn("get_strength_summary","Kraft-Ueberblick: Hauptuebungen mit e1RM/Peak/Saetzen, Wochen-Tonnage, Durchschnitts-RPE."),
     _fn("get_tonnage", "Wochen-Tonnage (kg) der letzten N Wochen.", {"weeks": {"type": "integer"}}),
     _fn("get_rpe_trend", "Woechentlicher Durchschnitts-RPE (Ermuedungssignal).", {"weeks": {"type": "integer"}}),
     _fn("get_e1rm_trend", "e1RM-Verlauf einer bestimmten Uebung.",
@@ -180,6 +184,9 @@ def dispatch(name: str, args: dict):
         return run_zones.zones()
     if name == "get_run_records":
         return running.best_efforts()
+    if name == "get_hero":
+        from .. import hero
+        return hero.coach_summary()
     if name == "get_run_achievements":
         r = achievements.evaluate()
         earned = [{"name": a["name"], "points": a["points"], "date": a["earned_date"]}

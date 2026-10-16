@@ -1,0 +1,138 @@
+from datetime import date, datetime, timedelta
+
+import pandas as pd
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine
+
+from app import hero
+from app.api import hero as hero_api
+from app.checkins import CheckIn
+from app.models import ExerciseSession, RunBestEffort, StepsDaily, Workout, WorkoutSet
+
+TODAY = date(2026, 10, 16)  # Freitag
+
+
+@pytest.fixture
+def hero_db(tmp_path, monkeypatch):
+    engine = create_engine(f"sqlite:///{tmp_path / 'hero.db'}", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    monkeypatch.setattr(hero, "engine", engine)
+    monkeypatch.setattr(hero, "_achievement_xp", lambda: [])
+    monkeypatch.setattr(hero, "_strength_series", lambda: [])
+    yield engine
+    engine.dispose()
+
+
+def add_run(session, started, km=8.0, minutes=48, hr=140, ext=None):
+    session.add(ExerciseSession(exercise_type=33, started_at=started, ended_at=started + timedelta(minutes=minutes),
+                                distance_km=km, avg_hr=hr, max_hr=hr + 20, external_id=ext or f"run-{started}"))
+
+
+def runs_frame(rows):
+    df = pd.DataFrame(rows)
+    df["started_at"] = pd.to_datetime(df["started_at"])
+    df["day"] = df["started_at"].dt.date
+    df["key"] = df["external_id"]
+    return df
+
+
+def test_level_curve_titles_and_cap():
+    assert hero.level_for(0)["level"] == 1 and hero.level_for(999)["level"] == 1
+    lv = hero.level_for(1000)
+    assert (lv["level"], lv["floor"], lv["next"]) == (2, 1000, 2025)
+    assert hero.level_for(10**9)["level"] == hero.MAX_LEVEL and hero.level_for(10**9)["title"] == "Mythos"
+
+
+def test_ledger_rested_bonus_and_weekly_diminishing():
+    monday = date(2026, 10, 5)
+    runs = runs_frame([{"external_id": f"r{i}", "started_at": datetime(2026, 10, 5 + i, 7), "distance_km": 5.0,
+                        "dur_min": 30.0, "zone": 1} for i in range(5)])
+    empty = pd.DataFrame(columns=["id", "started_at", "sets", "day"])
+    book = hero.ledger(runs, empty, {}, {}, set(), [], monday + timedelta(days=6))
+    xp = [round(e["xp"]) for e in book["entries"]]
+    assert xp == [72, 72, 72, 72, 36]  # 30 min × 1,2 × 2; 5. Lauf der Woche halb
+    assert all(e["bonus"] == 0 for e in book["entries"])  # vor dem ersten Lauf kein Ruhetag
+    assert book["pool"] == 2 * hero.REST_PER_DAY  # Sa + So geruht
+    # Zwei Krankheitstage laden den Bonus, der nächste Lauf wird verdoppelt.
+    later = runs_frame([{"external_id": "a", "started_at": datetime(2026, 10, 12, 7), "distance_km": 5.0,
+                         "dur_min": 30.0, "zone": 1},
+                        {"external_id": "b", "started_at": datetime(2026, 10, 15, 7), "distance_km": 5.0,
+                         "dur_min": 30.0, "zone": 1}])
+    book = hero.ledger(later, empty, {}, {}, {date(2026, 10, 13), date(2026, 10, 14)}, [], date(2026, 10, 15))
+    assert [round(e["bonus"]) for e in book["entries"]] == [0, 72]
+
+
+def test_class_and_spec_from_ninety_days():
+    d = date(2026, 10, 16)
+    runs = runs_frame([{"external_id": f"r{i}", "started_at": datetime(2026, 9, 1) + timedelta(days=3 * i),
+                        "distance_km": 6.0, "dur_min": 40.0, "zone": 1} for i in range(10)])
+    daily = {r.day: {"laufen": 96.0, "kraft": 0.0, "alltag": 5.0, "erfolge": 0, "ruhebonus": 0} for r in runs.itertuples()}
+    c = hero.classify(daily, runs, d)
+    assert c["class"] == "jaeger" and c["spec"] == "ausdauer"
+    for i in range(8):
+        daily[date(2026, 9, 2) + timedelta(days=3 * i)] = {"laufen": 0, "kraft": 400.0, "alltag": 0, "erfolge": 0, "ruhebonus": 0}
+    assert hero.classify(daily, runs, d)["class"] == "krieger"
+    assert hero.classify({}, runs.iloc[:0], d)["class"] == "moench"
+
+
+def test_drop_rarity_rules_and_deterministic_items():
+    base = {"external_id": "x", "started_at": pd.Timestamp("2026-10-16 07:00"), "distance_km": 8.0,
+            "dur_min": 48.0, "ef": 1.2, "zone": 1}
+    prior = runs_frame([{**base, "external_id": f"p{i}", "started_at": pd.Timestamp("2026-10-01") + pd.Timedelta(days=i),
+                         "ef": 1.0 + i / 100} for i in range(5)])
+    efforts = pd.DataFrame([
+        {"external_id": "p0", "distance_m": 5000, "seconds": 1700.0, "started_at": pd.Timestamp("2026-10-01")},
+        {"external_id": "x", "distance_m": 5000, "seconds": 1650.0, "started_at": pd.Timestamp("2026-10-16 07:00")}])
+    run = pd.Series(base)
+    assert hero.drop_rarity(run, prior, efforts)[0] == "orange"
+    assert hero.drop_rarity(run, prior, efforts.iloc[:1])[0] == "blau"  # EF über dem 75. Perzentil
+    assert hero.drop_rarity(pd.Series({**base, "distance_km": 2.5}), prior, efforts)[0] == "grau"
+    assert hero.drop_rarity(pd.Series({**base, "distance_km": 21.2, "dur_min": 130}), prior, efforts)[0] == "rot"
+    a = hero.make_item(hero._rng("drop", "x"), "blau", datetime(2026, 10, 16, 7), 1, 40, "beute", "")
+    b = hero.make_item(hero._rng("drop", "x"), "blau", datetime(2026, 10, 16, 7), 1, 40, "beute", "")
+    assert a == b and a["rarity_label"] == "Selten"
+
+
+def test_vault_drops_and_claim_flow(hero_db):
+    with Session(hero_db) as session:
+        session.add(hero.HeroState(key="start", value="2026-10-05"))
+        for day in (5, 7, 9):  # Woche 05.–11.10.: 3 Läufe → Slots 1 und 2
+            add_run(session, datetime(2026, 10, day, 7))
+        add_run(session, datetime(2026, 10, 13, 7))  # aktuelle Woche: 1 Lauf
+        for day in (14, 15):
+            session.add(CheckIn(day=date(2026, 10, day), sick=True, updated_at=datetime(2026, 10, day)))
+        session.add(StepsDaily(day=date(2026, 10, 6), steps=11000))
+        w = Workout(started_at=datetime(2026, 10, 8, 18), source="hevy")
+        session.add(w)
+        session.commit()
+        session.add(WorkoutSet(workout_id=w.id, exercise="Squat", set_type="normal", weight_kg=80, reps=5))
+        session.commit()
+    o = hero.overview(TODAY)
+    assert len([i for i in o["inventory"] if i["source"] == "beute"]) == 4
+    assert o["hero"]["class"] in hero.CLASSES and o["hero"]["level"] >= 1
+    cur = o["vault"]["current"]
+    assert cur["sick_days"] == 2 and [s["threshold"] for s in cur["slots"]] == [1, 2, 3]  # Krankheit senkt Schwellen
+    past = o["vault"]["claimable"][0]
+    assert past["week"] == "2026-10-05" and [s["unlocked"] for s in past["slots"]] == [True, True, False]
+    assert o["vault"]["veteran"] is not None
+
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    hero_today = hero.local_today
+    try:
+        hero.local_today = lambda: TODAY
+        assert client.post("/hero/vault/claim", json={"week": "2026-10-05", "slot": 2}).status_code == 422
+        assert client.post("/hero/vault/claim", json={"week": "2026-10-12", "slot": 0}).status_code == 422
+        item = client.post("/hero/vault/claim", json={"week": "2026-10-05", "slot": 1}).json()["item"]
+        assert item == past["slots"][1]["item"]
+        assert client.post("/hero/vault/claim", json={"week": "2026-10-05", "slot": 0}).status_code == 409
+        assert client.post("/hero/vault/claim", json={"week": "veteran", "slot": 2}).status_code == 200
+        after = hero.overview(TODAY)
+    finally:
+        hero.local_today = hero_today
+    assert after["vault"]["claimable"] == [] and after["vault"]["veteran"] is None
+    assert {i["source"] for i in after["inventory"]} == {"beute", "truhe", "veteran"}
+    assert any(e["kind"] == "truhe" for e in after["log"])

@@ -98,6 +98,16 @@ def get_run_heart_rate(weeks: int = 12) -> list:
 
 
 @mcp.tool()
+def get_hero() -> dict:
+    """Heldenreise (Gamification im WoW-Stil): Klasse + Lauf-Spezialisierung (90 Tage), Level/XP,
+    Ruhebonus, Attribute 0–100 (aus VO₂max, 5-km-Zeit, Kraftindex, Trainingstagen, Schlaf,
+    Schritten), Wochentruhe (Slots bei 1/3/4 Läufen) und Inventar. Spiel-Ebene — die echten
+    Kennzahlen kommen aus den übrigen Tools."""
+    from .. import hero
+    return hero.overview()
+
+
+@mcp.tool()
 def get_run_achievements() -> dict:
     """Lauf-Achievements (sammelbare Trophäen, WoW-Style): summary (Gesamtpunkte, erreichte/
     gesamte Trophäen, Läufer-Level + Titel) + vollständige Liste aller Erfolge mit earned-Status,
