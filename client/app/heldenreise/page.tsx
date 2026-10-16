@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Cinzel } from "next/font/google";
 import { api, type Achievements, type Hero } from "@/lib/api";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
-import { HeroAttributes, HeroHeader, HeroInventory, HeroLog, HeroRules, HeroVaultCard } from "@/components/Hero";
+import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard } from "@/components/Hero";
 import { AchievementsGrid, AchievementsSummary } from "@/components/Achievements";
+
+const cinzel = Cinzel({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-cinzel" });
 
 export default function Heldenreise() {
   const [hero, setHero] = useState<Hero | null>(null);
@@ -17,24 +20,26 @@ export default function Heldenreise() {
   }, [load]);
   const claim = useCallback(async (week: string, slot: number) => { await api.heroClaim(week, slot); await load(); }, [load]);
 
-  if (err) return <><PageTitle title="Heldenreise" /><ApiError error={err} /></>;
-  if (!hero) return <><PageTitle title="Heldenreise" /><Loading /></>;
-  return <>
-    <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Level, Beute und Erfolge aus echten Daten" />
-    <div className="space-y-4">
-      <HeroHeader data={hero} />
-      <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-        <HeroVaultCard data={hero} onClaim={claim} />
-        <HeroAttributes items={hero.attributes} />
-      </div>
-      <HeroInventory items={hero.inventory} />
-      <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-        <HeroLog data={hero} />
-        <HeroRules data={hero} />
-      </div>
-      <section id="erfolge" className="scroll-mt-20" aria-label="Erfolge">
-        {ach ? <><AchievementsSummary data={ach} showLevel={false} /><div className="mt-4"><AchievementsGrid data={ach} /></div></> : <Loading />}
-      </section>
+  return (
+    <div className={`wow ${cinzel.variable}`}>
+      <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
+      {err ? <ApiError error={err} /> : !hero ? <Loading /> : (
+        <div className="space-y-4">
+          <HeroHeader data={hero} />
+          <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
+            <HeroCharacter data={hero} />
+            <HeroVaultCard data={hero} onClaim={claim} />
+          </div>
+          <HeroBags items={hero.inventory} />
+          <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
+            <HeroLog data={hero} />
+            <HeroRules data={hero} />
+          </div>
+          <section id="erfolge" className="scroll-mt-20" aria-label="Erfolge">
+            {ach ? <><AchievementsSummary data={ach} showLevel={false} /><div className="mt-4"><AchievementsGrid data={ach} /></div></> : <Loading />}
+          </section>
+        </div>
+      )}
     </div>
-  </>;
+  );
 }

@@ -71,10 +71,10 @@ TITLES = [(1, "Frischling"), (10, "Anwärter"), (20, "Streiter"), (30, "Veteran"
           (50, "Champion"), (60, "Meister"), (70, "Legende"), (80, "Mythos")]
 
 CLASSES = {
-    "krieger": {"label": "Krieger", "color": "#a07a52", "desc": "Kraft dominiert dein Training."},
-    "paladin": {"label": "Paladin", "color": "#d16a9e", "desc": "Kraft und Laufen halten sich die Waage."},
-    "jaeger": {"label": "Jäger", "color": "#5f8f2f", "desc": "Laufen dominiert dein Training."},
-    "moench": {"label": "Mönch", "color": "#00a37a", "desc": "Alltagsbewegung trägt dich – wenig gezieltes Training."},
+    "krieger": {"label": "Krieger", "color": "#c69b6d", "desc": "Kraft dominiert dein Training."},
+    "paladin": {"label": "Paladin", "color": "#f48cba", "desc": "Kraft und Laufen halten sich die Waage."},
+    "jaeger": {"label": "Jäger", "color": "#aad372", "desc": "Laufen dominiert dein Training."},
+    "moench": {"label": "Mönch", "color": "#00ff98", "desc": "Alltagsbewegung trägt dich – wenig gezieltes Training."},
 }
 SPECS = {
     "ausdauer": {"label": "Druide · Ausdauer", "desc": "Überwiegend locker in Zone 1–2."},
@@ -263,7 +263,7 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date) -> dict:
             day_xp["alltag"] += everyday
         for pts, name in ach_by_day.get(d, []):
             entries.append({"date": d, "kind": "erfolg", "xp": float(pts), "bonus": 0.0, "ref": None,
-                            "label": f"Erfolg „{name}“"})
+                            "label": f"Erfolg „{name}“", "name": name})
             day_xp["erfolge"] += pts
         if d in sick or not trained:
             pool = min(REST_CAP, pool + REST_PER_DAY)
@@ -281,7 +281,8 @@ def _level_events(entries: list[dict]) -> list[dict]:
         lv = level_for(xp)
         if lv["level"] > level:
             level = lv["level"]
-            events.append({"date": e["date"], "kind": "level", "text": f"Level {level} erreicht – {lv['title']}"})
+            events.append({"date": e["date"], "kind": "level", "text": f"Level {level} erreicht – {lv['title']}",
+                           "name": lv["title"], "level": level})
     return events
 
 
@@ -328,7 +329,7 @@ def _class_events(daily, runs, first: date, today: date) -> list[dict]:
         cur = (c["class"], c["spec"])
         if prev is not None and cur != prev:
             label = CLASSES[c["class"]]["label"] + (f" ({SPECS[c['spec']]['label']})" if c["spec"] else "")
-            events.append({"date": at, "kind": "klasse", "text": f"Klassenwechsel: jetzt {label}"})
+            events.append({"date": at, "kind": "klasse", "text": f"Klassenwechsel: jetzt {label}", "name": label})
         prev = cur
         d += timedelta(days=7)
     return events
@@ -638,13 +639,16 @@ def overview(today: date | None = None) -> dict:
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
-    log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)"}
+    log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
+                    "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
     log_events += [{"date": date.fromisoformat(it["date"]), "kind": "beute",
-                    "text": f"Beute: {it['name']} ({it['rarity_label']})", "rarity": it["rarity"]} for it in data["drops"]]
+                    "text": f"Beute: {it['name']} ({it['rarity_label']})", "rarity": it["rarity"], "name": it["name"]}
+                   for it in data["drops"]]
     log_events += [{"date": c.claimed_at.date(), "kind": "truhe",
                     "text": f"Truhe gewählt: {json.loads(c.item_json)['name']}",
-                    "rarity": json.loads(c.item_json)["rarity"]} for c in claims.values()]
+                    "rarity": json.loads(c.item_json)["rarity"], "name": json.loads(c.item_json)["name"]}
+                   for c in claims.values()]
     log_events.sort(key=lambda e: e["date"], reverse=True)
 
     week_xp = sum(e["xp"] + e["bonus"] for e in entries if e["date"] >= week_start)

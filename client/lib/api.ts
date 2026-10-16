@@ -206,7 +206,7 @@ export type Hero = {
   attributes: HeroAttribute[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe"; text: string; rarity?: Rarity }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {
