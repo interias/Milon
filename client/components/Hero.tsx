@@ -762,6 +762,10 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
     case "tasche": return <span style={{ color: "#00aa00" }}>Ihr erhaltet eine Tasche: {name("#ffffff")}.</span>;
     case "erkundung": return <span style={{ color: "#d9c08a" }}>Neues Gebiet entdeckt: {name("#d9c08a")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "verlies": return <span style={{ color: "#c08cff" }}>Verlies bezwungen: {name("#c08cff")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "abschnitt": return <span style={{ color: "#c08cff" }}>Abschnittsboss besiegt: {name("#c08cff")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "schrein": return <span style={{ color: "#6fd3e8" }}>Schrein entdeckt: {name("#6fd3e8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "schatz": return <span style={{ color: "#ffd100" }}>Schatz gefunden: {name("#ffd100")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
     default: return <span>{e.text}</span>;
   }

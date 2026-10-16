@@ -198,6 +198,13 @@ export type HeroDaily = { date: string; key: string; title: string; goal: string
 export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
 export type HeroBag = { id: string; name: string; slots: number; date: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
+export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
+  km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
+  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string;
+  segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number }[] };
+export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
+  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null };
+
 export type Hero = {
   today: string; start: string;
   hero: {
@@ -236,7 +243,9 @@ export type Hero = {
   auction: { week: string; ends: string; listings: { idx: number; kind: string; price: number; sold: boolean; item?: HeroItem;
     bag?: { id: string; name: string; slots: number; source: string }; mount?: { key: string; name: string; glyph: string } }[] } | null;
   world: { available: false } | { available: true; cell_m: number; radius_m: number; core_m: number; cells: [number, number][];
-    routes: { date: string; points: [number, number][] }[]; regions: { name: string; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
+    routes: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
+    regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
+    pois: HeroPlace[]; dungeons: HeroDungeon[];
     explored_pct: number; km2: number };
   potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];
   bags: { capacity: number; backpack: number; max_bags: number; used: HeroBag[]; spare: HeroBag[] };
@@ -244,7 +253,7 @@ export type Hero = {
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {

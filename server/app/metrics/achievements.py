@@ -758,6 +758,29 @@ def _specs():
     a(("zone_collector", "herzfrequenz", "Zonen-Sammler", "In allen 4 Puls-Zonen jemals gelaufen", 50, "🎯",
        lambda c: _zone_collector(c)))
 
+
+    # ---------------- WELTKARTE (Heldenreise: Gebiete, Orte, Strecken-Verliese) ----------------
+    W = [
+        ("welt_gebiet_1", "Erster Schritt in den Nebel", "Ein Gebiet der Weltkarte entdecken", 10, "🗺️", lambda w: _wk_regions(w, 1)),
+        ("welt_nahland", "Kenner des Nahlands", "Alle 9 Gebiete des Nahlands (bis 6 km) entdecken", 60, "🧭", lambda w: _wk_regions(w, 9, ring=0)),
+        ("welt_grenzland", "Grenzgänger", "Ein Gebiet im Grenzland (6–15 km) entdecken", 30, "🚩", lambda w: _wk_regions(w, 1, ring=1)),
+        ("welt_fernland", "Fernweh", "Ein Gebiet im Fernland (15–30 km) entdecken", 80, "🏔️", lambda w: _wk_regions(w, 1, ring=2)),
+        ("welt_alle", "Herr der Marken", "Alle 25 Gebiete der Weltkarte entdecken", 400, "👑", lambda w: _wk_regions(w, 25)),
+        ("welt_schatz", "Schatzjäger", "10 Schätze der Weltkarte finden", 40, "💰", lambda w: _wk_pois(w, "schatz", 10)),
+        ("welt_schrein", "Pilger der Schreine", "10 Schreine der Weltkarte besuchen", 75, "⛩️", lambda w: _wk_pois(w, "schrein", 10)),
+        ("welt_abschnitt", "Abschnittsjäger", "10 Abschnittsbosse der Strecken-Verliese bezwingen", 30, "⚔️", lambda w: _wk_segments(w, 10)),
+        ("welt_verlies_1", "Erste Expedition", "Ein Strecken-Verlies vollständig bezwingen", 25, "🗝️", lambda w: _wk_dungeons(w, 1)),
+        ("welt_verlies_5", "Expeditionsleiter", "5 Strecken-Verliese bezwingen", 75, "🏕️", lambda w: _wk_dungeons(w, 5)),
+        ("welt_verlies_15", "Legende des Niederrheins", "15 Strecken-Verliese bezwingen", 200, "📜", lambda w: _wk_dungeons(w, 15)),
+        ("welt_heroisch", "Heroischer Pfadfinder", "Ein Verlies heroisch bezwingen (alle Abschnitte in einem Lauf)", 50, "🔥", lambda w: _wk_dungeons(w, 1, heroic=True)),
+        ("welt_heroisch_5", "Unaufhaltsam", "5 Verliese heroisch bezwingen", 150, "💥", lambda w: _wk_dungeons(w, 5, heroic=True)),
+        ("welt_wasser", "Seenrunde", "Alle Wasser-Verliese bezwingen", 150, "🌊", lambda w: _wk_dungeons(w, None, kind="wasser")),
+        ("welt_wald", "Waldgeist", "Alle Wald-Verliese bezwingen", 150, "🌲", lambda w: _wk_dungeons(w, None, kind="wald")),
+        ("welt_dorf", "Dorfchronist", "Alle Dorf-Verliese bezwingen", 250, "🏘️", lambda w: _wk_dungeons(w, None, kind="dorf")),
+        ("welt_stufe50", "Fernland-Bezwinger", "Ein Verlies ab Stufe 50 bezwingen", 120, "🐉", lambda w: _wk_dungeons(w, 1, min_level=50)),
+    ]
+    for iid, name, desc, pts, icon, fn in W:
+        a((iid, "weltkarte", name, desc, pts, icon, (lambda fn: lambda c: fn(_world_of(c)))(fn)))
     return S
 
 
@@ -1365,6 +1388,45 @@ def _form_km(c):
 # =========================================================================================
 #  META-Erfolge (auf Basis der ausgewerteten Erfolge)
 # =========================================================================================
+def _world_of(c) -> dict:
+    """Weltkarte der Heldenreise (einmal je Auswertung)."""
+    if not hasattr(c, "_world"):
+        from .. import hero_world
+        try:
+            c._world = hero_world.world()
+        except Exception as e:  # noqa: BLE001
+            log.warning("Weltkarte für Erfolge nicht verfügbar: %s", e)
+            c._world = {"available": False}
+    return c._world
+
+
+def _wk_reach(dates: list[str], target: int, noun: str):
+    dates = sorted(d for d in dates if d)
+    n = len(dates)
+    return R(n >= target, dates[target - 1] if n >= target else None, n / target, f"{min(n, target)} / {target} {noun}")
+
+
+def _wk_regions(w, target, ring=None):
+    regs = [r for r in w.get("regions", []) if ring is None or (r["ring"] == ring)]
+    return _wk_reach([r["discovered_on"] for r in regs if r["discovered"]], target, "Gebiete")
+
+
+def _wk_pois(w, kind, target):
+    return _wk_reach([p["found_on"] for p in w.get("pois", []) if p["found"] and p["kind"] == kind], target, "gefunden")
+
+
+def _wk_segments(w, target):
+    return _wk_reach([s["cleared_on"] for d in w.get("dungeons", []) for s in d["segments"] if s["cleared"]], target, "Abschnitte")
+
+
+def _wk_dungeons(w, target, heroic=False, kind=None, min_level=0):
+    dgs = [d for d in w.get("dungeons", []) if (kind is None or d["type"] == kind) and d["level"] >= min_level]
+    if target is None:
+        target = max(1, len(dgs))
+    key = "heroic_on" if heroic else "cleared_on"
+    return _wk_reach([d[key] for d in dgs if d["heroic" if heroic else "cleared"]], target, "Verliese")
+
+
 def _meta_specs():
     M = []
     m = M.append

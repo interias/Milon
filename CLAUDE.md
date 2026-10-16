@@ -366,3 +366,14 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - Gebiete: Kern „Zitadelle“ bis 1,2 km plus 8 Sektoren (N Diersfordter Forst, NO Blumenkamp, O Schepersfeld, SO Fusternberg, S Lippe-Mündung, SW Büdericher Insel, W Rheinauen, NW Flüren). Weltradius 6 km.
   - Entdeckung: 50 EP (Quelle `erkundung`) und 2 Gold, Log-Eintrag; Titel „Kartograf“ (5) und „Weltenwanderer“ (9).
   - Die API liefert nur Meter relativ zur Heimat.
+- **Weltkarte II (2026-10-16): 30 km, Strecken-Verliese, Expeditionsbuch.**
+  - **Welt bis 30 km:** Kern „Zitadelle“ + drei Ringe à 8 Sektoren: Nahland ≤ 6 km (wie bisher), Grenzland ≤ 15 km (Hamminkeln … Mehrhoog), Fernland ≤ 30 km (Bocholt … Rees) = 25 Gebiete. Entdeckung 50/100/150 EP und 2/4/6 Gold je Ring.
+  - **Schreine und Schätze:** 74 geseedete Punkte (`hero_world.pois`), gefunden, wenn ein Lauf sie auf 250/400/600 m streift. Schrein 100 EP, Schatz 25 EP + Gold nach Entfernung.
+  - **Strecken-Verliese:** 35 echte Strecken in `server/app/hero_dungeons.json` (6 Wasser, z. B. Auesee/Schwarzes Wasser/Xantener Seen; 5 Wald; 3 Aue; 2 Deich/Festung; 4 Feld; 15 Dörfer).
+    - Einmalig erzeugt aus OSM (Nominatim) + BRouter (Profil Wandern) per `server/tools/hero_dungeons/` (geocode.py → build_dungeons.py). Die App fragt zur Laufzeit nichts extern ab. Quellenangabe „© OpenStreetMap-Mitwirkende“ auf der Karte.
+    - Je Verlies 2–4 Abschnitte mit Boss. Ein Abschnitt fällt, wenn ein Lauf ≥ 80 % seiner Punkte auf 50 m abdeckt. Abschnitte dürfen aus verschiedenen Läufen stammen; alle in **einem** Lauf = **heroisch** (+50 % EP, Beute eine Stufe besser).
+    - Sichtbar erst, wenn erkundete Zellen ≤ 300 m an der Strecke liegen; vorher liefert die API keine Streckenpunkte (Name, Richtung, Entfernung bleiben sichtbar).
+    - Stufe = Entfernung (`poi_level`: 8 + 2,2 je km) + Länge/2 km (max. +8). EP 5×Stufe je Boss, 10×Stufe fürs ganze Verlies, Gold 2 + Stufe/10, Beute ab Starttag mit Gegenstandsstufe aus der Verlies-Stufe (blau < 25, lila < 45, sonst legendär). Log-Arten `abschnitt`, `verlies`, `schrein`, `schatz` (alle EP-Quelle `erkundung`).
+  - **Titel:** Verliesgänger, Heroischer Pfadfinder, Seenwächter, Hüter der Wälder, Dorfchronist, Deichgraf, Auenläufer, Feldherr, Herr der Marken (25 Gebiete). **Erfolge:** neue Kategorie „Weltkarte“ (17 Erfolge) in `metrics/achievements.py` über `hero_world.world()`.
+  - **UI** (`HeroWorld.tsx`): Ansichten Erkundet/Nahland/30 km, Verlies-Strecken (gestrichelt = offen), Fokus-Panel mit Abschnittsbossen und Abdeckung, „Nächste Verliese“, Karte **Expeditionsbuch** (Sammlung nach Landschaft, Abschnitts-Balken, Klick zoomt die Karte).
+  - `world()` cacht das Ergebnis je Routenstand (`_memo`), weil Heldenreise und Erfolge es beide brauchen.
