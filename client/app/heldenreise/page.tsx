@@ -8,7 +8,7 @@ import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
-import { HeroBags, HeroCharacter, HeroHeader, HeroLinkContext, HeroLog, HeroLogTicker, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
+import { HeroBags, HeroCharacter, HeroHeader, HeroLinkContext, HeroLog, HeroLogTicker, HeroPurse, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
 import { HeroQuestLog, HeroTalentTree } from "@/components/HeroTalents";
 import { HeroDungeons, HeroRaid } from "@/components/HeroBosses";
@@ -61,6 +61,7 @@ export default function Heldenreise() {
     equipBest: async () => { await api.heroEquipBest(); play("equip"); await load(); },
     disenchant: async (itemId) => { await api.heroDisenchant(itemId); play("chest"); await load(); },
     upgrade: async (itemId) => { await api.heroUpgrade(itemId); play("loot", "lila"); await load(); },
+    sell: async (itemId) => { await api.heroSell(itemId); play("loot", "weiss"); await load(); },
     dust: hero?.dust ?? 0,
     dragging, setDragging,
     isNew: (id) => !!seen && !seen.has(id),
@@ -135,7 +136,7 @@ export default function Heldenreise() {
               <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} key={tab} className="@container ach-fade space-y-4">
                 {tab === "charakter" && <>
                   <HeroCharacter data={hero} gear={gear} weather={weather} />
-                  <HeroBags items={hero.inventory} gear={gear} />
+                  <HeroBags items={hero.inventory} gear={gear} data={hero} />
                 </>}
                 {tab === "abenteuer" && <>
                   <nav aria-label="Abschnitte" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:hidden">
@@ -168,6 +169,7 @@ export default function Heldenreise() {
                   <HeroChronicle data={hero} />
                   <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
                     <HeroReputation data={hero} />
+                    <HeroPurse data={hero} />
                     <HeroRules data={hero} />
                   </div>
                 </>}

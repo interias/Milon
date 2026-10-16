@@ -389,3 +389,39 @@ def test_saga_week_facts_and_storage(hero_db, monkeypatch):
     saga = hero_saga.generate(o, TODAY)
     assert saga["content"].startswith("## Saga") and saga["week"] == "2026-10-12" and saga["cost_usd"] == 0.002
     assert "ZEITRAUM: 2026-10-12" in seen["m"][1]["content"] and hero_saga.latest()["content"] == saga["content"]
+
+
+def test_economy_prices_bags_and_money():
+    from app import hero_economy as eco
+    assert eco.sell_price({"rarity": "lila", "ilvl": 200}) == 8 * eco.GOLD
+    assert eco.money(123456) == "12g 34s 56k" and eco.money(5) == "5k" and eco.money(-10000) == "−1g"
+    cap, used = eco.capacity([{"slots": s} for s in (4, 12, 6, 8, 10)])
+    assert cap == 16 + 12 + 10 + 8 + 6 and len(used) == 4
+    data = {"dungeons": [{"id": f"dungeon:{i}", "cleared": True, "tier": "normal", "date": "2026-10-16", "name": "X"} for i in range(40)],
+            "bosses": []}
+    bags = eco.bag_drops(data)
+    assert 3 <= len(bags) <= 20 and all(b["slots"] in (4, 6) for b in bags)  # ~25 % von 40
+    assert eco.bag_drops(data) == bags  # geseedet stabil
+
+
+def test_sell_and_gold_balance(hero_db, monkeypatch):
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        session.add(hero.HeroState(key="start", value="2026-10-01"))
+        for day in range(1, 15):
+            add_run(session, datetime(2026, 10, day, 7), km=5 + day % 4)
+        session.commit()
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    o = hero.overview(TODAY)
+    before = o["gold"]["balance"]
+    assert before >= hero.hero_economy.START_CAPITAL and o["gold"]["sources"]["Lauf"] > 0
+    item = o["inventory"][0]
+    client.post("/hero/equip", json={"item_id": item["id"]})
+    assert client.post("/hero/sell", json={"item_id": item["id"]}).status_code == 409
+    other = o["inventory"][1]
+    price = client.post("/hero/sell", json={"item_id": other["id"]}).json()["gold"]
+    after = hero.overview(TODAY)
+    assert price == other["price"] and after["gold"]["balance"] == before + price
+    assert other["id"] not in {it["id"] for it in after["inventory"]}

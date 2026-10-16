@@ -1,0 +1,94 @@
+"""Heldenreise: Gold (Kupfer als Basiseinheit), Händlerpreise, Taschen und Briefkasten.
+
+Gold wird live aus den Heldenreise-Ereignissen ab Starttag berechnet; gespeichert werden nur
+Verkäufe (hero_item_mods) und — später — Käufe. 1 Gold = 100 Silber = 10.000 Kupfer.
+"""
+from __future__ import annotations
+
+import hashlib
+import random
+from datetime import date
+
+SILVER, GOLD = 100, 10_000
+START_CAPITAL = 25 * GOLD
+EARN = {"km": 10 * SILVER, "kraft": 50 * SILVER, "taeglich": 50 * SILVER, "auftrag": 2 * GOLD, "instanz": 3 * GOLD,
+        "boss": 10 * GOLD, "event": 15 * GOLD, "duell": 1 * GOLD}
+SELL_BASE = {"grau": 10 * SILVER, "weiss": 50 * SILVER, "gruen": 1 * GOLD, "blau": 3 * GOLD, "lila": 8 * GOLD,
+             "orange": 20 * GOLD, "rot": 50 * GOLD}
+BACKPACK = 16
+MAX_BAGS = 4
+BAG_NAMES = {4: "Leinenbeutel", 6: "Wollbeutel", 8: "Runenstoff-Tasche", 10: "Magiestoff-Tasche", 12: "Netherstoff-Tasche"}
+
+
+def _rng(*parts) -> random.Random:
+    digest = hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()
+    return random.Random(int(digest[:16], 16))
+
+
+def sell_price(item: dict) -> int:
+    """Händlerpreis in Kupfer: Seltenheit × Stufenfaktor (Stufe 200 = 1,0)."""
+    return int(round(SELL_BASE[item["rarity"]] * item["ilvl"] / 200, -2))
+
+
+def earnings(data: dict, start: date) -> list[tuple[date, int, str]]:
+    """Gold-Einnahmen ab Starttag: (Tag, Kupfer, Quelle)."""
+    out: list[tuple[date, int, str]] = [(start, START_CAPITAL, "Startkapital")]
+    runs, workouts = data["runs"], data["workouts"]
+    if not runs.empty:
+        for r in runs[runs["day"] >= start].itertuples():
+            out.append((r.day, int(round(r.distance_km * EARN["km"], -2)), "Lauf"))
+    if not workouts.empty:
+        for w in workouts[workouts["day"] >= start].itertuples():
+            out.append((w.day, EARN["kraft"], "Krafttraining"))
+    for wk in data["quest_weeks"]:
+        for q in wk["quests"]:
+            if q["done"] and date.fromisoformat(q["done_on"]) >= start:
+                out.append((date.fromisoformat(q["done_on"]), EARN["auftrag"], "Auftrag"))
+    for d in (data.get("daily") or {}).get("xp", []):
+        if d[0] >= start:
+            out.append((d[0], EARN["taeglich"], "Tagesaufgabe"))
+    for b in data["bosses"]:
+        if b["defeated"]:
+            out.append((date.fromisoformat(b["defeated_on"]), EARN["boss"], "Boss"))
+    for dg in data["dungeons"]:
+        if dg["cleared"]:
+            out.append((date.fromisoformat(dg["date"]), EARN["instanz"], "Instanz"))
+    for e in data["events"]:
+        if e["done"]:
+            out.append((date.fromisoformat(e["done_on"]), EARN["event"], "Event"))
+    for d in data["duels"]:
+        if d["won"]:
+            out.append((date.fromisoformat(d["date"]), EARN["duell"], "Duell"))
+    return out
+
+
+def bag_drops(data: dict) -> list[dict]:
+    """Taschen als seltene Beute: bezwungene Instanzen 25 %, besiegte Bosse 40 % (geseedet, stabil)."""
+    out = []
+    sizes = {"normal": [4, 6], "heroisch": [6, 8], "mythisch": [8, 10]}
+    for dg in data["dungeons"]:
+        rng = _rng("bag", dg["id"])
+        if dg["cleared"] and rng.random() < 0.25:
+            size = rng.choice(sizes[dg["tier"]])
+            out.append({"id": f"bag:{dg['id']}", "name": BAG_NAMES[size], "slots": size, "date": dg["date"],
+                        "source": f"Instanz „{dg['name']}“"})
+    for b in data["bosses"]:
+        rng = _rng("bag", b["month"], b["key"])
+        if b["defeated"] and rng.random() < 0.40:
+            size = rng.choice([6, 8, 10])
+            out.append({"id": f"bag:boss:{b['month']}:{b['key']}", "name": BAG_NAMES[size], "slots": size,
+                        "date": b["defeated_on"], "source": f"Boss „{b['name']}“"})
+    return out
+
+
+def capacity(bags: list[dict]) -> tuple[int, list[dict]]:
+    """Rucksack + die besten 4 Taschen (automatisch angelegt)."""
+    used = sorted(bags, key=lambda b: -b["slots"])[:MAX_BAGS]
+    return BACKPACK + sum(b["slots"] for b in used), used
+
+
+def money(copper: int) -> str:
+    g, rest = divmod(abs(copper), GOLD)
+    s, c = divmod(rest, SILVER)
+    parts = [f"{g}g" if g else "", f"{s}s" if s else "", f"{c}k" if c or not (g or s) else ""]
+    return ("−" if copper < 0 else "") + " ".join(p for p in parts if p)

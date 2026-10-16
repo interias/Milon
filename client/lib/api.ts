@@ -187,7 +187,7 @@ export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
   ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event"; reason: string; date: string;
   lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
-  set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number;
+  set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number; price?: number; mail?: boolean;
 };
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
@@ -196,6 +196,7 @@ export type HeroVault = {
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
 export type HeroDaily = { date: string; key: string; title: string; goal: string; done: boolean; sick: boolean };
 export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
+export type HeroBag = { id: string; name: string; slots: number; date: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
 export type Hero = {
   today: string; start: string;
@@ -231,11 +232,13 @@ export type Hero = {
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
   dust: number;
+  gold: { balance: number; earned: number; sold: number; spent: number; week: number; sources: Record<string, number>; rates: Record<string, number> };
+  bags: { capacity: number; backpack: number; max_bags: number; used: HeroBag[]; spare: HeroBag[] };
   sets: { name: string; suffix: string; owned: number; equipped: number; color: string; bonus: string | null }[];
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {
@@ -457,6 +460,7 @@ export const api = {
   heroTalent: (row: number, choice: string | null) => post<{ row: number; choice: string | null }>("/hero/talent", { row, choice }),
   heroTitle: (key: string | null) => post<{ key: string | null }>("/hero/title", { key }),
   heroMount: (key: string | null) => post<{ key: string | null }>("/hero/mount", { key }),
+  heroSell: (itemId: string) => post<{ gold: number }>("/hero/sell", { item_id: itemId }),
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),

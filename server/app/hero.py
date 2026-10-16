@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_events, hero_extras, hero_quests, hero_social
+from . import hero_bosses, hero_economy, hero_events, hero_extras, hero_quests, hero_social
 from .checkins import local_today
 from .db import engine
 
@@ -67,6 +67,8 @@ class HeroItemMod(SQLModel, table=True):
     disenchanted: bool = False
     dust: int = 0
     upgrades: int = 0
+    sold: bool = False
+    gold: int = 0  # Verkaufserlös in Kupfer
 
 
 RARITIES = ["grau", "weiss", "gruen", "blau", "lila", "orange", "rot"]
@@ -879,11 +881,12 @@ def _inventory(drops_: list[dict], claims: dict[str, HeroClaim]) -> list[dict]:
     out = []
     for it in drops_ + claimed:
         m = mods.get(it["id"])
-        if m and m.disenchanted:
+        if m and (m.disenchanted or m.sold):
             continue
         ups = m.upgrades if m else 0
         out.append({**it, "set": _set_suffix(it), "upgrades": ups, "ilvl": it["ilvl"] + UPGRADE_ILVL * ups,
-                    "upgrade_cost": upgrade_cost(ups) if ups < MAX_UPGRADES else None, "dust": DUST[it["rarity"]]})
+                    "upgrade_cost": upgrade_cost(ups) if ups < MAX_UPGRADES else None, "dust": DUST[it["rarity"]],
+                    "price": hero_economy.sell_price({**it, "ilvl": it["ilvl"] + UPGRADE_ILVL * ups})})
     return sorted(out, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
 
 
@@ -906,6 +909,36 @@ def disenchant(item_id: str) -> int:
         session.add(row)
         session.commit()
     return DUST[item["rarity"]]
+
+
+def sell(item_id: str) -> int:
+    """Verkauft einen nicht angelegten Gegenstand an den Händler; liefert den Erlös in Kupfer."""
+    item = _find_item(item_id)
+    if _equipment().get(item["slot"]) == item_id:
+        raise ValueError("Angelegte Gegenstände können nicht verkauft werden.")
+    with Session(engine) as session:
+        row = session.get(HeroItemMod, item_id) or HeroItemMod(item_id=item_id)
+        row.sold, row.gold = True, item["price"]
+        session.add(row)
+        session.commit()
+    return item["price"]
+
+
+def gold_view(data: dict, today: date) -> dict:
+    earned = hero_economy.earnings(data, data["start"])
+    sold = sum(m.gold for m in _item_mods().values() if m.sold)
+    spent = _safe(_gold_spent, 0)
+    week = today - timedelta(days=today.weekday())
+    by_source: dict[str, int] = {}
+    for _, c, src in earned:
+        by_source[src] = by_source.get(src, 0) + c
+    return {"balance": sum(c for _, c, _ in earned) + sold - spent, "earned": sum(c for _, c, _ in earned),
+            "sold": sold, "spent": spent, "week": sum(c for d, c, _ in earned if d >= week),
+            "sources": by_source, "rates": hero_economy.EARN}
+
+
+def _gold_spent() -> int:
+    return 0
 
 
 def upgrade(item_id: str) -> dict:
@@ -1302,6 +1335,11 @@ def overview(today: date | None = None) -> dict:
     claims = _claims()
     worn = _equipment()
     inventory = [{**it, "equipped": worn.get(it["slot"]) == it["id"]} for it in _inventory(data["drops"], claims)]
+    bags = _safe(lambda: hero_economy.bag_drops(data), [])
+    cap, used_bags = hero_economy.capacity(bags)
+    loose = sorted((it for it in inventory if not it["equipped"]), key=lambda it: (it["date"], it["id"]))
+    mail_ids = {it["id"] for it in loose[cap:]}
+    inventory = [{**it, "mail": it["id"] in mail_ids} for it in inventory]
     equipment = {it["slot"]: it for it in inventory if it["equipped"]}
     stats = _hero_stats(data, inventory, lv["level"], book["totals"])
     chosen_title = _state_get("title") or None
@@ -1326,6 +1364,9 @@ def overview(today: date | None = None) -> dict:
                     "rarity": json.loads(c.item_json)["rarity"], "name": json.loads(c.item_json)["name"],
                     "item_id": json.loads(c.item_json)["id"]}
                    for c in claims.values()]
+    for b in bags:
+        log_events.append({"date": date.fromisoformat(b["date"][:10]), "kind": "tasche", "text": f"Tasche erhalten: {b['name']}",
+                           "name": b["name"], "tip": [f"Tasche · {b['slots']} Plätze", f"Gefunden: {b['source']}"]})
     for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None), []):
         if m["unlocked"]:
             log_events.append({"date": date.fromisoformat(m["unlocked_on"]), "kind": "reittier",
@@ -1369,6 +1410,9 @@ def overview(today: date | None = None) -> dict:
         "inventory": inventory,
         "equipment": equipment,
         "dust": dust_balance(_item_mods()),
+        "gold": gold_view(data, today),
+        "bags": {"capacity": cap, "backpack": hero_economy.BACKPACK, "max_bags": hero_economy.MAX_BAGS,
+                 "used": used_bags, "spare": [b for b in bags if b not in used_bags]},
         "sets": hero_social.sets(inventory),
         "titles": title_list,
         "reputation": hero_social.reputation(stats),
