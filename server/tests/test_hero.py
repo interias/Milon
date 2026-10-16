@@ -242,3 +242,26 @@ def test_talent_effects_and_api(hero_db, monkeypatch):
     monkeypatch.setattr(hero, "_load", lambda today: {"level": 12})
     assert client.post("/hero/talent", json={"row": 10, "choice": "morgen"}).status_code == 200
     assert hero._active(hero._history("talent_10"), TODAY) == "morgen"
+
+
+def test_month_bosses_and_dungeons():
+    from app import hero_bosses
+    rows = [{"external_id": "old", "started_at": datetime(2026, 9, 10, 7), "distance_km": 12.0, "dur_min": 72.0, "zone": 1},
+            {"external_id": "old2", "started_at": datetime(2026, 9, 20, 7), "distance_km": 10.0, "dur_min": 62.0, "zone": 1},
+            {"external_id": "fast", "started_at": datetime(2026, 10, 5, 7), "distance_km": 13.5, "dur_min": 76.0, "zone": 1}]
+    runs = runs_frame(rows)
+    runs["pace"] = runs["dur_min"] / runs["distance_km"]
+    efforts = pd.DataFrame([
+        {"external_id": "old", "distance_m": 5000, "seconds": 1800.0, "started_at": pd.Timestamp("2026-09-10 07:00")},
+        {"external_id": "fast", "distance_m": 5000, "seconds": 1760.0, "started_at": pd.Timestamp("2026-10-05 07:00")}])
+    data = {"runs": runs, "workouts": pd.DataFrame(columns=["id", "started_at", "sets", "day"]), "efforts": efforts,
+            "sick": set()}
+    bosses = {b["key"]: b for b in hero_bosses.month_bosses(date(2026, 10, 1), data, TODAY)}
+    assert bosses["waechter"]["defeated_on"] == "2026-10-05"  # 29:20 < 30:00 × 0,98
+    assert bosses["wyrm"]["defeated_on"] == "2026-10-05"  # 13,5 km ≥ 12 + 1
+    assert not bosses["fresser"]["defeated"] and 0 < bosses["fresser"]["hp"] < 1
+    sick = {**data, "sick": {date(2026, 10, d) for d in range(1, 17)}}
+    assert hero_bosses.month_bosses(date(2026, 10, 1), sick, TODAY)[2]["goal"] == "19 km im Monat"  # 40 × 15/31
+    dg = hero_bosses.dungeons(runs, date(2026, 10, 1))
+    assert len(dg) == 1 and dg[0]["tier"] == "normal" and dg[0]["cleared"]
+    assert [b["name"] for b in dg[0]["bosses"]] == ["Torwächter", "Hallenfürst", "Der Unermüdliche", "Schatten des Tempos"]
