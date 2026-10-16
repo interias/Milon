@@ -51,6 +51,9 @@ export type Gear = {
   equip: (itemId: string) => Promise<void>;
   unequip: (slot: string) => Promise<void>;
   equipBest: () => Promise<void>;
+  disenchant: (itemId: string) => Promise<void>;
+  upgrade: (itemId: string) => Promise<void>;
+  dust: number;
   dragging: string | null;
   setDragging: (slot: string | null) => void;
   isNew: (itemId: string) => boolean;
@@ -66,10 +69,11 @@ function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolea
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
-    <p style={{ color: TIP_YELLOW }}>Gegenstandsstufe {item.ilvl}</p>
+    <p style={{ color: TIP_YELLOW }}>Gegenstandsstufe {item.ilvl}{item.upgrades ? <span style={{ color: "#1eff00" }}> · Aufwertung {item.upgrades}/3</span> : null}</p>
     <p className="flex justify-between gap-6"><span>{item.slot_label}</span><span>{item.rarity_label}</span></p>
     <p style={{ color: "#1eff00" }}>Verdient: {item.reason}</p>
     {item.lucky && <p style={{ color: "#1eff00" }}>Glücksfund: eine Stufe besser als verdient</p>}
+    {item.set && <p className="mt-1" style={{ color: TIP_YELLOW }}>Garnitur {item.set}</p>}
     <p className="mt-1 italic" style={{ color: TIP_YELLOW }}>„{item.flavor}“</p>
     <p className="mt-1 text-[12px] text-[#9d9d9d]">{SOURCE[item.source]} · {dm(item.date)}{item.run_km ? ` · ${item.run_km.toLocaleString("de-DE")} km` : ""}</p>
   </>;
@@ -87,13 +91,14 @@ function useItemTip(gear?: Gear) {
   const [tip, setTip] = useState<{ item: HeroItem; x: number; y: number } | null>(null);
   const [open, setOpen] = useState<HeroItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDe, setConfirmDe] = useState(false);
   const worn = (item: HeroItem) => gear?.equipment[item.slot];
   const canEquip = (item: HeroItem) => !!gear && !item.equipped;
   const bind = (item: HeroItem) => ({
     onMouseEnter: (e: React.MouseEvent) => { setTip({ item, x: e.clientX, y: e.clientY }); gear?.markSeen(item.id); },
     onMouseMove: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => setTip(null),
-    onClick: () => { setTip(null); setOpen(item); gear?.markSeen(item.id); },
+    onClick: () => { setTip(null); setOpen(item); setConfirmDe(false); gear?.markSeen(item.id); },
     // Rechtsklick legt an wie in WoW.
     onContextMenu: canEquip(item) ? (e: React.MouseEvent) => { e.preventDefault(); setTip(null); gear!.equip(item.id); } : undefined,
     draggable: canEquip(item),
@@ -123,11 +128,24 @@ function useItemTip(gear?: Gear) {
         <div className="wow-tip w-full max-w-sm"><ItemTooltipBody item={open} /><IlvlDiff item={open} worn={worn(open)} /></div>
         {!open.equipped && worn(open) && worn(open)!.id !== open.id && <div className="wow-tip w-full max-w-sm"><ItemTooltipBody item={worn(open)!} worn /></div>}
       </div>
-      {gear && <div className="mt-4 flex justify-center gap-2">
+      {gear && <div className="mt-4 flex flex-wrap justify-center gap-2">
         {open.equipped
           ? <button type="button" disabled={busy} className={BTN} style={BTN_STYLE} onClick={() => act(() => gear.unequip(open.slot))}>Ablegen</button>
           : <button type="button" disabled={busy} className={BTN} style={BTN_STYLE} onClick={() => act(() => gear.equip(open.id))}>{worn(open) ? "Anlegen (tauschen)" : "Anlegen"}</button>}
+        {open.upgrade_cost != null && (
+          <button type="button" disabled={busy || gear.dust < open.upgrade_cost} className={BTN} style={{ ...BTN_STYLE, color: "#1eff00" }}
+                  title={gear.dust < open.upgrade_cost ? `Du hast ${gear.dust} Arkanstaub` : undefined}
+                  onClick={() => act(() => gear.upgrade(open.id))}>Aufwerten +4 · {open.upgrade_cost} Staub</button>
+        )}
+        {!open.equipped && (
+          <button type="button" disabled={busy} className={BTN}
+                  style={confirmDe ? { background: "linear-gradient(180deg, #b8131a, #6e0b0f)", borderColor: GOLD, color: TIP_YELLOW } : { ...BTN_STYLE, color: "#b552f7" }}
+                  onClick={() => confirmDe ? act(() => gear.disenchant(open.id)) : setConfirmDe(true)}>
+            {confirmDe ? `Wirklich zerlegen? (+${open.dust} Staub)` : `Entzaubern · +${open.dust} Staub`}
+          </button>
+        )}
       </div>}
+      {gear && <p className="mt-2 text-center text-[11px] text-muted">Arkanstaub: {gear.dust}</p>}
     </RunAnalysisDialog>}
   </>;
   return { bind, node };
@@ -250,7 +268,7 @@ function SpecChooser({ data, onChoose, onClose }: { data: Hero; onChoose: (spec:
   );
 }
 
-export function HeroHeader({ data, onSpec }: { data: Hero; onSpec: (spec: string | null) => Promise<void> }) {
+export function HeroHeader({ data, onSpec, onTitle }: { data: Hero; onSpec: (spec: string | null) => Promise<void>; onTitle: () => void }) {
   const [choosing, setChoosing] = useState(false);
   const h = data.hero;
   const shares: [string, number, string][] = [
@@ -270,7 +288,9 @@ export function HeroHeader({ data, onSpec }: { data: Hero; onSpec: (spec: string
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-3xl font-bold leading-none" style={{ color: h.class_color, textShadow: "0 2px 6px #000" }}>{h.class_label}</h2>
-          <p className="mt-1 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>&lt;{h.title}&gt; · Stufe {h.level}</p>
+          <p className="mt-1 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>
+            <button type="button" onClick={onTitle} className="underline decoration-dotted underline-offset-4" title="Titel wählen">&lt;{h.title_chosen ?? h.title}&gt;</button> · Stufe {h.level}
+          </p>
           <p className="text-xs text-muted">
             <button type="button" onClick={() => setChoosing(true)} className="font-semibold underline decoration-dotted underline-offset-4" style={{ color: "var(--wow-gold-soft)" }}>
               {h.spec_label ?? "Spezialisierung wählen"}
@@ -376,7 +396,8 @@ export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
           <p className="absolute inset-x-0 top-1.5 z-10 text-center font-display text-[11px] uppercase tracking-wider text-muted">
             Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{data.ilvl_avg ?? "–"}</b>
           </p>
-          <div className="h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment} /></div>
+          <div className="h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment}
+            aura={(() => { const s = data.sets.find((x) => x.bonus); return s ? { color: s.color, pulse: s.equipped >= 4 } : null; })()} /></div>
         </div>
         {column(RIGHT_SLOTS)}
       </div>
@@ -390,6 +411,18 @@ export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
           {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
         </div>
       </div>
+      {data.sets.some((x) => x.owned >= 2 || x.equipped >= 1) && <>
+        <div className="wow-rule my-4" />
+        <p className="mb-1.5 font-display text-[11px] uppercase tracking-wider text-muted">Garnituren · ab 2 angelegten Teilen Aura, ab 4 pulsierend</p>
+        <div className="flex flex-wrap gap-1.5">
+          {data.sets.filter((x) => x.owned >= 2 || x.equipped >= 1).map((x) => (
+            <span key={x.suffix} className="rounded border px-2 py-1 text-[11px]"
+                  style={{ borderColor: x.bonus ? x.color : "#3a2d1a", color: x.bonus ? x.color : "var(--color-muted)" }}>
+              {x.name} · {x.equipped}/{x.owned} angelegt{x.bonus ? ` · ${x.bonus}` : ""}
+            </span>
+          ))}
+        </div>
+      </>}
       {node}
     </Card>
   );
@@ -478,7 +511,10 @@ export function HeroBags({ items, gear }: { items: HeroItem[]; gear: Gear }) {
   const size = Math.max(16, Math.ceil(loose.length / 8) * 8);
   return (
     <Card>
-      <CardTitle title={`Taschen · ${loose.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. ▲ = besser als angelegt." />
+      <div className="flex items-start justify-between gap-2">
+        <CardTitle title={`Taschen · ${loose.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. ▲ = besser als angelegt." />
+        <span className="shrink-0 rounded border border-[#3a2d1a] px-2 py-1 text-[11px]" style={{ color: "#b552f7" }} title="Aus entzauberten Gegenständen; wertet Gegenstände auf">✦ {gear.dust} Arkanstaub</span>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {Array.from({ length: size }, (_, i) => loose[i]
           ? <Slot key={loose[i].id} item={loose[i]} bind={bind(loose[i])} upgrade={loose[i].ilvl > (gear.equipment[loose[i].slot]?.ilvl ?? 0)} isNew={gear.isNew(loose[i].id)} />

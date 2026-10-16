@@ -17,12 +17,14 @@ const SPOTS: Record<string, [number, number][]> = {
   fuesse: [[39, 94], [61, 94]], ring: [[73, 58]], schmuck: [[50, 47]],
 };
 
-export function HeroFigure({ color, equipment }: { color: string; equipment: Record<string, HeroItem> }) {
+export function HeroFigure({ color, equipment, aura }: { color: string; equipment: Record<string, HeroItem>; aura?: { color: string; pulse: boolean } | null }) {
   const mask = { maskImage: "url(/img/silhouette/front-filled.png)", WebkitMaskImage: "url(/img/silhouette/front-filled.png)",
                  maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
                  maskPosition: "center", WebkitMaskPosition: "center" } as React.CSSProperties;
   return (
     <div className="relative mx-auto h-full w-full max-w-[170px]" aria-hidden="true">
+      {aura && <div className={`absolute inset-x-[4%] inset-y-[2%] rounded-[50%] ${aura.pulse ? "wow-aura-pulse" : ""}`}
+                    style={{ background: `radial-gradient(ellipse at center, color-mix(in srgb, ${aura.color} 55%, transparent), transparent 70%)`, opacity: aura.pulse ? undefined : 0.6 }} />}
       <div className="absolute inset-x-[6%] bottom-0 h-[9%] rounded-[50%]"
            style={{ background: `radial-gradient(ellipse at center, color-mix(in srgb, ${color} 55%, transparent), transparent 70%)` }} />
       <div className="absolute inset-x-0 bottom-[3%] top-0">

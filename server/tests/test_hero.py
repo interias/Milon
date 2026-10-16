@@ -265,3 +265,45 @@ def test_month_bosses_and_dungeons():
     dg = hero_bosses.dungeons(runs, date(2026, 10, 1))
     assert len(dg) == 1 and dg[0]["tier"] == "normal" and dg[0]["cleared"]
     assert [b["name"] for b in dg[0]["bosses"]] == ["Torwächter", "Hallenfürst", "Der Unermüdliche", "Schatten des Tempos"]
+
+
+def test_reputation_titles_and_sets():
+    from app import hero_social
+    stats = {"laufen": 9500, "kraft": 31000, "protein_days": 10, "sleep_nights": 0}
+    rep = {f["key"]: f for f in hero_social.reputation(stats)}
+    assert rep["laeufergilde"]["standing"] == "Wohlwollend" and rep["eisenbund"]["standing"] == "Ehrfürchtig"
+    assert rep["tafelrunde"]["value"] == 500 and rep["orden"]["progress"] == 0.0
+    titles = {t["key"]: t for t in hero_social.titles({"km": 520, "level": 12}, "kilometerfresser")}
+    assert titles["kilometerfresser"]["earned"] and titles["kilometerfresser"]["chosen"]
+    assert not titles["held_von_wesel"]["earned"] and titles["held_von_wesel"]["value"] == 12
+    items = [{"set": "des Morgengrauens", "slot": s, "equipped": True} for s in ("kopf", "brust")] + \
+            [{"set": "der Nacht", "slot": "ring", "equipped": False}]
+    sets = hero_social.sets(items)
+    assert sets[0]["suffix"] == "des Morgengrauens" and sets[0]["bonus"] == "Aura" and sets[1]["bonus"] is None
+
+
+def test_disenchant_upgrade_and_title(hero_db, monkeypatch):
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        session.add(hero.HeroState(key="start", value="2026-10-01"))
+        for day in range(1, 15):
+            add_run(session, datetime(2026, 10, day, 7), km=5 + day % 4)
+        session.commit()
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    items = sorted(hero.overview(TODAY)["inventory"], key=lambda it: it["ilvl"])
+    worn, junk, keep = items[0], items[1], items[-1]
+    client.post("/hero/equip", json={"item_id": worn["id"]})
+    assert client.post("/hero/disenchant", json={"item_id": worn["id"]}).status_code == 409  # angelegt
+    assert client.post("/hero/upgrade", json={"item_id": keep["id"]}).status_code == 409  # kein Staub
+    gained = sum(client.post("/hero/disenchant", json={"item_id": it["id"]}).json()["dust"]
+                 for it in items[1:-1] if it["slot"] != worn["slot"] or it["id"] != worn["id"])
+    o = hero.overview(TODAY)
+    assert o["dust"] == gained and junk["id"] not in {it["id"] for it in o["inventory"]}
+    if gained >= 10:
+        up = client.post("/hero/upgrade", json={"item_id": keep["id"]}).json()["item"]
+        assert up["ilvl"] == keep["ilvl"] + hero.UPGRADE_ILVL and hero.overview(TODAY)["dust"] == gained - 10
+    assert client.post("/hero/title", json={"key": "held_von_wesel"}).status_code == 409
+    assert client.post("/hero/title", json={"key": "gibtsnicht"}).status_code == 422
+    assert client.post("/hero/title", json={"key": None}).status_code == 200

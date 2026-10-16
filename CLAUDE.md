@@ -259,3 +259,12 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - „Schatten des Tempos“ = schneller als der eigene Langlauf-Median (180 T).
     - 50 EP je Boss; bezwungen → Beute in Stufenfarbe (`dungeon:<lauf>`). Namen mit Wesel-Lokalkolorit.
   - Der `ledger` nimmt generische Zusatzereignisse (`extra`: Auftrag, Boss, Instanz → Quellen `auftraege`, `bosse`, `instanzen`).
+- **Etappe 2d (2026-10-16): Titel, Ruf, Sets, Entzaubern** (`app/hero_social.py` + `hero_item_mods`).
+  - **Titel:** 14 Titel aus Kennzahlen (`_hero_stats`: Läufe, km, Frühläufe, Krafttrainings, Serie, Aufträge, Bosse, volle Schlachtzüge, Instanzen, Gegenstände, Legendäre, Stufe, Ehrfürchtig). Getragener Titel in `hero_state.title` (ohne Datum, rein optisch). API `POST /hero/title` (409 nicht freigeschaltet).
+  - **Ruf:** 4 Fraktionen, Stufen 0 / 3.000 / 9.000 / 18.000 / 30.000:
+    - Läufergilde von Wesel: Lauf-EP.
+    - Eisenbund: Kraft-EP.
+    - Tafelrunde der Versorger: 50 je Protein-Tag.
+    - Orden der stillen Nacht: 50 je Nacht ab 7 h.
+  - **Sets:** Garnitur = gleicher Namenszusatz (`item.set`; Altbestand per `_set_suffix` abgeleitet). Ab 2 angelegten Teilen Aura um die Figur, ab 4 pulsierend; rein optisch.
+  - **Entzaubern/Aufwerten:** Entzaubern nur für nicht angelegte Gegenstände → Arkanstaub (`DUST` nach Rarität), endgültig; UI fragt nach. Aufwerten bis 3-mal je +4 Stufen für 10/20/30 Staub. API `POST /hero/disenchant`, `POST /hero/upgrade` (409 angelegt / zu wenig Staub / voll).

@@ -27,6 +27,10 @@ class TalentInput(BaseModel):
     choice: str | None = Field(default=None, max_length=30)
 
 
+class TitleInput(BaseModel):
+    key: str | None = Field(default=None, max_length=40)
+
+
 class UnequipInput(BaseModel):
     slot: str = Field(min_length=2, max_length=20)
 
@@ -87,3 +91,34 @@ def choose_talent(body: TalentInput) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"row": body.row, "choice": body.choice}
+
+
+@router.post("/title")
+def choose_title(body: TitleInput) -> dict:
+    try:
+        hero.choose_title(body.key)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail="Unbekannter Titel.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"key": body.key}
+
+
+@router.post("/disenchant")
+def disenchant_item(body: EquipInput) -> dict:
+    try:
+        return {"dust": hero.disenchant(body.item_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/upgrade")
+def upgrade_item(body: EquipInput) -> dict:
+    try:
+        return {"item": hero.upgrade(body.item_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
