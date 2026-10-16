@@ -71,6 +71,7 @@ export function AttributeRadar({ items, color }: { items: HeroAttribute[]; color
 const SOURCES: [keyof Hero["progression"][number], string, string][] = [
   ["laufen", "Laufen", "#aad372"], ["kraft", "Kraft", "#c69b6d"], ["alltag", "Alltag", "#3fc7eb"],
   ["erfolge", "Erfolge", "#ffd100"], ["ruhebonus", "Ausgeruht", "#3d7bd9"],
+  ["buffs", "Buffs", "#ff7d0a"], ["fokus", "Fokus", "#f48cba"],
 ];
 
 export function HeroChronicle({ data }: { data: Hero }) {

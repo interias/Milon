@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Hero, HeroAttribute, HeroItem, HeroVault, Rarity } from "@/lib/api";
+import type { Hero, HeroAttribute, HeroBuff, HeroItem, HeroVault, Rarity } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de0, dm } from "@/lib/format";
@@ -166,7 +166,92 @@ function XpBar({ data }: { data: Hero }) {
   );
 }
 
-export function HeroHeader({ data }: { data: Hero }) {
+// --- Buffs & Debuffs am Einheitenrahmen ----------------------------------------------------
+const BUFF_ICON: Record<string, React.ReactNode> = {
+  food: <><path d="M15.4 15.63a7.875 6 135 1 1 6.23-6.23 4.5 3.43 135 0 0-6.23 6.23" /><path d="m8.29 12.71-2.6 2.6a2.5 2.5 0 1 0-1.65 4.65A2.5 2.5 0 1 0 8.7 18.3l2.59-2.59" /></>,
+  moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+  eye: <><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
+  bed: <><path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" /></>,
+  thermo: <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" />,
+  zap: <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />,
+  battery: <><rect x="2" y="7" width="16" height="10" rx="2" /><path d="M22 11v2" /><path d="M6 11v2" /></>,
+  flame: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />,
+  target: <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>,
+};
+
+function BuffBar({ buffs }: { buffs: HeroBuff[] }) {
+  const [tip, setTip] = useState<{ b: HeroBuff; x: number; y: number } | null>(null);
+  const [pinned, setPinned] = useState<HeroBuff | null>(null);
+  if (!buffs.length) return null;
+  const show = tip ?? (pinned ? { b: pinned, x: 0, y: 0 } : null);
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label="Buffs und Debuffs">
+      {buffs.map((b) => {
+        const debuff = b.kind === "debuff";
+        return <button key={b.key} type="button" aria-label={`${b.name}: ${b.effect}`}
+                       onMouseEnter={(e) => setTip({ b, x: e.clientX, y: e.clientY })}
+                       onMouseMove={(e) => setTip({ b, x: e.clientX, y: e.clientY })}
+                       onMouseLeave={() => setTip(null)}
+                       onClick={() => setPinned(pinned?.key === b.key ? null : b)}
+                       className="grid h-8 w-8 place-items-center rounded-[4px] border"
+                       style={{ borderColor: debuff ? "#c41e1e" : "#6b5230", color: debuff ? "#ff6a5c" : TIP_YELLOW,
+                                background: debuff ? "radial-gradient(circle, #3a0e0c, #120605)" : "radial-gradient(circle, #2e2414, #0b0907)",
+                                boxShadow: "inset 0 0 0 1px #000" }}>
+          <Icon size={17}>{BUFF_ICON[b.icon]}</Icon>
+        </button>;
+      })}
+      {show && (
+        <div className={`wow-tip z-50 w-64 ${tip ? "pointer-events-none fixed" : "absolute right-4 mt-10"}`}
+             style={tip ? { left: Math.max(12, Math.min(tip.x + 14, (typeof window !== "undefined" ? window.innerWidth : 800) - 280)), top: tip.y + 14 } : undefined}>
+          <p className="font-bold" style={{ color: show.b.kind === "debuff" ? "#ff6a5c" : TIP_YELLOW }}>{show.b.name}</p>
+          <p className="text-white">{show.b.effect}</p>
+          <p className="mt-1 text-[12px] text-[#9d9d9d]">{show.b.kind === "debuff" ? "Debuff" : "Buff"} · {show.b.source}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Spezialisierung wählen -----------------------------------------------------------------
+function SpecChooser({ data, onChoose, onClose }: { data: Hero; onChoose: (spec: string | null) => Promise<void>; onClose: () => void }) {
+  const h = data.hero;
+  const [busy, setBusy] = useState(false);
+  async function pick(spec: string | null) {
+    setBusy(true);
+    try { await onChoose(spec); onClose(); } finally { setBusy(false); }
+  }
+  const autoLabel = data.specs.find((s) => s.key === h.spec_auto)?.label ?? "noch offen";
+  return (
+    <RunAnalysisDialog title="Spezialisierung wählen" onClose={onClose}>
+      <p className="mb-3 text-sm text-muted">Deine Klasse folgt deinem Training. Die Spezialisierung wählst du als <b className="text-ink">Trainingsfokus</b>:
+        passende Läufe geben ab heute +10 % EP. Die Neigung zeigt, wie gut dein bisheriges Training dazu passt.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {data.specs.map((sp) => {
+          const active = h.spec_chosen === sp.key;
+          return <button key={sp.key} type="button" disabled={busy || active} onClick={() => pick(sp.key)}
+                         className="rounded-md border p-3 text-left transition hover:brightness-110"
+                         style={{ borderColor: active ? h.class_color : "#4b3a22", background: active ? `color-mix(in srgb, ${h.class_color} 14%, #120e0a)` : "#120e0a" }}>
+            <p className="font-display text-sm font-bold" style={{ color: active ? h.class_color : TIP_YELLOW }}>{sp.label}{active ? " · aktiv" : ""}</p>
+            <p className="text-xs text-muted">{sp.desc}</p>
+            <p className="mt-1 text-xs" style={{ color: "#1eff00" }}>{sp.focus}</p>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-muted">
+              <span>Neigung</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#0a0807]"><div className="h-full rounded-full" style={{ width: `${(sp.score ?? 0) * 100}%`, background: h.class_color }} /></div>
+              <span className="tabular-nums">{sp.score != null ? Math.round(sp.score * 100) : "–"}</span>
+            </div>
+          </button>;
+        })}
+      </div>
+      <button type="button" disabled={busy || h.spec_chosen == null} onClick={() => pick(null)}
+              className="mt-3 w-full rounded-md border border-[#4b3a22] p-2.5 text-left text-xs text-muted hover:brightness-110">
+        <b style={{ color: TIP_YELLOW }}>Automatisch</b> – folgt deiner Neigung (aktuell {autoLabel}), ohne Fokus-Bonus{h.spec_chosen == null ? " · aktiv" : ""}
+      </button>
+    </RunAnalysisDialog>
+  );
+}
+
+export function HeroHeader({ data, onSpec }: { data: Hero; onSpec: (spec: string | null) => Promise<void> }) {
+  const [choosing, setChoosing] = useState(false);
   const h = data.hero;
   const shares: [string, number, string][] = [
     ["Laufen", h.shares.laufen, "#aad372"], ["Kraft", h.shares.kraft, "#c69b6d"], ["Alltag", h.shares.alltag, "#00ff98"],
@@ -186,7 +271,13 @@ export function HeroHeader({ data }: { data: Hero }) {
         <div className="min-w-0 flex-1">
           <h2 className="text-3xl font-bold leading-none" style={{ color: h.class_color, textShadow: "0 2px 6px #000" }}>{h.class_label}</h2>
           <p className="mt-1 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>&lt;{h.title}&gt; · Stufe {h.level}</p>
-          <p className="text-xs text-muted">{h.spec_label ?? "Ohne Spezialisierung"} — {h.class_desc}</p>
+          <p className="text-xs text-muted">
+            <button type="button" onClick={() => setChoosing(true)} className="font-semibold underline decoration-dotted underline-offset-4" style={{ color: "var(--wow-gold-soft)" }}>
+              {h.spec_label ?? "Spezialisierung wählen"}
+            </button>
+            {h.spec_chosen ? " · Fokus" : " · automatisch"} — {h.class_desc}
+          </p>
+          <div className="relative mt-2"><BuffBar buffs={data.buffs} /></div>
         </div>
         <div className="text-right tabular-nums">
           <p className="font-display text-[11px] uppercase tracking-wider text-muted">Diese Woche</p>
@@ -223,6 +314,7 @@ export function HeroHeader({ data }: { data: Hero }) {
           ) : <p className="text-xs text-muted">{h.spec_desc}</p>}
         </div>
       </div>
+      {choosing && <SpecChooser data={data} onChoose={onSpec} onClose={() => setChoosing(false)} />}
     </Card>
   );
 }
@@ -425,7 +517,7 @@ export function HeroLog({ data }: { data: Hero }) {
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />
@@ -439,6 +531,8 @@ export function HeroRules({ data }: { data: Hero }) {
         <li>Ab dem {data.rules.runs_full_xp + 1}. Lauf bzw. {data.rules.workouts_full_xp + 1}. Krafttraining einer Woche nur halbe EP – Erholung zählt.</li>
         <li>Ruhe- und Krankheitstage laden {data.rules.rest_per_day} EP „Ausgeruht“, das die nächsten Trainings-EP verdoppelt.</li>
         <li>Alltag: Schritte über 5.000, Rad und Gehen. Erfolge zählen mit ihren Punkten.</li>
+        <li>Buffs: Protein-Ziel am Vortag (Wohlgenährt) und eine Nacht ab 7 h (Erholt) geben je +5 % Trainings-EP.</li>
+        <li>Fokus: Läufe passend zur gewählten Spezialisierung geben ab dem Tag der Wahl +10 %.</li>
       </ul>
     </Card>
   );

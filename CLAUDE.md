@@ -219,3 +219,15 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Chronik:** Stufenverlauf aus `progression` (Backend, je ISO-Woche EP je Quelle + kumulierte EP + Stufe mit Bruchteil) und gestapelte EP-Balken der letzten 12 Wochen.
   - **Effekte** (`.wow-*` in globals.css, bei „Bewegung reduzieren“ aus): Glanz auf Episch/Legendär/Artefakt, gelbes Leuchten an neuer Beute (localStorage `milon.hero.seen`, erster Besuch = alles gesehen), Stufenaufstiegs-Banner (localStorage `milon.hero.level`), Truhen-Enthüllung mit rotierenden Strahlen nach der Wahl (`LootReveal`).
   - **Flavor-Text** von Truhen-Gegenständen jetzt quellenabhängig, auch für bereits gewählte (`hero.flavor`).
+- **Etappe 2a (2026-10-16): Spezialisierung wählbar + Buffs/Debuffs.**
+  - **Klasse** bleibt automatisch.
+  - **Spezialisierung** wählt man im Dialog (Klick auf den Spec-Namen) als Trainingsfokus: Gespeichert wird die datierte Historie `hero_state.spec_history` (`[{from, value}]`, `None` = automatisch). Passende Läufe geben **ab dem Tag der Wahl** +10 % EP (`matches_spec`: Ausdauer Z1–2, Tempo Z3–4, Strecke ≥ 10 km, Last ab 3. Lauf der Woche). API `POST /hero/spec`.
+  - **Daten-Buffs** (`day_buffs`, wirken auch rückwirkend, weil sie aus Messdaten stammen):
+    - Wohlgenährt = Protein am Vortag ≥ 90 % des Referenzziels.
+    - Erholt = Hauptnacht ≥ 7 h.
+    - Je Buff +5 % Trainings-EP.
+  - Der `ledger` nimmt dafür ein `Mods`-Objekt; die neuen Quellen `buffs` und `fokus` stehen in `xp_sources` und `progression`.
+  - **Buff-Leiste** am Einheitenrahmen (`buffs_today`):
+    - Buffs: Wohlgenährt, Erholt, Ausgeruht, Energiegeladen (Check-in ≥ 4), Feuereifer (Serie ≥ 7 Tage), Fokus.
+    - Debuffs ohne Malus: Übermüdet (< 6 h), Erschöpft (Check-in ≤ 2), Krank.
+    - WoW-Tooltip beim Überfahren, Antippen pinnt ihn.
