@@ -45,9 +45,22 @@ export function Icon({ children, size = 20 }: { children: React.ReactNode; size?
 }
 
 // --- Tooltip (WoW-Stil): beim Überfahren schwebend, beim Klicken als Dialog -----------------
-function ItemTooltipBody({ item }: { item: HeroItem }) {
+export type Gear = {
+  equipment: Record<string, HeroItem>;
+  equip: (itemId: string) => Promise<void>;
+  unequip: (slot: string) => Promise<void>;
+  equipBest: () => Promise<void>;
+  dragging: string | null;
+  setDragging: (slot: string | null) => void;
+};
+const DRAG_TYPE = "application/x-hero-item";
+const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
+const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
+
+function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
   const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe" };
   return <>
+    {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
     <p style={{ color: TIP_YELLOW }}>Gegenstandsstufe {item.ilvl}</p>
     <p className="flex justify-between gap-6"><span>{item.slot_label}</span><span>{item.rarity_label}</span></p>
@@ -58,30 +71,65 @@ function ItemTooltipBody({ item }: { item: HeroItem }) {
   </>;
 }
 
-function useItemTip() {
+function IlvlDiff({ item, worn }: { item: HeroItem; worn?: HeroItem }) {
+  if (!worn || worn.id === item.id || item.equipped) return null;
+  const d = item.ilvl - worn.ilvl;
+  const color = d > 0 ? "#1eff00" : d < 0 ? "#ff3b3b" : "#9d9d9d";
+  const text = d > 0 ? `▲ ${d} Stufen besser als angelegt` : d < 0 ? `▼ ${-d} Stufen schlechter als angelegt` : "gleiche Stufe wie angelegt";
+  return <p className="mt-1 text-[12px]" style={{ color }}>{text}</p>;
+}
+
+function useItemTip(gear?: Gear) {
   const [tip, setTip] = useState<{ item: HeroItem; x: number; y: number } | null>(null);
   const [open, setOpen] = useState<HeroItem | null>(null);
+  const [busy, setBusy] = useState(false);
+  const worn = (item: HeroItem) => gear?.equipment[item.slot];
+  const canEquip = (item: HeroItem) => !!gear && !item.equipped;
   const bind = (item: HeroItem) => ({
     onMouseEnter: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
     onMouseMove: (e: React.MouseEvent) => setTip({ item, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => setTip(null),
     onClick: () => { setTip(null); setOpen(item); },
+    // Rechtsklick legt an wie in WoW.
+    onContextMenu: canEquip(item) ? (e: React.MouseEvent) => { e.preventDefault(); setTip(null); gear!.equip(item.id); } : undefined,
+    draggable: canEquip(item),
+    onDragStart: canEquip(item) ? (e: React.DragEvent) => {
+      setTip(null);
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ id: item.id, slot: item.slot }));
+      e.dataTransfer.effectAllowed = "move";
+      gear!.setDragging(item.slot);
+    } : undefined,
+    onDragEnd: gear ? () => gear.setDragging(null) : undefined,
   });
+  async function act(fn: () => Promise<void>) {
+    setBusy(true);
+    try { await fn(); setOpen(null); } finally { setBusy(false); }
+  }
+  const compare = tip && !tip.item.equipped ? worn(tip.item) : undefined;
   const node = <>
     {tip && typeof window !== "undefined" && (
-      <div className="wow-tip pointer-events-none fixed z-50 w-72 max-w-[calc(100vw-24px)]"
-           style={{ left: Math.max(12, Math.min(tip.x + 16, window.innerWidth - 300)), top: Math.max(12, Math.min(tip.y + 16, window.innerHeight - 220)) }}>
-        <ItemTooltipBody item={tip.item} />
+      <div className="pointer-events-none fixed z-50 flex items-start gap-1.5"
+           style={{ left: Math.max(12, Math.min(tip.x + 16, window.innerWidth - (compare ? 600 : 300))), top: Math.max(12, Math.min(tip.y + 16, window.innerHeight - 240)) }}>
+        <div className="wow-tip w-72"><ItemTooltipBody item={tip.item} /><IlvlDiff item={tip.item} worn={worn(tip.item)} /></div>
+        {compare && compare.id !== tip.item.id && <div className="wow-tip w-72 opacity-95"><ItemTooltipBody item={compare} worn /></div>}
       </div>
     )}
     {open && <RunAnalysisDialog title={open.name} onClose={() => setOpen(null)}>
-      <div className="wow-tip mx-auto max-w-sm"><ItemTooltipBody item={open} /></div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <div className="wow-tip w-full max-w-sm"><ItemTooltipBody item={open} /><IlvlDiff item={open} worn={worn(open)} /></div>
+        {!open.equipped && worn(open) && worn(open)!.id !== open.id && <div className="wow-tip w-full max-w-sm"><ItemTooltipBody item={worn(open)!} worn /></div>}
+      </div>
+      {gear && <div className="mt-4 flex justify-center gap-2">
+        {open.equipped
+          ? <button type="button" disabled={busy} className={BTN} style={BTN_STYLE} onClick={() => act(() => gear.unequip(open.slot))}>Ablegen</button>
+          : <button type="button" disabled={busy} className={BTN} style={BTN_STYLE} onClick={() => act(() => gear.equip(open.id))}>{worn(open) ? "Anlegen (tauschen)" : "Anlegen"}</button>}
+      </div>}
     </RunAnalysisDialog>}
   </>;
   return { bind, node };
 }
 
-function Slot({ item, slot, bind, size = 44 }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number }) {
+function Slot({ item, slot, bind, size = 44, upgrade = false }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number; upgrade?: boolean }) {
   if (!item) {
     return <span className="wow-slot text-[#4b3a22]" style={{ width: size, height: size }} title={slot ? `${SLOT_NAME[slot]} – leer` : undefined}>
       {slot && <Icon size={size * 0.45}>{SLOT_ICON[slot]}</Icon>}
@@ -89,9 +137,10 @@ function Slot({ item, slot, bind, size = 44 }: { item?: HeroItem; slot?: string;
   }
   const col = rc(item.rarity);
   return <button type="button" {...bind} aria-label={item.name}
-                 className="wow-slot wow-slot-filled shrink-0 focus:outline-none focus-visible:ring-2"
+                 className="wow-slot wow-slot-filled relative shrink-0 focus:outline-none focus-visible:ring-2"
                  style={{ width: size, height: size, color: col, ["--glow" as string]: col }}>
     <Icon size={size * 0.5}>{SLOT_ICON[item.slot]}</Icon>
+    {upgrade && <span className="absolute left-0.5 top-0 text-[11px] font-bold leading-none text-[#1eff00]" style={{ textShadow: "0 1px 1px #000" }} title="Verbesserung">▲</span>}
   </button>;
 }
 
@@ -191,21 +240,44 @@ function StatRow({ a }: { a: HeroAttribute }) {
   );
 }
 
-export function HeroCharacter({ data }: { data: Hero }) {
-  const { bind, node } = useItemTip();
-  const best: Record<string, HeroItem> = {};
-  for (const it of data.inventory) if (!best[it.slot] || it.ilvl > best[it.slot].ilvl) best[it.slot] = it;
-  const equipped = Object.values(best);
-  const avg = equipped.length ? Math.round(equipped.reduce((s, it) => s + it.ilvl, 0) / equipped.length) : null;
-  const column = (slots: string[]) => <div className="flex flex-col gap-1.5">{slots.map((s) => <Slot key={s} slot={s} item={best[s]} bind={best[s] && bind(best[s])} />)}</div>;
+export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
+  const { bind, node } = useItemTip(gear);
+  const [busy, setBusy] = useState(false);
+  const upgrades = data.inventory.filter((it) => !it.equipped && it.ilvl > (gear.equipment[it.slot]?.ilvl ?? 0));
+  const upgradeSlots = new Set(upgrades.map((it) => it.slot)).size;
+  function target(slot: string) {
+    const item = gear.equipment[slot];
+    return <div key={slot} className="rounded-md transition"
+                style={gear.dragging === slot ? { boxShadow: `0 0 0 2px ${GOLD}, 0 0 12px ${GOLD}` } : undefined}
+                onDragOver={(e) => { if (gear.dragging === slot) e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const raw = e.dataTransfer.getData(DRAG_TYPE);
+                  gear.setDragging(null);
+                  if (!raw) return;
+                  const dropped = JSON.parse(raw) as { id: string; slot: string };
+                  if (dropped.slot === slot) gear.equip(dropped.id);
+                }}>
+      <Slot slot={slot} item={item} bind={item && bind(item)} />
+    </div>;
+  }
+  const column = (slots: string[]) => <div className="flex flex-col gap-1.5">{slots.map(target)}</div>;
   return (
     <Card>
-      <CardTitle title="Charakter" sub="Beste Ausrüstung je Platz · Werte aus deinen Messdaten (0–100, ± zu vor 30 T)" />
+      <div className="flex items-start justify-between gap-2">
+        <CardTitle title="Charakter" sub="Anlegen: in den Platz ziehen, Rechtsklick oder antippen · Werte 0–100, ± zu vor 30 T" />
+        {upgradeSlots > 0 && (
+          <button type="button" disabled={busy} className={`${BTN} shrink-0`} style={{ ...BTN_STYLE, color: "#1eff00" }}
+                  onClick={async () => { setBusy(true); try { await gear.equipBest(); } finally { setBusy(false); } }}>
+            ▲ Beste anlegen ({upgradeSlots})
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
         {column(LEFT_SLOTS)}
         <div className="min-w-0 rounded-md border border-[#2c2216] bg-black/30 px-3 py-2">
           <p className="mb-1 text-center font-display text-[11px] uppercase tracking-wider text-muted">
-            Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{avg ?? "–"}</b>
+            Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{data.ilvl_avg ?? "–"}</b>
           </p>
           <div className="wow-rule mb-1" />
           {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
@@ -294,15 +366,16 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
 }
 
 // --- Taschen ------------------------------------------------------------------------------
-export function HeroBags({ items }: { items: HeroItem[] }) {
-  const { bind, node } = useItemTip();
-  const size = Math.max(16, Math.ceil(items.length / 8) * 8);
+export function HeroBags({ items, gear }: { items: HeroItem[]; gear: Gear }) {
+  const { bind, node } = useItemTip(gear);
+  const loose = items.filter((it) => !it.equipped);
+  const size = Math.max(16, Math.ceil(loose.length / 8) * 8);
   return (
     <Card>
-      <CardTitle title={`Taschen · ${items.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. Überfahren oder antippen für Details." />
+      <CardTitle title={`Taschen · ${loose.length} / ${size}`} sub="Jeder Lauf droppt Beute – Seltenheit verdient, Gegenstand zufällig. ▲ = besser als angelegt." />
       <div className="flex flex-wrap gap-1.5">
-        {Array.from({ length: size }, (_, i) => items[i]
-          ? <Slot key={items[i].id} item={items[i]} bind={bind(items[i])} />
+        {Array.from({ length: size }, (_, i) => loose[i]
+          ? <Slot key={loose[i].id} item={loose[i]} bind={bind(loose[i])} upgrade={loose[i].ilvl > (gear.equipment[loose[i].slot]?.ilvl ?? 0)} />
           : <span key={`empty-${i}`} className="wow-slot" />)}
       </div>
       {node}

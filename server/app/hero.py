@@ -49,6 +49,15 @@ class HeroClaim(SQLModel, table=True):
     claimed_at: datetime
 
 
+class HeroEquip(SQLModel, table=True):
+    """Angelegter Gegenstand je Ausrüstungsplatz (item_id wie im Inventar)."""
+    __tablename__ = "hero_equipment"
+
+    slot: str = Field(primary_key=True)
+    item_id: str
+    equipped_at: datetime
+
+
 RARITIES = ["grau", "weiss", "gruen", "blau", "lila", "orange", "rot"]
 RARITY_LABEL = {"grau": "Schrott", "weiss": "Gewöhnlich", "gruen": "Ungewöhnlich", "blau": "Selten",
                 "lila": "Episch", "orange": "Legendär", "rot": "Artefakt"}
@@ -606,6 +615,62 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
     return item
 
 
+# --- Ausrüstung ------------------------------------------------------------------------
+def _inventory(drops_: list[dict], claims: dict[str, HeroClaim]) -> list[dict]:
+    claimed = [{**json.loads(c.item_json), "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
+    return sorted(drops_ + claimed, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
+
+
+def _equipment() -> dict[str, str]:
+    with Session(engine) as session:
+        return {e.slot: e.item_id for e in session.exec(select(HeroEquip)).all()}
+
+
+def _set_slot(session: Session, slot: str, item_id: str | None) -> None:
+    row = session.get(HeroEquip, slot)
+    if item_id is None:
+        if row is not None:
+            session.delete(row)
+    elif row is None:
+        session.add(HeroEquip(slot=slot, item_id=item_id, equipped_at=datetime.now()))
+    else:
+        row.item_id, row.equipped_at = item_id, datetime.now()
+        session.add(row)
+
+
+def equip(item_id: str, today: date | None = None) -> dict:
+    """Legt einen Gegenstand aus dem Inventar an (ersetzt den Platz). KeyError = unbekannt."""
+    items = _inventory(_load(today or local_today())["drops"], _claims())
+    item = next((it for it in items if it["id"] == item_id), None)
+    if item is None:
+        raise KeyError(item_id)
+    with Session(engine) as session:
+        _set_slot(session, item["slot"], item_id)
+        session.commit()
+    return item
+
+
+def unequip(slot: str) -> None:
+    if slot not in SLOTS:
+        raise KeyError(slot)
+    with Session(engine) as session:
+        _set_slot(session, slot, None)
+        session.commit()
+
+
+def equip_best(today: date | None = None) -> dict[str, str]:
+    """Legt je Platz den Gegenstand mit der höchsten Stufe an."""
+    best: dict[str, dict] = {}
+    for it in _inventory(_load(today or local_today())["drops"], _claims()):
+        if it["slot"] not in best or it["ilvl"] > best[it["slot"]]["ilvl"]:
+            best[it["slot"]] = it
+    with Session(engine) as session:
+        for slot, it in best.items():
+            _set_slot(session, slot, it["id"])
+        session.commit()
+    return {slot: it["id"] for slot, it in best.items()}
+
+
 # --- Gesamtbild -------------------------------------------------------------------------
 def _load(today: date) -> dict:
     runs = _safe(_runs, pd.DataFrame())
@@ -633,8 +698,9 @@ def overview(today: date | None = None) -> dict:
     cls = classify(book["daily"], runs, today)
     week_start = _monday(today)
     claims = _claims()
-    claimed_items = [{**json.loads(c.item_json), "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
-    inventory = sorted(data["drops"] + claimed_items, key=lambda it: (it["date"], it["ilvl"]), reverse=True)
+    worn = _equipment()
+    inventory = [{**it, "equipped": worn.get(it["slot"]) == it["id"]} for it in _inventory(data["drops"], claims)]
+    equipment = {it["slot"]: it for it in inventory if it["equipped"]}
 
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
@@ -668,6 +734,8 @@ def overview(today: date | None = None) -> dict:
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"]),
         "inventory": inventory,
+        "equipment": equipment,
+        "ilvl_avg": round(sum(it["ilvl"] for it in equipment.values()) / len(equipment)) if equipment else None,
         "log": [{**e, "date": e["date"].isoformat()} for e in log_events[:40]],
         "rules": {"runs_full_xp": RUNS_FULL_XP, "workouts_full_xp": WORKOUTS_FULL_XP,
                   "rest_per_day": REST_PER_DAY, "vault_thresholds": VAULT_THRESHOLDS},

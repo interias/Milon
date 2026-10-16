@@ -136,3 +136,30 @@ def test_vault_drops_and_claim_flow(hero_db):
     assert after["vault"]["claimable"] == [] and after["vault"]["veteran"] is None
     assert {i["source"] for i in after["inventory"]} == {"beute", "truhe", "veteran"}
     assert any(e["kind"] == "truhe" for e in after["log"])
+
+
+def test_equip_unequip_and_best(hero_db, monkeypatch):
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        session.add(hero.HeroState(key="start", value="2026-10-01"))
+        for day in range(1, 15):
+            add_run(session, datetime(2026, 10, day, 7), km=5 + day % 4)
+        session.commit()
+    items = hero.overview(TODAY)["inventory"]
+    assert items and not any(it["equipped"] for it in items)
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    first = items[-1]
+    assert client.post("/hero/equip", json={"item_id": first["id"]}).status_code == 200
+    o = hero.overview(TODAY)
+    assert o["equipment"][first["slot"]]["id"] == first["id"] and o["ilvl_avg"] == first["ilvl"]
+    assert client.post("/hero/equip", json={"item_id": "drop:unbekannt"}).status_code == 404
+    best = client.post("/hero/equip-best").json()["equipped"]
+    o = hero.overview(TODAY)
+    for slot, item_id in best.items():
+        top = max((it for it in o["inventory"] if it["slot"] == slot), key=lambda it: it["ilvl"])
+        assert item_id == top["id"] and o["equipment"][slot]["equipped"]
+    assert client.post("/hero/unequip", json={"slot": first["slot"]}).status_code == 200
+    assert first["slot"] not in hero.overview(TODAY)["equipment"]
+    assert client.post("/hero/unequip", json={"slot": "flügel"}).status_code == 404
