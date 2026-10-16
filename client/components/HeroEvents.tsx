@@ -2,7 +2,7 @@
 
 import type { Hero } from "@/lib/api";
 import { Card } from "@/components/ui";
-import { Icon } from "@/components/Hero";
+import { HeroLink, Icon } from "@/components/Hero";
 import { dm } from "@/lib/format";
 
 const TIP_YELLOW = "#ffd100";
@@ -67,7 +67,11 @@ export function HeroEvent({ data }: { data: Hero }) {
         <span className="text-[11px] text-muted">Saison-Event · nur diesen Monat</span>
       </div>
       <p className="text-[12px] text-muted">{e.rule} · Belohnung bei {e.goal}: {e.xp} EP und</p>
-      <p className="text-[13px] font-semibold" style={{ color: "var(--rar-lila)" }}>[{e.item}]</p>
+      <p className="text-[13px] font-semibold">
+        <HeroLink name={e.item} color="var(--rar-lila)"
+                  item={data.inventory.find((it) => it.id === `event:${e.month}`)}
+                  lines={["Episch · Festtagsbeute", `${e.name}: ${e.goal} ${e.token} sammeln`, e.rule]} />
+      </p>
       <div className="mt-2 flex flex-wrap gap-1" aria-label={`${e.tokens} von ${e.goal} ${e.token}`}>
         {Array.from({ length: e.goal }, (_, i) => (
           <span key={i} className="grid h-6 w-6 place-items-center rounded border text-[12px]"

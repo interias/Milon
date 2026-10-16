@@ -320,3 +320,11 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Saga mit „Weiterlesen“, EP-Regeln als `<details>`.
     - Erfolgs-Kategorien einklappbar (`AchievementsGrid collapsible`, bei Filter offen).
   - **Gemessen bei 375 px:** Tabs ab 397 statt 1.125 px; Erfolge 1.370 statt 12.400 px; Charakter 1.410 statt 2.300 px.
+- **Links in eckigen Klammern (2026-10-16):** „Kampflog“ heißt jetzt **„Log“**.
+  - Jeder `[Name]` im Log (und der Event-Gegenstand) ist ein `HeroLink`: WoW-Tooltip beim Überfahren; Klick bzw. Antippen öffnet einen Dialog mit „Zum Posten kopieren“.
+  - **Rechtsklick kopiert** eine Zeile wie `[Name] (Episch, Beine, Stufe 218) – verdient: …` in die Zwischenablage (`navigator.clipboard`, Fallback `execCommand`).
+  - **Datenquellen:**
+    - Gegenstände über `log[].item_id` → Inventar.
+    - Erfolge über den Namen → Erfolgsdaten der Seite (`HeroLinkContext`).
+    - Aufträge, Bosse, Instanzen, Events, Duelle und Reittiere über `log[].tip` (Zeilen, im Backend gebaut: `data["tips"]`).
+  - Der Log-Ticker oben verlinkt bewusst nicht (er öffnet den Log-Tab).
