@@ -213,6 +213,7 @@ export type Hero = {
   quests: { week: string; halved: boolean; sick_days: number; complete: boolean; complete_on: string | null;
     quests: { id: string; category: string; title: string; goal: string; target: number; unit: string; progress: number; done: boolean; done_on: string | null; xp: number }[] } | null;
   buffs: HeroBuff[];
+  companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
   progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; xp: number; level: number }[];

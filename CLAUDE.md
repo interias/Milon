@@ -277,3 +277,10 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - Der aktive Tab steht im Hash (`#erfolge`, Link von der Laufen-Seite). Hinweise an den Tabs: „!“ = Truhe wählbar, „▲“ = Verbesserung oder neue Beute in den Taschen, „•“ = freie Talentreihe.
   - **Kampflog immer sichtbar:** ab `xl` als mitlaufende Spalte rechts (300 px), darunter kompakt unter dem Kopf.
   - Innere Raster im Tab-Bereich nutzen Container-Queries (`@3xl:`), weil die Spalte schmaler ist als der Viewport.
+- **Lebendigkeit (2026-10-16):** `components/HeroLife.tsx`, `lib/hero-sound.ts`.
+  - **Szene** hinter der Figur aus dem echten Wetter (`api.weather`) und der Tageszeit: Nacht, Morgengrauen, Tag oder Abenddämmerung aus Sonnenauf- und -untergang ±45 min. Je nach Wetter kommen Sterne/Mond, Sonne, ziehende Wolken, Regen, Schnee, Nebel oder Blitze dazu.
+  - **Begleiter** (`hero.companion`) passend zur Klasse: Fuchs Funke (Jäger), Bär Brumm (Krieger), Löwe Leo (Paladin), Eule Kauz (Mönch).
+    - Wachstum nach Serie: Junges, ab 7 Tagen Halbstark, ab 30 Ausgewachsen.
+    - Stimmung aus Tagesdaten: krank, stolz (epische Beute heute), froh (trainiert), schläft (22–6 Uhr), wartet. Klick zeigt eine Sprechblase.
+  - **„Willkommen zurück“:** localStorage `milon.hero.visit` (EP + Log-Schlüssel). Zeigt neue Kampflog-Einträge, die EP-Leiste zählt vom alten Stand hoch. Beim ersten Besuch passiert nichts.
+  - **Klänge:** WebAudio-Synthese, standardmäßig aus (`milon.hero.sound`), Schalter im Einheitenrahmen. Es gibt Fanfare für Stufenaufstieg, Truhe, Beute (Tonhöhe nach Rarität), Anlegen und Tab-Klick.

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Hero, HeroAttribute, HeroBuff, HeroItem, HeroVault, Rarity } from "@/lib/api";
+import type { Hero, HeroAttribute, HeroBuff, HeroItem, HeroVault, Rarity, Weather } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de0, dm } from "@/lib/format";
 import { AttributeRadar, HeroFigure } from "@/components/HeroVisuals";
+import { Companion, HeroScene, SoundToggle } from "@/components/HeroLife";
+import { play } from "@/lib/hero-sound";
 
 // Farben/Tokens kommen aus dem .wow-Thema in globals.css.
 const rc = (r: Rarity) => `var(--rar-${r})`;
@@ -167,15 +169,18 @@ function Slot({ item, slot, bind, size = 44, upgrade = false, isNew = false }: {
 }
 
 // --- Einheitenrahmen ----------------------------------------------------------------------
-function XpBar({ data }: { data: Hero }) {
+function XpBar({ data, fromXp }: { data: Hero; fromXp?: number | null }) {
   const h = data.hero;
   const span = h.next - h.floor;
+  const start = fromXp != null && fromXp < h.xp ? Math.max(0, (fromXp - h.floor) / span) : h.progress;
+  const [shown, setShown] = useState(start);
+  useEffect(() => { const t = setTimeout(() => setShown(h.progress), 350); return () => clearTimeout(t); }, [h.progress]);
   const rested = Math.min(1 - h.progress, h.rested / span);
   return (
     <div className="relative h-4 w-full overflow-hidden rounded-[3px] border border-[#000] bg-[#0a0807]" style={{ boxShadow: "0 0 0 1px #5b4526" }}>
       {rested > 0 && <div className="absolute inset-y-0" style={{ left: `${h.progress * 100}%`, width: `${rested * 100}%`, background: "var(--wow-rested)", opacity: .55 }} />}
-      <div className="absolute inset-y-0 left-0 transition-[width] duration-700"
-           style={{ width: `${h.progress * 100}%`, background: "linear-gradient(180deg, #b36cf0, var(--wow-xp) 55%, #5c2391)" }} />
+      <div className="absolute inset-y-0 left-0 transition-[width] duration-[1600ms] ease-out"
+           style={{ width: `${shown * 100}%`, background: "linear-gradient(180deg, #b36cf0, var(--wow-xp) 55%, #5c2391)" }} />
       <div className="absolute inset-0" style={{ background: "repeating-linear-gradient(90deg, transparent 0 calc(5% - 1px), rgba(0,0,0,.65) calc(5% - 1px) 5%)" }} />
       <p className="absolute inset-0 grid place-items-center text-[11px] font-semibold text-white" style={{ textShadow: "0 1px 2px #000" }}>
         EP {de0(h.xp - h.floor)} / {de0(span)}{h.rested > 0 ? ` · Ausgeruht +${de0(h.rested)}` : ""}
@@ -268,7 +273,7 @@ function SpecChooser({ data, onChoose, onClose }: { data: Hero; onChoose: (spec:
   );
 }
 
-export function HeroHeader({ data, onSpec, onTitle }: { data: Hero; onSpec: (spec: string | null) => Promise<void>; onTitle: () => void }) {
+export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSpec: (spec: string | null) => Promise<void>; onTitle: () => void; fromXp?: number | null }) {
   const [choosing, setChoosing] = useState(false);
   const h = data.hero;
   const shares: [string, number, string][] = [
@@ -300,12 +305,13 @@ export function HeroHeader({ data, onSpec, onTitle }: { data: Hero; onSpec: (spe
           <div className="relative mt-2"><BuffBar buffs={data.buffs} /></div>
         </div>
         <div className="text-right tabular-nums">
+          <div className="mb-1 flex justify-end"><SoundToggle /></div>
           <p className="font-display text-[11px] uppercase tracking-wider text-muted">Diese Woche</p>
           <p className="font-display text-2xl font-bold" style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</p>
           <p className="text-[11px] text-muted">noch {de0(h.next - h.xp)} bis Stufe {h.level + 1}</p>
         </div>
       </div>
-      <div className="mt-4"><XpBar data={data} /></div>
+      <div className="mt-4"><XpBar data={data} fromXp={fromXp} /></div>
       <div className="wow-rule my-4" />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -356,7 +362,7 @@ function StatRow({ a }: { a: HeroAttribute }) {
   );
 }
 
-export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
+export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear; weather?: Weather | null }) {
   const { bind, node } = useItemTip(gear);
   const [busy, setBusy] = useState(false);
   const upgrades = data.inventory.filter((it) => !it.equipped && it.ilvl > (gear.equipment[it.slot]?.ilvl ?? 0));
@@ -396,7 +402,9 @@ export function HeroCharacter({ data, gear }: { data: Hero; gear: Gear }) {
           <p className="absolute inset-x-0 top-1.5 z-10 text-center font-display text-[11px] uppercase tracking-wider text-muted">
             Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{data.ilvl_avg ?? "–"}</b>
           </p>
-          <div className="h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment}
+          <HeroScene weather={weather ?? null} />
+          <Companion pet={data.companion} />
+          <div className="relative h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment}
             aura={(() => { const s = data.sets.find((x) => x.bonus); return s ? { color: s.color, pulse: s.equipped >= 4 } : null; })()} /></div>
         </div>
         {column(RIGHT_SLOTS)}
@@ -581,6 +589,11 @@ export function HeroRules({ data }: { data: Hero }) {
 
 // --- Truhe öffnen: Lichtstrahlen, Gegenstand springt heraus --------------------------------
 export function LootReveal({ item, onClose }: { item: HeroItem; onClose: () => void }) {
+  useEffect(() => {
+    play("chest");
+    const t = setTimeout(() => play("loot", item.rarity), 450);
+    return () => clearTimeout(t);
+  }, [item.rarity]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", key);
