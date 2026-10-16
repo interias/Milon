@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_events, hero_quests, hero_social
+from . import hero_bosses, hero_events, hero_extras, hero_quests, hero_social
 from .checkins import local_today
 from .db import engine
 
@@ -331,9 +331,9 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event"]
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle"]
 EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
-             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event")}
+             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:")}
 
 
 class Mods:
@@ -919,6 +919,17 @@ def upgrade(item_id: str) -> dict:
     return {**item, "upgrades": ups + 1, "ilvl": item["ilvl"] + UPGRADE_ILVL}
 
 
+def choose_mount(key: str | None) -> None:
+    if key is not None:
+        data = _load(local_today())
+        m = next((m for m in hero_extras.mounts(data["runs"], data["workouts"], None) if m["key"] == key), None)
+        if m is None:
+            raise KeyError(key)
+        if not m["unlocked"]:
+            raise ValueError("Reittier noch nicht freigeschaltet.")
+    _state_set("mount", key or "")
+
+
 def choose_title(key: str | None, today: date | None = None) -> None:
     if key is not None:
         t = next((t for t in overview(today)["titles"] if t["key"] == key), None)
@@ -1238,6 +1249,9 @@ def _load(today: date) -> dict:
         m = (m + timedelta(days=32)).replace(day=1)
     events = [e for e in events if e]
     extra += [(date.fromisoformat(e["done_on"]), e["xp"], e["name"], "event") for e in events if e["done"]]
+    duels = _safe(lambda: hero_extras.run_duels(runs, start), [])
+    extra += [(date.fromisoformat(d["date"]), d["xp"], f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}.", "duell")
+              for d in duels if d["won"]]
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
@@ -1249,7 +1263,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events,
+            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -1275,7 +1289,7 @@ def overview(today: date | None = None) -> dict:
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
-                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event")]
+                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -1286,6 +1300,10 @@ def overview(today: date | None = None) -> dict:
                     "text": f"Truhe gewählt: {json.loads(c.item_json)['name']}",
                     "rarity": json.loads(c.item_json)["rarity"], "name": json.loads(c.item_json)["name"]}
                    for c in claims.values()]
+    for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None), []):
+        if m["unlocked"]:
+            log_events.append({"date": date.fromisoformat(m["unlocked_on"]), "kind": "reittier",
+                               "text": f"Reittier erhalten: {m['name']}", "name": m["name"]})
     log_events.sort(key=lambda e: e["date"], reverse=True)
 
     week_xp = sum(e["xp"] + e["bonus"] for e in entries if e["date"] >= week_start)
@@ -1316,6 +1334,11 @@ def overview(today: date | None = None) -> dict:
         "dungeons": data["dungeons"][::-1][:10],
         "daily": {k: v for k, v in data["daily"].items() if k in ("today", "streak", "last7")} if data["daily"] else None,
         "event": next((e for e in data["events"] if e["month"] == today.replace(day=1).isoformat()), None),
+        "duels": {"last": data["duels"][-1] if data["duels"] else None,
+                  "won": sum(1 for d in data["duels"] if d["won"]), "total": len(data["duels"]),
+                  "shadows": [hero_extras.shadow(runs, today, 91, "vor 3 Monaten"),
+                              hero_extras.shadow(runs, today, 365, "vor einem Jahr")]},
+        "mounts": _safe(lambda: hero_extras.mounts(runs, data["workouts"], _state_get("mount") or None), []),
         "inventory": inventory,
         "equipment": equipment,
         "dust": dust_balance(_item_mods()),

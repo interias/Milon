@@ -122,3 +122,14 @@ def upgrade_item(body: EquipInput) -> dict:
         raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/mount")
+def choose_mount(body: TitleInput) -> dict:
+    try:
+        hero.choose_mount(body.key)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail="Unbekanntes Reittier.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"key": body.key}
