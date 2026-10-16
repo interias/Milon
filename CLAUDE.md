@@ -293,3 +293,9 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Saison-Event je Monat** (`EVENTS`, z. B. Oktober Herbstfest):
     - Lauf = 1 Sammelstück, ab 10 km = 2. Ziel 12 → 300 EP (Quelle `event`) und ein fester epischer Event-Gegenstand (`event:<monat>`).
     - Szeneneffekt nach Event: Blätter, Schnee, Blüten, Glühwürmchen oder Funken.
+- **Doppelgänger + Reittiere (2026-10-16):** `app/hero_extras.py`, UI `components/HeroDuels.tsx`.
+  - **Lauf-Duell:** jeder Lauf seit Starttag gegen einen Zwilling 80–100 Tage vorher (Distanz ±20 %, nächste Distanz). Sieg = schneller und, falls vorhanden, höhere EF → 75 EP (Quelle `duelle`).
+  - **Schattenvergleich:** die letzten 28 Tage gegen dieselben 28 Tage vor 91 bzw. 365 Tagen (km, Läufe, Ø Pace, Ø EF). Besiegt ab 3/4. Der Jahres-Schatten erscheint erst, wenn Daten da sind.
+  - **Reittiere:** km-Meilensteine 100–3.000 (Deichschaf … Phönix des Niederrheins) und Arbeitssätze 2.000/5.000 (Kriegsbär, Eisenmammut). Das Freischaltdatum steht im Kampflog.
+    - Das gewählte Reittier liegt in `hero_state.mount` (API `POST /hero/mount`, 409 = gesperrt) und steht neben der Figur.
+  - **Frontend tolerant** gegenüber älteren API-Antworten (`?? []` / `return null`): Beim Neustart lädt das Frontend manchmal noch Daten des alten Servers.

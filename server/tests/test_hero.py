@@ -349,3 +349,23 @@ def test_daily_streak_survives_sick_day(monkeypatch):
             "checkins": {}, "protein": {}, "protein_target": None, "sleep": {}, "sick": {date(2026, 10, 3)}}
     monkeypatch.setattr(hero_events, "daily_key", lambda d, data: "bewegung")
     assert hero_events.dailies(date(2026, 10, 1), date(2026, 10, 4), data)["streak"] == 3
+
+
+def test_duels_shadows_and_mounts():
+    from app import hero_extras
+    rows = [{"external_id": "old", "started_at": datetime(2026, 7, 10, 7), "distance_km": 10.0, "dur_min": 65.0, "zone": 1, "ef": 1.0},
+            {"external_id": "new", "started_at": datetime(2026, 10, 10, 7), "distance_km": 10.5, "dur_min": 63.0, "zone": 1, "ef": 1.1},
+            {"external_id": "slow", "started_at": datetime(2026, 10, 12, 7), "distance_km": 9.5, "dur_min": 70.0, "zone": 1, "ef": 1.2}]
+    runs = runs_frame(rows)
+    runs["pace"] = runs["dur_min"] / runs["distance_km"]
+    duels = hero_extras.run_duels(runs, date(2026, 10, 1))
+    assert [(d["date"], d["won"], d["xp"]) for d in duels] == [("2026-10-10", True, 75), ("2026-10-12", False, 0)]
+    sh = hero_extras.shadow(runs, date(2026, 10, 14), 91, "vor 3 Monaten")
+    assert sh["available"] and {r["key"]: r["better"] for r in sh["rows"]} == {"km": True, "runs": True, "pace": False, "ef": True}
+    assert not hero_extras.shadow(runs, date(2026, 10, 14), 365, "vor einem Jahr")["available"]
+    wo = pd.DataFrame([{"id": 1, "started_at": pd.Timestamp("2026-09-01"), "sets": 2500, "day": date(2026, 9, 1)}])
+    many = runs_frame([{"external_id": f"k{i}", "started_at": datetime(2026, 8, 1) + timedelta(days=i), "distance_km": 30.0,
+                        "dur_min": 180.0, "zone": 1} for i in range(20)])
+    mounts = {m["key"]: m for m in hero_extras.mounts(many, wo, "schlachtross")}
+    assert mounts["schlachtross"]["unlocked_on"] == "2026-08-17" and mounts["schlachtross"]["chosen"]
+    assert mounts["kriegsbaer"]["unlocked"] and not mounts["mammut"]["unlocked"] and mounts["nebelwolf"]["value"] == 600

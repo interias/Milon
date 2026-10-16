@@ -6,6 +6,7 @@ import { api, type Achievements, type Hero, type HeroItem, type Weather } from "
 import { play } from "@/lib/hero-sound";
 import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
+import { HeroDuel, HeroMounts } from "@/components/HeroDuels";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
@@ -118,6 +119,7 @@ export default function Heldenreise() {
                 {tab === "charakter" && <>
                   <HeroCharacter data={hero} gear={gear} weather={weather} />
                   <HeroBags items={hero.inventory} gear={gear} />
+                  <HeroMounts data={hero} onChoose={async (key) => { await api.heroMount(key); play("equip"); await load(); }} />
                 </>}
                 {tab === "abenteuer" && <>
                   <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
@@ -132,6 +134,7 @@ export default function Heldenreise() {
                     <HeroRaid data={hero} />
                     <HeroDungeons data={hero} />
                   </div>
+                  <HeroDuel data={hero} />
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
                 {tab === "chronik" && <>
