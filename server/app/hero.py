@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_quests
+from . import hero_bosses, hero_quests
 from .checkins import local_today
 from .db import engine
 
@@ -312,7 +312,8 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege"]
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen"]
+EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz")}
 
 
 class Mods:
@@ -373,7 +374,7 @@ def step_xp(steps: int) -> int:
 
 
 def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | None = None,
-           quests: list[tuple[date, int, str]] | None = None) -> dict:
+           extra: list[tuple[date, float, str, str]] | None = None) -> dict:
     """Chronologisches XP-Buch mit Ruhebonus und Wochen-Abschwächung."""
     entries: list[dict] = []
     by_day_runs: dict[date, list] = {}
@@ -386,9 +387,9 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
     if not days:
         return {"entries": [], "pool": 0, "totals": {}, "daily": {}}
     first = min(days)
-    quest_by_day: dict[date, list] = {}
-    for d, xp, name in quests or []:
-        quest_by_day.setdefault(d, []).append((xp, name))
+    extra_by_day: dict[date, list] = {}
+    for d, xp, name, kind in extra or []:
+        extra_by_day.setdefault(d, []).append((xp, name, kind))
     ach_by_day: dict[date, list] = {}
     for d, pts, name in ach:
         ach_by_day.setdefault(min(d, today) if d else first, []).append((pts, name))
@@ -441,10 +442,11 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
             entries.append({"date": d, "kind": "erfolg", "xp": float(pts), "bonus": 0.0, "ref": None,
                             "label": f"Erfolg „{name}“", "name": name})
             day_xp["erfolge"] += pts
-        for xp, name in quest_by_day.get(d, []):
-            entries.append({"date": d, "kind": "auftrag", "xp": float(xp), "bonus": 0.0, "ref": None,
-                            "label": f"Auftrag „{name}“", "name": name})
-            day_xp["auftraege"] += xp
+        for xp, name, kind in extra_by_day.get(d, []):
+            key, prefix = EXTRA_KEY[kind]
+            entries.append({"date": d, "kind": kind, "xp": float(xp), "bonus": 0.0, "ref": None,
+                            "label": f"{prefix} „{name}“", "name": name})
+            day_xp[key] += xp
         if d in sick or not trained:
             pool = min(mods.rest_cap(d), pool + REST_PER_DAY)
         for k, v in day_xp.items():
@@ -649,6 +651,8 @@ _CHEST_FLAVOR = {
     "truhe": "Aus der Wochentruhe gehoben – der Lohn einer treuen Laufwoche.",
     "veteran": "Ein Erbstück deiner bisherigen Reise, lange vor dem ersten Drop verdient.",
     "auftrag": "Belohnung des Auftragsbretts – für eine Woche, in der alles erledigt wurde.",
+    "boss": "Aus dem Hort eines besiegten Monatsbosses.",
+    "instanz": "Aus der Schatzkammer einer bezwungenen Instanz.",
 }
 
 
@@ -885,6 +889,28 @@ def quest_loot(weeks: list[dict], entries: list[dict]) -> list[dict]:
     return out
 
 
+def boss_loot(bosses: list[dict], dungeons: list[dict], entries: list[dict]) -> list[dict]:
+    out = []
+    for b in bosses:
+        if not b["defeated"]:
+            continue
+        rng = _rng("bossloot", b["month"], b["key"])
+        rarity = "orange" if b["loot"] == "orange" and rng.random() < 0.5 else "lila"
+        won = date.fromisoformat(b["defeated_on"])
+        item = make_item(rng, rarity, datetime.combine(won, datetime.min.time()).replace(hour=20), None,
+                         _level_at(entries, won), "boss", f"Monatsboss „{b['name']}“ besiegt")
+        out.append({**item, "id": f"boss:{b['month']}:{b['key']}"})
+    for dg in dungeons:
+        if not dg["cleared"]:
+            continue
+        rng = _rng("dungeonloot", dg["id"])
+        day = date.fromisoformat(dg["date"])
+        item = make_item(rng, dg["loot"], datetime.combine(day, datetime.min.time()).replace(hour=12), None,
+                         _level_at(entries, day), "instanz", f"{dg['tier_label']}e Instanz „{dg['name']}“ bezwungen")
+        out.append({**item, "id": dg["id"]})
+    return out
+
+
 def talents_view(mods: Mods, level: int, today: date) -> list[dict]:
     rows = []
     for lvl, name, options in TALENT_ROWS:
@@ -996,15 +1022,29 @@ def _load(today: date) -> dict:
             w, _active(spec_hist, w), mods.quest_extra(min(w + timedelta(days=6), today)), base, today), None))
         w += timedelta(days=7)
     weeks = [x for x in weeks if x]
-    quest_xp = [(date.fromisoformat(q["done_on"]), q["xp"], q["title"]) for wk in weeks for q in wk["quests"] if q["done"]]
-    book = ledger(runs, workouts, steps, other, sick, ach, today, mods, quest_xp)
+    extra = [(date.fromisoformat(q["done_on"]), q["xp"], q["title"], "auftrag") for wk in weeks for q in wk["quests"] if q["done"]]
+    base["efforts"] = _safe(_best_efforts, pd.DataFrame(columns=["external_id", "distance_m", "seconds", "started_at"]))
+    bosses = []
+    m = start.replace(day=1)
+    while m <= today:
+        bosses += _safe(lambda m=m: hero_bosses.month_bosses(m, base, today), [])
+        m = (m + timedelta(days=32)).replace(day=1)
+    for b in bosses:
+        if b["defeated"]:
+            won = date.fromisoformat(b["defeated_on"])
+            factor = 1.5 if mods.talent(50, won) == "bossjaeger" else 1.0
+            extra.append((won, b["xp"] * factor, b["name"], "boss"))
+    dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
+    extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
+    book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
     total = sum(e["xp"] + e["bonus"] for e in book["entries"])
     level = level_for(total)["level"]
     loot = _safe(lambda: drops(runs, book["entries"], start, mods), [])
     loot += _safe(lambda: quest_loot(weeks, book["entries"]), [])
+    loot += _safe(lambda: boss_loot(bosses, dungeons, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "mods": mods, "talents": talents, "quest_weeks": weeks,
+            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -1025,8 +1065,8 @@ def overview(today: date | None = None) -> dict:
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
-    log_events += [{"date": e["date"], "kind": "auftrag", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
-                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] == "auftrag"]
+    log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
+                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -1061,6 +1101,8 @@ def overview(today: date | None = None) -> dict:
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"]),
         "talents": talents_view(data["mods"], lv["level"], today),
         "quests": data["quest_weeks"][-1] if data["quest_weeks"] else None,
+        "bosses": [b for b in data["bosses"] if b["month"] == today.replace(day=1).isoformat()],
+        "dungeons": data["dungeons"][::-1][:10],
         "inventory": inventory,
         "equipment": equipment,
         "ilvl_avg": round(sum(it["ilvl"] for it in equipment.values()) / len(equipment)) if equipment else None,

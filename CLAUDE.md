@@ -246,3 +246,16 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - 150 EP am Erfüllungstag (Quelle `auftraege`); alle erfüllt → Auftragsbeute (`quest:<woche>`, Quelle `auftrag`, zählt nicht zur Truhenqualität).
   - **UI:** Auftragslog im Quest-Tracker-Stil neben der Truhe; Talentbaum mit Container-Query (`@container`, schmal untereinander, breit 3 Spalten).
   - **Fix:** Die Artefakt-Vorschau der Erfolge erzwang die Seitenbreite → `w-0 min-w-full`.
+- **Etappe 2c (2026-10-16): Monatsbosse + Instanzen** (`app/hero_bosses.py`, ohne gespeicherten Zustand).
+  - **4 Monatsbosse je Kalendermonat ab Startmonat**, Ziele relativ zu den 90 Tagen vor Monatsbeginn:
+    - 5-km-Wächter: Bestzeit −2 %.
+    - Wyrm der langen Straße: längster Lauf +1 km, mindestens 10 km.
+    - Kilometerfresser: Monats-km 10 % über dem Schnitt der letzten 3 Monate, mindestens 40.
+    - Eisenkoloss: Arbeitssätze 10 % über dem Schnitt, mindestens 40.
+    - Krankheitstage senken die Volumenziele anteilig. Lebensleiste = Abstand zum Ziel.
+    - Sieg: 400 EP (×1,5 mit Talent Bossjäger) am Siegtag und Beute (`boss:<monat>:<key>`; Episch, beim Wächter 50 % Legendär).
+  - **Instanzen:** jeder Lauf ab 10 km seit Starttag (Normal ab 10 / Heroisch ab 15 / Mythisch ab 21,1 km).
+    - Bosse sind die Kilometermarken 5/10/15/21,1; die nächste Marke steht optional als Ausblick dabei.
+    - „Schatten des Tempos“ = schneller als der eigene Langlauf-Median (180 T).
+    - 50 EP je Boss; bezwungen → Beute in Stufenfarbe (`dungeon:<lauf>`). Namen mit Wesel-Lokalkolorit.
+  - Der `ledger` nimmt generische Zusatzereignisse (`extra`: Auftrag, Boss, Instanz → Quellen `auftraege`, `bosse`, `instanzen`).
