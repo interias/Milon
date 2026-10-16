@@ -24,6 +24,7 @@ from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
+from typing import Optional
 from sqlmodel import Field, Session, SQLModel, select
 
 from . import hero_bosses, hero_economy, hero_events, hero_extras, hero_quests, hero_social
@@ -69,6 +70,27 @@ class HeroItemMod(SQLModel, table=True):
     upgrades: int = 0
     sold: bool = False
     gold: int = 0  # Verkaufserlös in Kupfer
+
+
+class HeroPurchase(SQLModel, table=True):
+    """Kauf im Auktionshaus (Gegenstand, Tasche, Reittier oder Trank) inkl. Inhalt als JSON."""
+    __tablename__ = "hero_purchases"
+
+    id: str = Field(primary_key=True)
+    week: str = Field(index=True)
+    kind: str
+    price: int
+    payload: str
+    bought_at: datetime
+
+
+class HeroPotionUse(SQLModel, table=True):
+    __tablename__ = "hero_potion_uses"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    day: date = Field(index=True)
+    key: str
+    used_at: datetime
 
 
 RARITIES = ["grau", "weiss", "gruen", "blau", "lila", "orange", "rot"]
@@ -347,10 +369,14 @@ class Mods:
     """Zeitabhängige Wirkungen auf Trainings-EP: Daten-Buffs und gewählte Spezialisierung."""
 
     def __init__(self, buffs: dict[date, set[str]] | None = None, spec_hist: list[dict] | None = None,
-                 talents: dict[int, list[dict]] | None = None):
+                 talents: dict[int, list[dict]] | None = None, potions: dict[date, set[str]] | None = None):
         self.buffs = buffs or {}
         self.spec_hist = spec_hist or []
         self.talents = talents or {}
+        self.potions = potions or {}
+
+    def refill(self, d: date) -> float:
+        return 120.0 if "erholung" in self.potions.get(d, set()) else 0.0
 
     def talent(self, row: int, d: date) -> str | None:
         return _active(self.talents.get(row, []), d)
@@ -362,6 +388,8 @@ class Mods:
             pct += 2 * BUFF_PCT if self.talent(30, d) == "feinschmecker" else BUFF_PCT
         if "erholt" in have:
             pct += 2 * BUFF_PCT if self.talent(30, d) == "tiefschlaf" else BUFF_PCT
+        if "ausdauer" in self.potions.get(d, set()):
+            pct += 0.10
         return pct
 
     def run_talent(self, d: date, run, lifted: bool) -> float:
@@ -378,7 +406,8 @@ class Mods:
         return 360.0 if self.talent(30, d) == "langer_atem" else REST_CAP
 
     def luck(self, d: date) -> float:
-        return 0.15 if self.talent(50, d) == "schatzsucher" else 0.08
+        base = 0.15 if self.talent(50, d) == "schatzsucher" else 0.08
+        return base + (0.10 if "glueck" in self.potions.get(d, set()) else 0.0)
 
     def vault_bonus(self, d: date) -> float:
         return 0.30 if self.talent(50, d) == "truhenmeister" else 0.15
@@ -432,6 +461,7 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
         trained = False
         day_xp = {k: 0.0 for k in XP_KEYS}
         buff_pct = mods.training(d)
+        pool = min(mods.rest_cap(d), pool + mods.refill(d))
         ran, lifted = bool(by_day_runs.get(d)), bool(by_day_wo.get(d))
         for r in by_day_runs.get(d, []):
             week_runs[wk] = week_runs.get(wk, 0) + 1
@@ -682,6 +712,7 @@ _CHEST_FLAVOR = {
     "instanz": "Aus der Schatzkammer einer bezwungenen Instanz.",
     "taeglich": "Fleißbelohnung für sieben erledigte Tagesaufgaben am Stück.",
     "event": "Festtagsbeute – nur in diesem einen Monat zu erringen.",
+    "auktion": "Im Auktionshaus von Wesel erstanden – Gold gegen Glanz.",
 }
 
 
@@ -877,6 +908,7 @@ def dust_balance(mods: dict[str, HeroItemMod]) -> int:
 def _inventory(drops_: list[dict], claims: dict[str, HeroClaim]) -> list[dict]:
     claimed = [{**(it := json.loads(c.item_json)), "flavor": flavor(it["rarity"], it["source"]),
                 "claimed_at": c.claimed_at.isoformat()} for c in claims.values()]
+    claimed += [json.loads(p.payload) for p in _purchases() if p.kind == "item"]
     mods = _item_mods()
     out = []
     for it in drops_ + claimed:
@@ -938,7 +970,92 @@ def gold_view(data: dict, today: date) -> dict:
 
 
 def _gold_spent() -> int:
-    return 0
+    return sum(p.price for p in _purchases())
+
+
+def _purchases() -> list[HeroPurchase]:
+    with Session(engine) as session:
+        return list(session.exec(select(HeroPurchase)).all())
+
+
+def _potion_days() -> dict[date, set[str]]:
+    out: dict[date, set[str]] = {}
+    with Session(engine) as session:
+        for u in session.exec(select(HeroPotionUse)).all():
+            out.setdefault(u.day, set()).add(u.key)
+    return out
+
+
+def auction_view(level: int, today: date) -> dict:
+    week = today - timedelta(days=today.weekday())
+    bought = {p.id for p in _purchases()}
+    stock = hero_economy.auction_stock(
+        week, level, lambda rng, rarity, wk, lvl: make_item(rng, rarity, datetime.combine(wk, datetime.min.time()).replace(hour=9),
+                                                          None, lvl, "auktion", "Im Auktionshaus erstanden"))
+    for s_ in stock:
+        s_["sold"] = f"ah:{week.isoformat()}:{s_['idx']}" in bought
+    return {"week": week.isoformat(), "ends": (week + timedelta(days=7)).isoformat(), "listings": stock}
+
+
+def potions_view(today: date) -> list[dict]:
+    bought: dict[str, int] = {}
+    for p in _purchases():
+        if p.kind == "potion":
+            key = json.loads(p.payload)["key"]
+            bought[key] = bought.get(key, 0) + 1
+    used: dict[str, int] = {}
+    today_used: set[str] = set()
+    for d, keys in _potion_days().items():
+        for k in keys:
+            used[k] = used.get(k, 0) + 1
+            if d == today:
+                today_used.add(k)
+    return [{"key": k, "name": n, "effect": e, "price": price, "glyph": g, "count": bought.get(k, 0) - used.get(k, 0),
+             "active_today": k in today_used} for k, (n, e, price, g) in hero_economy.POTIONS.items()]
+
+
+def buy(kind: str, ref: str, today: date | None = None) -> dict:
+    """Kauft ein Angebot (kind='listing', ref=idx) oder einen Trank (kind='potion', ref=key)."""
+    today = today or local_today()
+    data = _load(today)
+    balance = gold_view(data, today)["balance"]
+    week = today - timedelta(days=today.weekday())
+    if kind == "potion":
+        if ref not in hero_economy.POTIONS:
+            raise KeyError(ref)
+        price = hero_economy.POTIONS[ref][2]
+        pid, payload, pkind = f"potion:{datetime.now().isoformat()}", {"key": ref}, "potion"
+    else:
+        listing = next((x for x in auction_view(data["level"], today)["listings"] if str(x["idx"]) == str(ref)), None)
+        if listing is None:
+            raise KeyError(ref)
+        if listing["sold"]:
+            raise ValueError("Schon verkauft – nächste Woche gibt es Nachschub.")
+        price, pid, pkind = listing["price"], f"ah:{week.isoformat()}:{listing['idx']}", listing["kind"]
+        payload = listing.get("item") or listing.get("bag") or listing.get("mount")
+        if pkind == "bag":
+            payload = {**payload, "date": today.isoformat()}
+    if balance < price:
+        raise ValueError(f"Zu wenig Gold – es fehlen {hero_economy.money(price - balance)}.")
+    with Session(engine) as session:
+        session.add(HeroPurchase(id=pid, week=week.isoformat(), kind=pkind, price=price,
+                                 payload=json.dumps(payload, ensure_ascii=False), bought_at=datetime.now()))
+        session.commit()
+    return {"kind": pkind, "price": price, "payload": payload}
+
+
+def drink(key: str, today: date | None = None) -> None:
+    today = today or local_today()
+    pot = next((p for p in potions_view(today) if p["key"] == key), None)
+    if pot is None:
+        raise KeyError(key)
+    if pot["active_today"]:
+        raise ValueError("Diesen Trank hast du heute schon getrunken.")
+    if pot["count"] < 1:
+        raise ValueError("Kein Trank mehr im Gepäck.")
+    with Session(engine) as session:
+        session.add(HeroPotionUse(day=today, key=key, used_at=datetime.now()))
+        session.commit()
 
 
 def upgrade(item_id: str) -> dict:
@@ -957,10 +1074,20 @@ def upgrade(item_id: str) -> dict:
     return {**item, "upgrades": ups + 1, "ilvl": item["ilvl"] + UPGRADE_ILVL}
 
 
+def _all_mounts(data: dict, chosen: str | None) -> list[dict]:
+    mounts = hero_extras.mounts(data["runs"], data["workouts"], chosen)
+    for p in _purchases():
+        if p.kind == "mount":
+            m = json.loads(p.payload)
+            mounts.append({**m, "kind": "auktion", "need": 0, "value": 0, "unlocked": True, "unit": "Auktionshaus",
+                           "unlocked_on": p.bought_at.date().isoformat(), "chosen": m["key"] == chosen})
+    return mounts
+
+
 def choose_mount(key: str | None) -> None:
     if key is not None:
         data = _load(local_today())
-        m = next((m for m in hero_extras.mounts(data["runs"], data["workouts"], None) if m["key"] == key), None)
+        m = next((m for m in _all_mounts(data, None) if m["key"] == key), None)
         if m is None:
             raise KeyError(key)
         if not m["unlocked"]:
@@ -1195,6 +1322,9 @@ def buffs_today(data: dict, today: date, rested: float, chosen: str | None) -> l
     streak = _safe(_streak, 0)
     if streak >= 7:
         add("feuereifer", "Feuereifer", "buff", "flame", "Nur Ehre – halte die Serie am Leben", f"{streak} Tage Trainingsserie")
+    for key in sorted(data["mods"].potions.get(today, set())):
+        name, effect, _, glyph = hero_economy.POTIONS[key]
+        add(f"trank_{key}", name, "buff", "potion", effect, "Heute getrunken")
     if chosen:
         add("fokus", f"Fokus: {SPECS[chosen]['label']}", "buff", "target", FOCUS_TEXT[chosen], "Gewählte Spezialisierung")
     return out
@@ -1253,7 +1383,7 @@ def _load(today: date) -> dict:
     buffs = day_buffs(protein, target, sleep)
     spec_hist = _history("spec_history")
     talents = {lvl: _history(f"talent_{lvl}") for lvl, _, _ in TALENT_ROWS}
-    mods = Mods(buffs, spec_hist, talents)
+    mods = Mods(buffs, spec_hist, talents, _safe(_potion_days, {}))
     start = start_date(today)
     base = {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "protein": protein,
             "protein_target": target, "sleep": sleep}
@@ -1336,6 +1466,7 @@ def overview(today: date | None = None) -> dict:
     worn = _equipment()
     inventory = [{**it, "equipped": worn.get(it["slot"]) == it["id"]} for it in _inventory(data["drops"], claims)]
     bags = _safe(lambda: hero_economy.bag_drops(data), [])
+    bags += [json.loads(p.payload) for p in _safe(_purchases, []) if p.kind == "bag"]
     cap, used_bags = hero_economy.capacity(bags)
     loose = sorted((it for it in inventory if not it["equipped"]), key=lambda it: (it["date"], it["id"]))
     mail_ids = {it["id"] for it in loose[cap:]}
@@ -1406,7 +1537,9 @@ def overview(today: date | None = None) -> dict:
                   "won": sum(1 for d in data["duels"] if d["won"]), "total": len(data["duels"]),
                   "shadows": [hero_extras.shadow(runs, today, 91, "vor 3 Monaten"),
                               hero_extras.shadow(runs, today, 365, "vor einem Jahr")]},
-        "mounts": _safe(lambda: hero_extras.mounts(runs, data["workouts"], _state_get("mount") or None), []),
+        "mounts": _safe(lambda: _all_mounts(data, _state_get("mount") or None), []),
+        "auction": _safe(lambda: auction_view(lv["level"], today), None),
+        "potions": _safe(lambda: potions_view(today), []),
         "inventory": inventory,
         "equipment": equipment,
         "dust": dust_balance(_item_mods()),

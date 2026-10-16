@@ -337,3 +337,18 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Taschen:** Rucksack 16 + die besten 4 Taschen (automatisch). Drop-Chance: bezwungene Instanz 25 %, besiegter Boss 40 % (geseedet). Namen: Leinenbeutel 4 … Netherstoff-Tasche 12.
   - **Briefkasten:** Nicht angelegte Gegenstände jenseits der Kapazität (älteste bleiben in den Taschen) erhalten `mail: true` und rücken automatisch nach. Es geht nichts verloren.
   - **UI:** `Money` (Münzen), Verkaufspreis im Tooltip, „Verkaufen“ zweistufig, Taschenleiste, Briefkasten, Karte „Geldbörse“ im Chronik-Tab.
+- **Wirtschaft II (2026-10-16): Auktionshaus + Tränke.** Neuer Tab **Handel** mit Auktionshaus, Tränken und Geldbörse (aus Chronik umgezogen).
+  - **Auktionshaus:** Wochenangebot geseedet je ISO-Woche (`hero_economy.auction_stock`), Kaufpreis = 4 × Händlerpreis.
+    - 6 Gegenstände (Ungewöhnlich bis Legendär), 1 Tasche.
+    - Mit 20 % Chance ein AH-Reittier (Packesel, Pfau, Kamelhengst).
+    - Jedes Angebot nur einmal kaufbar. Käufe in `hero_purchases` mit Inhalt als JSON: Gegenstände ins Inventar (Quelle `auktion`), Taschen in die Taschen, Reittiere in den Stall.
+  - **Tränke:**
+    - Ausdauer 4 g: +10 % Trainings-EP.
+    - Erholung 3 g: +120 Ruhebonus.
+    - Glück 6 g: +10 % Glücksfund.
+    - Beliebig oft kaufbar, Wirkung für **heute**, je Sorte einmal am Tag.
+    - Getrunken = `hero_potion_uses`; Wirkung über `Mods` (`training`, `refill`, `luck`); erscheint als Buff.
+  - **API:** `POST /hero/buy {kind: listing|potion, ref}` (409 verkauft / zu wenig Gold), `POST /hero/drink {key}`.
+  - **Tabs:**
+    - Desktop: Die Tab-Zeile hat `w-0 min-w-full` und eine ausgeblendete Scrollleiste, sonst drückt sie die Seite breiter.
+    - Handy: 7 Spalten mit den Kurznamen Held, Reise, Talente, Handel, Saga, Erfolge, Log.
