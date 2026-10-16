@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cinzel } from "next/font/google";
 import { api, type Achievements, type Hero } from "@/lib/api";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
-import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard } from "@/components/Hero";
+import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, type Gear } from "@/components/Hero";
 import { AchievementsGrid, AchievementsSummary } from "@/components/Achievements";
 
 const cinzel = Cinzel({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-cinzel" });
@@ -19,6 +19,14 @@ export default function Heldenreise() {
     api.runAchievements().then(setAch).catch(() => {});
   }, [load]);
   const claim = useCallback(async (week: string, slot: number) => { await api.heroClaim(week, slot); await load(); }, [load]);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const gear = useMemo<Gear>(() => ({
+    equipment: hero?.equipment ?? {},
+    equip: async (itemId) => { await api.heroEquip(itemId); await load(); },
+    unequip: async (slot) => { await api.heroUnequip(slot); await load(); },
+    equipBest: async () => { await api.heroEquipBest(); await load(); },
+    dragging, setDragging,
+  }), [hero, load, dragging]);
 
   return (
     <div className={`wow ${cinzel.variable}`}>
@@ -27,10 +35,10 @@ export default function Heldenreise() {
         <div className="space-y-4">
           <HeroHeader data={hero} />
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
-            <HeroCharacter data={hero} />
+            <HeroCharacter data={hero} gear={gear} />
             <HeroVaultCard data={hero} onClaim={claim} />
           </div>
-          <HeroBags items={hero.inventory} />
+          <HeroBags items={hero.inventory} gear={gear} />
           <div className="grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0">
             <HeroLog data={hero} />
             <HeroRules data={hero} />

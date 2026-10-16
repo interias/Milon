@@ -14,6 +14,14 @@ class ClaimInput(BaseModel):
     slot: int = Field(ge=0, le=2)
 
 
+class EquipInput(BaseModel):
+    item_id: str = Field(min_length=3, max_length=200)
+
+
+class UnequipInput(BaseModel):
+    slot: str = Field(min_length=2, max_length=20)
+
+
 @router.get("")
 def get_hero() -> dict:
     return hero.overview()
@@ -28,3 +36,25 @@ def claim_vault(body: ClaimInput) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"item": item}
+
+
+@router.post("/equip")
+def equip_item(body: EquipInput) -> dict:
+    try:
+        return {"item": hero.equip(body.item_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
+
+
+@router.post("/unequip")
+def unequip_slot(body: UnequipInput) -> dict:
+    try:
+        hero.unequip(body.slot)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unbekannter Ausrüstungsplatz.") from exc
+    return {"slot": body.slot}
+
+
+@router.post("/equip-best")
+def equip_best() -> dict:
+    return {"equipped": hero.equip_best()}

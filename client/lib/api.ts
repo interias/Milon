@@ -186,7 +186,7 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
   ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran"; reason: string; date: string;
-  lucky?: boolean; run_km?: number; claimed_at?: string;
+  lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
 };
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
@@ -206,6 +206,8 @@ export type Hero = {
   attributes: HeroAttribute[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
+  equipment: Record<string, HeroItem>;
+  ilvl_avg: number | null;
   log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
@@ -421,6 +423,9 @@ export const api = {
   runAchievements: () => get<Achievements>("/metrics/running/achievements"),
   hero: () => get<Hero>("/hero"),
   heroClaim: (week: string, slot: number) => post<{ item: HeroItem }>("/hero/vault/claim", { week, slot }),
+  heroEquip: (itemId: string) => post<{ item: HeroItem }>("/hero/equip", { item_id: itemId }),
+  heroUnequip: (slot: string) => post<{ slot: string }>("/hero/unequip", { slot }),
+  heroEquipBest: () => post<{ equipped: Record<string, string> }>("/hero/equip-best"),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),
