@@ -204,3 +204,33 @@ body {
   display: grid; place-items: center; font-family: var(--font-sans); font-size: 11px; font-weight: 800; line-height: 1;
   color: #000; background: #ffd100; box-shadow: 0 0 6px #ffd100;
 }
+
+/* Heldenreise-Szene & Begleiter (bei „Bewegung reduzieren" ruhig) */
+.hero-star { animation: heroTwinkle 3.2s ease-in-out infinite; }
+@keyframes heroTwinkle { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+.hero-cloud { animation: heroDrift 38s linear infinite; }
+@keyframes heroDrift { from { transform: translateX(0) } to { transform: translateX(160%) } }
+.hero-drop { width: 1px; height: 14px; background: linear-gradient(transparent, rgba(190, 215, 255, .75)); animation: heroFall .8s linear infinite; }
+@keyframes heroFall { from { transform: translate(0, 0) } to { transform: translate(-14px, 330px) } }
+.hero-flake { animation: heroSnow 6s linear infinite; }
+@keyframes heroSnow { from { transform: translate(0, 0) } 50% { transform: translate(10px, 160px) } to { transform: translate(-6px, 330px) } }
+.hero-fog { background: linear-gradient(90deg, transparent, rgba(200, 205, 215, .25), transparent); filter: blur(10px); animation: heroDrift 26s ease-in-out infinite alternate; }
+.hero-flash { opacity: 0; animation: heroFlash 9s steps(1) infinite; }
+@keyframes heroFlash { 0%, 61%, 63%, 100% { opacity: 0 } 62% { opacity: .35 } }
+.pet-froh { animation: petHop 1.1s ease-in-out infinite; }
+@keyframes petHop { 0%, 100% { transform: translateY(0) } 40% { transform: translateY(-9px) } 60% { transform: translateY(-9px) rotate(-4deg) } }
+.pet-wartet .pet-tail { transform-origin: 42px 36px; animation: petWag .9s ease-in-out infinite alternate; }
+@keyframes petWag { from { transform: rotate(-8deg) } to { transform: rotate(10deg) } }
+.pet-schlaeft { transform: scaleY(.92); transform-origin: bottom; }
+.pet-z { animation: petZ 2.4s ease-in infinite; }
+@keyframes petZ { from { transform: translate(0, 0); opacity: 0 } 30% { opacity: 1 } to { transform: translate(8px, -16px); opacity: 0 } }
+.pet-krank { transform: scaleY(.85) rotate(-3deg); transform-origin: bottom; filter: saturate(.6); }
+.pet-stolz { animation: petProud 2.4s ease-in-out infinite; }
+@keyframes petProud { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.06) } }
+.pet-spark { animation: heroTwinkle 1.2s ease-in-out infinite; }
+.hero-float { animation: heroFloat 1.6s ease-out both; }
+@keyframes heroFloat { from { transform: translateY(8px); opacity: 0 } 40% { opacity: 1 } to { transform: translateY(0); opacity: 1 } }
+@media (prefers-reduced-motion: reduce) {
+  .hero-star, .hero-cloud, .hero-drop, .hero-flake, .hero-fog, .hero-flash, .pet-froh, .pet-wartet .pet-tail, .pet-z, .pet-stolz, .pet-spark, .hero-float { animation: none; }
+  .hero-drop, .hero-flake { display: none; }
+}

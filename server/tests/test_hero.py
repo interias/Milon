@@ -307,3 +307,17 @@ def test_disenchant_upgrade_and_title(hero_db, monkeypatch):
     assert client.post("/hero/title", json={"key": "held_von_wesel"}).status_code == 409
     assert client.post("/hero/title", json={"key": "gibtsnicht"}).status_code == 422
     assert client.post("/hero/title", json={"key": None}).status_code == 200
+
+
+def test_companion_mood_and_growth(monkeypatch):
+    monkeypatch.setattr(hero, "_streak", lambda: 12)
+    monkeypatch.setattr(hero, "_checkin", lambda d: {})
+    runs = runs_frame([{"external_id": "a", "started_at": datetime(2026, 10, 16, 7), "distance_km": 5.0, "dur_min": 30.0, "zone": 1}])
+    empty = pd.DataFrame(columns=["id", "started_at", "sets", "day"])
+    data = {"runs": runs, "workouts": empty, "sick": set(), "drops": []}
+    pet = hero.companion("jaeger", data, TODAY, datetime(2026, 10, 16, 12))
+    assert (pet["species"], pet["name"], pet["stage_label"], pet["mood"]) == ("fuchs", "Funke", "Halbstark", "froh")
+    assert hero.companion("krieger", {**data, "sick": {TODAY}}, TODAY)["mood"] == "krank"
+    idle = {**data, "runs": runs.iloc[:0]}
+    assert hero.companion("moench", idle, TODAY, datetime(2026, 10, 16, 23))["mood"] == "schlaeft"
+    assert hero.companion("paladin", idle, TODAY, datetime(2026, 10, 16, 15))["mood"] == "wartet"

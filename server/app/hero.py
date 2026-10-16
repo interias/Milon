@@ -1102,6 +1102,36 @@ def buffs_today(data: dict, today: date, rested: float, chosen: str | None) -> l
     return out
 
 
+# --- Begleiter -------------------------------------------------------------------------
+PETS = {"jaeger": ("fuchs", "Funke"), "krieger": ("baer", "Brumm"), "paladin": ("loewe", "Leo"), "moench": ("eule", "Kauz")}
+PET_STAGES = [(0, "Junges"), (7, "Halbstark"), (30, "Ausgewachsen")]
+
+
+def companion(cls: str, data: dict, today: date, now: datetime | None = None) -> dict:
+    """Begleiter passend zur Klasse; Wachstum nach Trainingsserie, Stimmung aus den Tagesdaten."""
+    species, name = PETS[cls]
+    streak = _safe(_streak, 0)
+    stage = max(i for i, (floor, _) in enumerate(PET_STAGES) if streak >= floor)
+    hour = (now or datetime.now()).hour
+    runs, workouts = data["runs"], data["workouts"]
+    ran = (not runs.empty) and bool((runs["day"] == today).any())
+    lifted = (not workouts.empty) and bool((workouts["day"] == today).any())
+    loot_today = any(it["date"] == today.isoformat() and RARITIES.index(it["rarity"]) >= RARITIES.index("lila") for it in data["drops"])
+    if today in data["sick"] or _checkin(today).get("sick"):
+        mood, text = "krank", f"{name} liegt eingerollt neben dir und wärmt dich. Gute Besserung!"
+    elif loot_today:
+        mood, text = "stolz", f"{name} bewacht stolz deine neue epische Beute."
+    elif ran or lifted:
+        mood, text = "froh", f"{name} tobt vor Freude – heute schon {'gelaufen' if ran else 'trainiert'}!"
+    elif hour < 6 or hour >= 22:
+        mood, text = "schlaeft", f"{name} schläft tief und fest. Psst."
+    else:
+        mood, text = "wartet", f"{name} sitzt an der Tür und schaut auf deine Laufschuhe."
+    return {"species": species, "name": name, "stage": stage, "stage_label": PET_STAGES[stage][1],
+            "streak": streak, "next_stage": PET_STAGES[stage + 1][0] if stage + 1 < len(PET_STAGES) else None,
+            "mood": mood, "text": text}
+
+
 def choose_spec(spec: str | None, today: date | None = None) -> None:
     """Wählt die Spezialisierung (None = automatisch nach Neigung); wirkt ab heute."""
     if spec is not None and spec not in SPECS:
@@ -1215,6 +1245,7 @@ def overview(today: date | None = None) -> dict:
         "xp_sources": {k: round(v) for k, v in book["totals"].items()},
         "progression": progression(entries, book["daily"]),
         "buffs": buffs_today(data, today, book["pool"], chosen),
+        "companion": companion(cls["class"], data, today),
         "specs": [{"key": k, **v, "focus": FOCUS_TEXT[k], "score": cls["spec_scores"].get(k)} for k, v in SPECS.items()],
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"]),

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cinzel } from "next/font/google";
-import { api, type Achievements, type Hero, type HeroItem } from "@/lib/api";
+import { api, type Achievements, type Hero, type HeroItem, type Weather } from "@/lib/api";
+import { play } from "@/lib/hero-sound";
+import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
@@ -21,7 +23,11 @@ export default function Heldenreise() {
   useEffect(() => {
     load();
     api.runAchievements().then(setAch).catch(() => {});
+    api.weather(0, 0).then(setWeather).catch(() => {});
   }, [load]);
+  const [weather, setWeather] = useState<Weather | null>(null);
+  const visit = useLastVisit(hero);
+  const [welcomeDone, setWelcomeDone] = useState(false);
   const [reveal, setReveal] = useState<HeroItem | null>(null);
   const claim = useCallback(async (week: string, slot: number) => {
     const { item } = await api.heroClaim(week, slot);
@@ -48,11 +54,11 @@ export default function Heldenreise() {
   const [titles, setTitles] = useState(false);
   const gear = useMemo<Gear>(() => ({
     equipment: hero?.equipment ?? {},
-    equip: async (itemId) => { await api.heroEquip(itemId); await load(); },
-    unequip: async (slot) => { await api.heroUnequip(slot); await load(); },
-    equipBest: async () => { await api.heroEquipBest(); await load(); },
-    disenchant: async (itemId) => { await api.heroDisenchant(itemId); await load(); },
-    upgrade: async (itemId) => { await api.heroUpgrade(itemId); await load(); },
+    equip: async (itemId) => { await api.heroEquip(itemId); play("equip"); await load(); },
+    unequip: async (slot) => { await api.heroUnequip(slot); play("equip"); await load(); },
+    equipBest: async () => { await api.heroEquipBest(); play("equip"); await load(); },
+    disenchant: async (itemId) => { await api.heroDisenchant(itemId); play("chest"); await load(); },
+    upgrade: async (itemId) => { await api.heroUpgrade(itemId); play("loot", "lila"); await load(); },
     dust: hero?.dust ?? 0,
     dragging, setDragging,
     isNew: (id) => !!seen && !seen.has(id),
@@ -72,6 +78,7 @@ export default function Heldenreise() {
   }, []);
   const choose = (key: TabKey) => {
     setTab(key);
+    play("click");
     history.replaceState(null, "", `#${key}`);
   };
 
@@ -88,14 +95,15 @@ export default function Heldenreise() {
       <PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" />
       {err ? <ApiError error={err} /> : !hero ? <Loading /> : (
         <div className="space-y-4">
-          <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} onTitle={() => setTitles(true)} />
+          <HeroHeader data={hero} onSpec={async (spec) => { await api.heroSpec(spec); await load(); }} onTitle={() => setTitles(true)} fromXp={visit?.fromXp} />
+          {visit && !welcomeDone && <WelcomeBack news={visit.news} gained={visit.gained} onClose={() => setWelcomeDone(true)} />}
           {titles && <HeroTitleChooser data={hero} onChoose={async (key) => { await api.heroTitle(key); await load(); }} onClose={() => setTitles(false)} />}
           <LevelUpBanner level={hero.hero.level} title={hero.hero.title} />
           {reveal && <LootReveal item={reveal} onClose={() => setReveal(null)} />}
           <div className="xl:hidden"><HeroLog data={hero} listClass="max-h-36" /></div>
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="min-w-0">
-              <div role="tablist" aria-label="Bereiche der Heldenreise" className="wow-tabs mb-4 flex gap-1 overflow-x-auto">
+              <div role="tablist" aria-label="Bereiche der Heldenreise" className="wow-tabs mb-4 flex gap-1 overflow-x-auto overflow-y-hidden pr-2 pt-2">
                 {TABS.map((t) => (
                   <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} id={`tab-${t.key}`}
                           aria-controls={`panel-${t.key}`} onClick={() => choose(t.key)}
@@ -107,7 +115,7 @@ export default function Heldenreise() {
               </div>
               <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} key={tab} className="@container ach-fade space-y-4">
                 {tab === "charakter" && <>
-                  <HeroCharacter data={hero} gear={gear} />
+                  <HeroCharacter data={hero} gear={gear} weather={weather} />
                   <HeroBags items={hero.inventory} gear={gear} />
                 </>}
                 {tab === "abenteuer" && <>

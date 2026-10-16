@@ -5,6 +5,7 @@ import type { Hero, HeroAttribute, HeroItem } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { linePath } from "@/components/charts";
 import { de0, dm } from "@/lib/format";
+import { play } from "@/lib/hero-sound";
 
 const rc = (r: string) => `var(--rar-${r})`;
 const TIP_YELLOW = "#ffd100";
@@ -150,6 +151,7 @@ export function LevelUpBanner({ level, title }: { level: number; title: string }
       localStorage.setItem("milon.hero.level", String(level));
       if (prev && level > prev) {
         setShow(true);
+        play("levelup");
         const t = setTimeout(() => setShow(false), 5000);
         return () => clearTimeout(t);
       }
