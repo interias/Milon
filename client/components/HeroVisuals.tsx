@@ -98,7 +98,7 @@ export function HeroChronicle({ data }: { data: Hero }) {
   return (
     <Card>
       <CardTitle title="Chronik" sub={`Stufenverlauf seit ${dm(prog[0].week)} · EP je Woche nach Quelle (12 Wochen)`} />
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-5 @3xl:grid-cols-2">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Stufe von ${lv[0].toFixed(0)} auf ${lv.at(-1)!.toFixed(1)}`}>
           <defs>
             <linearGradient id="wow-lv" x1="0" x2="0" y1="0" y2="1">
