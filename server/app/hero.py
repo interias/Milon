@@ -27,7 +27,7 @@ import pandas as pd
 from typing import Optional
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_economy, hero_events, hero_extras, hero_quests, hero_social
+from . import hero_bosses, hero_economy, hero_events, hero_extras, hero_quests, hero_social, hero_world
 from .checkins import local_today
 from .db import engine
 
@@ -360,9 +360,9 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle"]
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung"]
 EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
-             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:")}
+             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:"), "erkundung": ("erkundung", "Gebiet entdeckt:")}
 
 
 class Mods:
@@ -1122,6 +1122,7 @@ def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> 
         "protein_days": sum(1 for g in data["protein"].values() if target and g >= 0.9 * target),
         "sleep_nights": sum(1 for m in data["sleep"].values() if m >= 420),
     }
+    stats["regions"] = sum(1 for r in data.get("world", {}).get("regions", []) if r["discovered"])
     stats["exalted"] = sum(1 for f in hero_social.reputation(stats) if f["standing"] == "Ehrfürchtig")
     return stats
 
@@ -1420,6 +1421,9 @@ def _load(today: date) -> dict:
     duels = _safe(lambda: hero_extras.run_duels(runs, start), [])
     extra += [(date.fromisoformat(d["date"]), d["xp"], f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}.", "duell")
               for d in duels if d["won"]]
+    world = _safe(hero_world.world, {"available": False})
+    extra += [(date.fromisoformat(r["discovered_on"]), hero_world.DISCOVER_XP, r["name"], "erkundung")
+              for r in world.get("regions", []) if r["discovered"]]
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
@@ -1436,6 +1440,8 @@ def _load(today: date) -> dict:
                                          "Bosse: " + ", ".join(b["name"] for b in dg["bosses"] if b["defeated"])]
     for e in events:
         tips[("event", e["name"])] = ["Saison-Event", e["rule"], f"Belohnung: {e['xp']} EP + {e['item']}"]
+    for r in world.get("regions", []):
+        tips[("erkundung", r["name"])] = ["Gebiet der Weltkarte", f"{r['pct']:g} % erkundet ({r['cells']} von {r['total']} Feldern)".replace(".", ",")]
     for d in duels:
         label = f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}."
         tips[("duell", label)] = ["Duell gegen dein früheres Ich",
@@ -1449,7 +1455,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips,
+            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips, "world": world,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -1482,7 +1488,7 @@ def overview(today: date | None = None) -> dict:
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"]), "tip": data["tips"].get((e["kind"], e["name"]))}
-                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell")]
+                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -1539,6 +1545,7 @@ def overview(today: date | None = None) -> dict:
                               hero_extras.shadow(runs, today, 365, "vor einem Jahr")]},
         "mounts": _safe(lambda: _all_mounts(data, _state_get("mount") or None), []),
         "auction": _safe(lambda: auction_view(lv["level"], today), None),
+        "world": data["world"],
         "potions": _safe(lambda: potions_view(today), []),
         "inventory": inventory,
         "equipment": equipment,

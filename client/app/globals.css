@@ -253,3 +253,8 @@ body {
 }
 .wow-tabs { scrollbar-width: none; }
 .wow-tabs::-webkit-scrollbar { display: none; }
+
+/* Ausrüstung am Körper: Episch+ schimmert */
+.gear-shine { animation: gearShine 3.4s ease-in-out infinite; }
+@keyframes gearShine { 0%, 100% { filter: brightness(1) } 50% { filter: brightness(1.35) drop-shadow(0 0 6px rgba(255, 255, 255, .35)) } }
+@media (prefers-reduced-motion: reduce) { .gear-shine { animation: none; } }

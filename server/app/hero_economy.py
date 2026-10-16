@@ -12,7 +12,7 @@ from datetime import date
 SILVER, GOLD = 100, 10_000
 START_CAPITAL = 25 * GOLD
 EARN = {"km": 10 * SILVER, "kraft": 50 * SILVER, "taeglich": 50 * SILVER, "auftrag": 2 * GOLD, "instanz": 3 * GOLD,
-        "boss": 10 * GOLD, "event": 15 * GOLD, "duell": 1 * GOLD}
+        "boss": 10 * GOLD, "event": 15 * GOLD, "duell": 1 * GOLD, "erkundung": 2 * GOLD}
 SELL_BASE = {"grau": 10 * SILVER, "weiss": 50 * SILVER, "gruen": 1 * GOLD, "blau": 3 * GOLD, "lila": 8 * GOLD,
              "orange": 20 * GOLD, "rot": 50 * GOLD}
 BACKPACK = 16
@@ -59,6 +59,9 @@ def earnings(data: dict, start: date) -> list[tuple[date, int, str]]:
     for d in data["duels"]:
         if d["won"]:
             out.append((date.fromisoformat(d["date"]), EARN["duell"], "Duell"))
+    for r in data.get("world", {}).get("regions", []):
+        if r["discovered"] and date.fromisoformat(r["discovered_on"]) >= start:
+            out.append((date.fromisoformat(r["discovered_on"]), EARN["erkundung"], "Erkundung"))
     return out
 
 

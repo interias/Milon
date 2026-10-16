@@ -12,14 +12,69 @@ const TIP_YELLOW = "#ffd100";
 
 // --- Figur wie das Modell im WoW-Charakterfenster ------------------------------------------
 // Angelegte Gegenstände leuchten an ihrer Körperstelle (Prozent der 2:3-Figur).
-const SPOTS: Record<string, [number, number][]> = {
-  kopf: [[50, 7]], hals: [[50, 17]], schultern: [[33, 21], [67, 21]], brust: [[50, 31]],
-  handgelenk: [[29, 50], [71, 50]], haende: [[28, 56], [72, 56]], beine: [[43, 72], [57, 72]],
-  fuesse: [[39, 94], [61, 94]], ring: [[73, 58]], schmuck: [[50, 47]],
+// Ausrüstung am Körper: Bereiche im Koordinatensystem der Silhouette (480×720, front-filled.png).
+// Körper-Teile werden mit der Silhouette maskiert, Zubehör (Schultern, Amulett, Ring, Schmuck) liegt obenauf.
+const BODY_PARTS: Record<string, string> = {
+  kopf: "M190 14h100v48H190z",
+  brust: "M110 138h260v162H110z M158 300h165v66H158z",
+  handgelenk: "M112 316h58v30h-58z M310 316h58v30h-58z",
+  haende: "M112 348h60v70h-60z M308 348h60v70h-60z",
+  beine: "M140 368h200v290H140z",
+  fuesse: "M120 656h240v50H120z",
 };
+const POSES: Record<string, string> = {
+  jaeger: "/img/run-teal-solid.png", krieger: "/img/kraft-ink-slash.png",
+  paladin: "/img/silhouette/front-filled.png", moench: "/img/silhouette/front-filled.png",
+};
+const SHEEN_R = new Set(["lila", "orange", "rot"]);
 
-export function HeroFigure({ color, equipment, aura }: { color: string; equipment: Record<string, HeroItem>; aura?: { color: string; pulse: boolean } | null }) {
-  const mask = { maskImage: "url(/img/silhouette/front-filled.png)", WebkitMaskImage: "url(/img/silhouette/front-filled.png)",
+function GearOverlay({ equipment }: { equipment: Record<string, HeroItem> }) {
+  const has = (slot: string) => equipment[slot];
+  const fill = (slot: string) => `url(#gear-${equipment[slot].rarity})`;
+  const rarities = Array.from(new Set(Object.values(equipment).map((it) => it.rarity)));
+  return (
+    <svg viewBox="0 0 480 720" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
+      <defs>
+        <mask id="gear-body" maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="720">
+          <image href="/img/silhouette/front-filled.png" x="0" y="0" width="480" height="720" />
+        </mask>
+        {rarities.map((r) => (
+          <linearGradient key={r} id={`gear-${r}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" style={{ stopColor: `color-mix(in srgb, var(--rar-${r}) 85%, #fff)` }} />
+            <stop offset=".55" style={{ stopColor: `var(--rar-${r})` }} />
+            <stop offset="1" style={{ stopColor: `color-mix(in srgb, var(--rar-${r}) 45%, #000)` }} />
+          </linearGradient>
+        ))}
+        <pattern id="gear-weave" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+          <path d="M0 0v10" stroke="#000" strokeOpacity=".18" strokeWidth="3" />
+        </pattern>
+      </defs>
+      <g mask="url(#gear-body)">
+        {Object.keys(BODY_PARTS).filter(has).map((slot) => (
+          <g key={slot} className={SHEEN_R.has(equipment[slot].rarity) ? "gear-shine" : undefined}>
+            <path d={BODY_PARTS[slot]} style={{ fill: fill(slot) }} opacity=".92" />
+            <path d={BODY_PARTS[slot]} fill="url(#gear-weave)" />
+          </g>
+        ))}
+        {has("brust") && <path d="M150 300h180" stroke="#000" strokeOpacity=".45" strokeWidth="5" />}
+        {has("beine") && <path d="M150 372h180" stroke="#000" strokeOpacity=".45" strokeWidth="6" />}
+      </g>
+      {has("schultern") && [[166, 162], [314, 162]].map(([cx, cy], i) => (
+        <ellipse key={i} cx={cx} cy={cy} rx="40" ry="20" style={{ fill: fill("schultern") }} stroke="#000" strokeOpacity=".6" strokeWidth="3" />
+      ))}
+      {has("hals") && <>
+        <path d="M218 128q22 48 44 0" fill="none" stroke="#3a2a14" strokeWidth="3" />
+        <circle cx="240" cy="176" r="11" style={{ fill: fill("hals") }} stroke="#000" strokeWidth="2.5" />
+      </>}
+      {has("schmuck") && <circle cx="292" cy="362" r="10" style={{ fill: fill("schmuck") }} stroke="#000" strokeWidth="2.5" />}
+      {has("ring") && <circle cx="340" cy="402" r="7" style={{ fill: fill("ring") }} stroke="#000" strokeWidth="2" />}
+    </svg>
+  );
+}
+
+export function HeroFigure({ color, equipment, aura, pose }: { color: string; equipment: Record<string, HeroItem>; aura?: { color: string; pulse: boolean } | null; pose?: string | null }) {
+  const src = pose ? POSES[pose] ?? POSES.moench : "/img/silhouette/front-filled.png";
+  const mask = { maskImage: `url(${src})`, WebkitMaskImage: `url(${src})`,
                  maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
                  maskPosition: "center", WebkitMaskPosition: "center" } as React.CSSProperties;
   return (
@@ -29,13 +84,10 @@ export function HeroFigure({ color, equipment, aura }: { color: string; equipmen
       <div className="absolute inset-x-[6%] bottom-0 h-[9%] rounded-[50%]"
            style={{ background: `radial-gradient(ellipse at center, color-mix(in srgb, ${color} 55%, transparent), transparent 70%)` }} />
       <div className="absolute inset-x-0 bottom-[3%] top-0">
-        <div className="wow-figure h-full w-full" style={{ ["--fig" as string]: `color-mix(in srgb, ${color} 70%, transparent)` }}>
+        <div className="wow-figure relative h-full w-full" style={{ ["--fig" as string]: `color-mix(in srgb, ${color} 70%, transparent)` }}>
           <div className="h-full w-full" style={{ ...mask, background: `linear-gradient(180deg, ${color}, color-mix(in srgb, ${color} 30%, #000) 95%)` }} />
+          {!pose && <GearOverlay equipment={equipment} />}
         </div>
-        {Object.entries(equipment).flatMap(([slot, it]) => (SPOTS[slot] ?? []).map(([x, y], i) => (
-          <span key={`${slot}-${i}`} className="absolute aspect-square w-[16%] -translate-x-1/2 -translate-y-1/2 rounded-full mix-blend-screen"
-                style={{ left: `${x}%`, top: `${y}%`, background: `radial-gradient(circle, ${rc(it.rarity)}, transparent 68%)` }} />
-        )))}
       </div>
     </div>
   );
@@ -75,7 +127,7 @@ const SOURCES: [keyof Hero["progression"][number], string, string][] = [
   ["laufen", "Laufen", "#aad372"], ["kraft", "Kraft", "#c69b6d"], ["alltag", "Alltag", "#3fc7eb"],
   ["erfolge", "Erfolge", "#ffd100"], ["ruhebonus", "Ausgeruht", "#3d7bd9"],
   ["buffs", "Buffs", "#ff7d0a"], ["fokus", "Fokus", "#f48cba"], ["talente", "Talente", "#a330c9"], ["auftraege", "Aufträge", "#e6cc80"],
-  ["bosse", "Bosse", "#c41e3a"], ["instanzen", "Instanzen", "#0070dd"], ["taeglich", "Tagesaufgaben", "#9d9d9d"], ["event", "Events", "#ff8a3d"], ["duelle", "Duelle", "#a9b8d8"],
+  ["bosse", "Bosse", "#c41e3a"], ["instanzen", "Instanzen", "#0070dd"], ["taeglich", "Tagesaufgaben", "#9d9d9d"], ["event", "Events", "#ff8a3d"], ["duelle", "Duelle", "#a9b8d8"], ["erkundung", "Erkundung", "#d9c08a"],
 ];
 
 export function HeroChronicle({ data }: { data: Hero }) {

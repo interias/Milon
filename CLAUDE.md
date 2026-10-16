@@ -352,3 +352,17 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Tabs:**
     - Desktop: Die Tab-Zeile hat `w-0 min-w-full` und eine ausgeblendete Scrollleiste, sonst drückt sie die Seite breiter.
     - Handy: 7 Spalten mit den Kurznamen Held, Reise, Talente, Handel, Saga, Erfolge, Log.
+- **Darstellung (2026-10-16):**
+  - **Ausrüstung am Körper:** `GearOverlay` in `HeroVisuals.tsx`.
+    - SVG im Koordinatensystem der Silhouette (480×720). Körperteile (Kopf, Brust, Handgelenk, Hände, Beine, Füße) sind mit `front-filled.png` maskiert und in Raritätsfarbe mit Webmuster gefüllt.
+    - Schultern, Amulett, Ring und Schmuckstück liegen obenauf. Episch+ schimmert (`.gear-shine`).
+  - **Pose:** Umschalter „Pose zeigen“; Jäger = Laufsilhouette, Krieger = Hantel, Paladin/Mönch = frontal.
+  - **Generierte Bilder** (gpt-image-2 per Skill `transparent-images`, Hintergrund Magenta bzw. Grün für den Paladin, dort Despill; zusammen 1,38 $):
+    - 10 Item-Bilder in `public/img/hero/items/<slot>.png` (128 px).
+    - 4 Porträts in `public/img/hero/portraits/<klasse>.png` (320 px; Kapuze/Helm, Gesicht im Schatten).
+    - Rückfall auf die Linien-Symbole, wenn eine Datei fehlt. Originale nicht im Repo.
+- **Weltkarte (2026-10-16):** `app/hero_world.py`, `components/HeroWorld.tsx` (Abenteuer-Tab, Sprungmarke „Karte“).
+  - ~150-m-Zellen um den häufigsten Startpunkt, aufgedeckt durch Garmin-GPS-Routen (`garmin_routes`).
+  - Gebiete: Kern „Zitadelle“ bis 1,2 km plus 8 Sektoren (N Diersfordter Forst, NO Blumenkamp, O Schepersfeld, SO Fusternberg, S Lippe-Mündung, SW Büdericher Insel, W Rheinauen, NW Flüren). Weltradius 6 km.
+  - Entdeckung: 50 EP (Quelle `erkundung`) und 2 Gold, Log-Eintrag; Titel „Kartograf“ (5) und „Weltenwanderer“ (9).
+  - Die API liefert nur Meter relativ zur Heimat.

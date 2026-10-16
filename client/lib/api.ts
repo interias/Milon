@@ -208,7 +208,7 @@ export type Hero = {
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung", number>;
   duels: { won: number; total: number;
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
@@ -227,7 +227,7 @@ export type Hero = {
   companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; xp: number; level: number }[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
@@ -235,13 +235,16 @@ export type Hero = {
   gold: { balance: number; earned: number; sold: number; spent: number; week: number; sources: Record<string, number>; rates: Record<string, number> };
   auction: { week: string; ends: string; listings: { idx: number; kind: string; price: number; sold: boolean; item?: HeroItem;
     bag?: { id: string; name: string; slots: number; source: string }; mount?: { key: string; name: string; glyph: string } }[] } | null;
+  world: { available: false } | { available: true; cell_m: number; radius_m: number; core_m: number; cells: [number, number][];
+    routes: { date: string; points: [number, number][] }[]; regions: { name: string; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
+    explored_pct: number; km2: number };
   potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];
   bags: { capacity: number; backpack: number; max_bags: number; used: HeroBag[]; spare: HeroBag[] };
   sets: { name: string; suffix: string; owned: number; equipped: number; color: string; bonus: string | null }[];
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {

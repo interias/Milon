@@ -24,6 +24,7 @@ def hero_db(tmp_path, monkeypatch):
     monkeypatch.setattr(hero, "_protein_days", lambda: {})
     monkeypatch.setattr(hero, "_protein_target", lambda: None)
     monkeypatch.setattr(hero, "_streak", lambda: 0)
+    monkeypatch.setattr(hero.hero_world, "world", lambda: {"available": False})
     yield engine
     engine.dispose()
 
@@ -457,3 +458,18 @@ def test_auction_potions_and_spending(hero_db, monkeypatch):
     pricey = max(stock[:6], key=lambda x: x["price"])
     monkeypatch.setattr(hero, "gold_view", lambda data, today: {"balance": 0})
     assert client.post("/hero/buy", json={"kind": "listing", "ref": str(pricey["idx"])}).status_code == 409  # kein Gold
+
+
+def test_world_map_regions_and_privacy(monkeypatch):
+    from app import hero_world
+    assert hero_world.region_of(0, 500) == "Zitadelle" and hero_world.region_of(0, 3000) == "Diersfordter Forst"
+    assert hero_world.region_of(-3000, 0) == "Rheinauen" and hero_world.region_of(0, -3000) == "Lippe-Mündung"
+    home = (51.66, 6.62)
+    east = [(home[0], home[1] + i * 0.0005) for i in range(80)]  # ~2,7 km nach Osten
+    monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 1), east), (date(2026, 10, 3), east[:10])])
+    w = hero_world.world()
+    regions = {r["name"]: r for r in w["regions"]}
+    assert regions["Zitadelle"]["discovered"] and regions["Schepersfeld"]["discovered_on"] == "2026-10-01"
+    assert not regions["Rheinauen"]["discovered"] and w["explored_pct"] > 0
+    flat = [v for line in w["routes"] for pt in line["points"] for v in pt]
+    assert max(abs(v) for v in flat) < 10_000  # nur Meter relativ zur Heimat, keine Koordinaten
