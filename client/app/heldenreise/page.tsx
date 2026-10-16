@@ -5,6 +5,7 @@ import { Cinzel } from "next/font/google";
 import { api, type Achievements, type Hero, type HeroItem, type Weather } from "@/lib/api";
 import { play } from "@/lib/hero-sound";
 import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
+import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
@@ -84,7 +85,7 @@ export default function Heldenreise() {
 
   const hints: Partial<Record<TabKey, string>> = {};
   if (hero) {
-    if (hero.vault.veteran || hero.vault.claimable.length) hints.abenteuer = "!";
+    if (hero.vault.veteran || hero.vault.claimable.length || (hero.daily?.today && !hero.daily.today.done)) hints.abenteuer = "!";
     const upgrade = hero.inventory.some((it) => !it.equipped && it.ilvl > (hero.equipment[it.slot]?.ilvl ?? 0));
     if (upgrade || hero.inventory.some((it) => !it.equipped && gear.isNew(it.id))) hints.charakter = "▲";
     if (hero.talents.some((r) => r.unlocked && r.options.length && !r.chosen)) hints.talente = "•";
@@ -119,6 +120,10 @@ export default function Heldenreise() {
                   <HeroBags items={hero.inventory} gear={gear} />
                 </>}
                 {tab === "abenteuer" && <>
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
+                    <HeroTrainer data={hero} />
+                    <HeroEvent data={hero} />
+                  </div>
                   <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
                     <HeroVaultCard data={hero} onClaim={claim} />
                     <HeroQuestLog data={hero} />

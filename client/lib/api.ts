@@ -185,7 +185,7 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
-  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz"; reason: string; date: string;
+  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event"; reason: string; date: string;
   lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
   set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number;
 };
@@ -194,6 +194,7 @@ export type HeroVault = {
   week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
+export type HeroDaily = { date: string; key: string; title: string; goal: string; done: boolean; sick: boolean };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
 export type Hero = {
   today: string; start: string;
@@ -205,7 +206,10 @@ export type Hero = {
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event", number>;
+  daily: { streak: number; today: HeroDaily | null; last7: HeroDaily[] } | null;
+  event: { month: string; name: string; token: string; item: string; effect: string; tokens: number; goal: number; done: boolean; done_on: string | null; xp: number; rule: string } | null;
+  trainer: { name: string; role: string; quote: string };
   bosses: { key: string; name: string; kind: string; goal: string; status: string; hp: number; defeated: boolean; defeated_on: string | null; xp: number; loot: string; month: string }[];
   dungeons: { id: string; name: string; tier: string; tier_label: string; loot: string; date: string; km: number; cleared: boolean; xp: number;
     bosses: { name: string; km: number | null; defeated: boolean; optional?: boolean; hint?: string }[] }[];
@@ -216,7 +220,7 @@ export type Hero = {
   companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; xp: number; level: number }[];
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
@@ -225,7 +229,7 @@ export type Hero = {
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {

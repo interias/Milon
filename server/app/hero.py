@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_quests, hero_social
+from . import hero_bosses, hero_events, hero_quests, hero_social
 from .checkins import local_today
 from .db import engine
 
@@ -184,6 +184,15 @@ def _steps() -> dict[date, int]:
     return {d.date(): int(s) for d, s in zip(df["day"], df["steps"]) if pd.notna(s)}
 
 
+def _checkin_days() -> dict[date, int]:
+    try:
+        with engine.connect() as con:
+            rows = con.exec_driver_sql("SELECT day, energy FROM checkins WHERE energy IS NOT NULL").fetchall()
+    except Exception:  # noqa: BLE001 -- Tabelle fehlt
+        return {}
+    return {date.fromisoformat(str(r[0])[:10]): int(r[1]) for r in rows}
+
+
 def _sick() -> set[date]:
     try:
         with engine.connect() as con:
@@ -322,8 +331,9 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen"]
-EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz")}
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event"]
+EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
+             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event")}
 
 
 class Mods:
@@ -663,6 +673,8 @@ _CHEST_FLAVOR = {
     "auftrag": "Belohnung des Auftragsbretts – für eine Woche, in der alles erledigt wurde.",
     "boss": "Aus dem Hort eines besiegten Monatsbosses.",
     "instanz": "Aus der Schatzkammer einer bezwungenen Instanz.",
+    "taeglich": "Fleißbelohnung für sieben erledigte Tagesaufgaben am Stück.",
+    "event": "Festtagsbeute – nur in diesem einen Monat zu erringen.",
 }
 
 
@@ -1025,6 +1037,43 @@ def boss_loot(bosses: list[dict], dungeons: list[dict], entries: list[dict]) -> 
     return out
 
 
+def event_loot(daily: dict | None, events: list[dict], entries: list[dict]) -> list[dict]:
+    out = []
+    for d in (daily or {}).get("loot_days", []):
+        rng = _rng("dailyloot", d.isoformat())
+        item = make_item(rng, "blau", datetime.combine(d, datetime.min.time()).replace(hour=21), None,
+                         _level_at(entries, d), "taeglich", "7 Tagesaufgaben in Folge")
+        out.append({**item, "id": f"daily:{d.isoformat()}"})
+    for e in events:
+        if not e["done"]:
+            continue
+        d = date.fromisoformat(e["done_on"])
+        item = make_item(_rng("eventloot", e["month"]), "lila", datetime.combine(d, datetime.min.time()).replace(hour=19), None,
+                         _level_at(entries, d), "event", f"Event „{e['name']}“ abgeschlossen")
+        out.append({**item, "name": e["item"], "set": None, "id": f"event:{e['month']}"})
+    return out
+
+
+def trainer(data: dict, overview_parts: dict, today: date, pool: float, cap: float) -> dict:
+    runs = data["runs"]
+    yesterday = today - timedelta(days=1)
+    y_runs = runs[runs["day"] == yesterday] if not runs.empty else runs
+    long_y = float(y_runs["distance_km"].max()) if not y_runs.empty and y_runs["distance_km"].max() >= 15 else None
+    weak = next((b for b in overview_parts["bosses"] if not b["defeated"] and b["hp"] < 0.25), None)
+    cur = overview_parts["vault"]["current"]
+    locked = [s["threshold"] for s in cur["slots"] if not s["unlocked"]]
+    missing = (locked[0] - cur["runs"]) if locked else None
+    quests = overview_parts["quests"]
+    open_q = next((q["title"] for q in quests["quests"] if not q["done"]), None) if quests else None
+    ev = overview_parts["event"]
+    ctx = {"class_label": overview_parts["class_label"], "sick": today in data["sick"] or bool(_checkin(today).get("sick")),
+           "long_run_yesterday": long_y, "tired": data["sleep"].get(today, 999) < 360, "weak_boss": weak,
+           "vault_runs_missing": missing if missing is not None and missing <= 2 else None, "open_quest": open_q,
+           "rested_full": pool >= cap, "event_left": (ev["goal"] - ev["tokens"]) if ev and not ev["done"] else None,
+           "event_name": ev["name"] if ev else None, "event_token": ev["token"] if ev else None}
+    return {"name": hero_events.TRAINER, "role": hero_events.TRAINER_ROLE, "quote": hero_events.trainer_quote(ctx, today)}
+
+
 def talents_view(mods: Mods, level: int, today: date) -> list[dict]:
     rows = []
     for lvl, name, options in TALENT_ROWS:
@@ -1178,6 +1227,17 @@ def _load(today: date) -> dict:
             won = date.fromisoformat(b["defeated_on"])
             factor = 1.5 if mods.talent(50, won) == "bossjaeger" else 1.0
             extra.append((won, b["xp"] * factor, b["name"], "boss"))
+    base["other"], base["checkins"] = other, _safe(_checkin_days, {})
+    daily = _safe(lambda: hero_events.dailies(start, today, base), None)
+    if daily:
+        extra += [(d, xp, title, "taeglich") for d, xp, title in daily["xp"]]
+    events = []
+    m = start.replace(day=1)
+    while m <= today:
+        events.append(_safe(lambda m=m: hero_events.season_event(m, base, today), None))
+        m = (m + timedelta(days=32)).replace(day=1)
+    events = [e for e in events if e]
+    extra += [(date.fromisoformat(e["done_on"]), e["xp"], e["name"], "event") for e in events if e["done"]]
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
@@ -1186,9 +1246,10 @@ def _load(today: date) -> dict:
     loot = _safe(lambda: drops(runs, book["entries"], start, mods), [])
     loot += _safe(lambda: quest_loot(weeks, book["entries"]), [])
     loot += _safe(lambda: boss_loot(bosses, dungeons, book["entries"]), [])
+    loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons,
+            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -1214,7 +1275,7 @@ def overview(today: date | None = None) -> dict:
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
-                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz")]
+                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -1228,7 +1289,7 @@ def overview(today: date | None = None) -> dict:
     log_events.sort(key=lambda e: e["date"], reverse=True)
 
     week_xp = sum(e["xp"] + e["bonus"] for e in entries if e["date"] >= week_start)
-    return {
+    result = {
         "today": today.isoformat(),
         "start": data["start"].isoformat(),
         "hero": {
@@ -1253,6 +1314,8 @@ def overview(today: date | None = None) -> dict:
         "quests": data["quest_weeks"][-1] if data["quest_weeks"] else None,
         "bosses": [b for b in data["bosses"] if b["month"] == today.replace(day=1).isoformat()],
         "dungeons": data["dungeons"][::-1][:10],
+        "daily": {k: v for k, v in data["daily"].items() if k in ("today", "streak", "last7")} if data["daily"] else None,
+        "event": next((e for e in data["events"] if e["month"] == today.replace(day=1).isoformat()), None),
         "inventory": inventory,
         "equipment": equipment,
         "dust": dust_balance(_item_mods()),
@@ -1264,6 +1327,15 @@ def overview(today: date | None = None) -> dict:
         "rules": {"runs_full_xp": RUNS_FULL_XP, "workouts_full_xp": WORKOUTS_FULL_XP,
                   "rest_per_day": REST_PER_DAY, "vault_thresholds": VAULT_THRESHOLDS},
     }
+    return _with_trainer(result, data, today)
+
+
+def _with_trainer(result: dict, data: dict, today: date) -> dict:
+    parts = {"bosses": result["bosses"], "vault": result["vault"], "quests": result["quests"], "event": result["event"],
+             "class_label": result["hero"]["class_label"]}
+    result["trainer"] = _safe(lambda: trainer(data, parts, today, data["book"]["pool"], data["mods"].rest_cap(today)),
+                              {"name": hero_events.TRAINER, "role": hero_events.TRAINER_ROLE, "quote": hero_events.FALLBACK[0]})
+    return result
 
 
 def coach_summary(today: date | None = None) -> dict:

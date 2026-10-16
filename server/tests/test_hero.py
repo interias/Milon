@@ -321,3 +321,31 @@ def test_companion_mood_and_growth(monkeypatch):
     idle = {**data, "runs": runs.iloc[:0]}
     assert hero.companion("moench", idle, TODAY, datetime(2026, 10, 16, 23))["mood"] == "schlaeft"
     assert hero.companion("paladin", idle, TODAY, datetime(2026, 10, 16, 15))["mood"] == "wartet"
+
+
+def test_dailies_events_and_trainer(monkeypatch):
+    from app import hero_events
+    runs = runs_frame([{"external_id": f"r{i}", "started_at": datetime(2026, 10, 1 + i, 7), "distance_km": 11.0 if i < 4 else 5.0,
+                        "dur_min": 60.0, "zone": 1} for i in range(9)])
+    data = {"runs": runs, "workouts": pd.DataFrame(columns=["id", "started_at", "sets", "day"]), "steps": {}, "other": {},
+            "checkins": {}, "protein": {}, "protein_target": None, "sleep": {}, "sick": {date(2026, 10, 10)}}
+    monkeypatch.setattr(hero_events, "daily_key", lambda d, data: "bewegung")
+    dl = hero_events.dailies(date(2026, 10, 1), date(2026, 10, 12), data)
+    assert dl["streak"] == 0 and dl["loot_days"] == [date(2026, 10, 7)]  # 10.10. krank pausiert, 11.10. bricht
+    assert not dl["today"]["done"] and len(dl["xp"]) == 9
+    ev = hero_events.season_event(date(2026, 10, 1), data, TODAY)
+    assert ev["name"] == "Herbstfest" and ev["tokens"] == 13 and ev["done_on"] == "2026-10-08"
+    ctx = {"class_label": "Jäger", "sick": False, "long_run_yesterday": None, "tired": False, "weak_boss": None,
+           "vault_runs_missing": 1, "open_quest": "Ruhiger Atem", "rested_full": False, "event_left": None}
+    assert "Noch 1 Lauf" in hero_events.trainer_quote(ctx, TODAY)
+    assert "Krank" in hero_events.trainer_quote({**ctx, "sick": True}, TODAY)
+
+
+def test_daily_streak_survives_sick_day(monkeypatch):
+    from app import hero_events
+    runs = runs_frame([{"external_id": f"r{i}", "started_at": datetime(2026, 10, d, 7), "distance_km": 5.0, "dur_min": 30.0, "zone": 1}
+                       for i, d in enumerate((1, 2, 4))])
+    data = {"runs": runs, "workouts": pd.DataFrame(columns=["id", "started_at", "sets", "day"]), "steps": {}, "other": {},
+            "checkins": {}, "protein": {}, "protein_target": None, "sleep": {}, "sick": {date(2026, 10, 3)}}
+    monkeypatch.setattr(hero_events, "daily_key", lambda d, data: "bewegung")
+    assert hero_events.dailies(date(2026, 10, 1), date(2026, 10, 4), data)["streak"] == 3
