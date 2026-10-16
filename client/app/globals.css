@@ -157,3 +157,28 @@ body {
 @keyframes wowGlow { 0%, 100% { box-shadow: 0 0 6px var(--glow) } 50% { box-shadow: 0 0 14px var(--glow) } }
 .wow-pulse { animation: wowGlow 2.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .wow-pulse { animation: none } }
+
+/* Heldenreise-Effekte (alle bei „Bewegung reduzieren" aus) */
+.wow-sheen { overflow: hidden; }
+.wow-sheen::after {
+  content: ""; position: absolute; inset: -40%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .45) 50%, transparent 60%);
+  transform: translateX(-120%); animation: wowSheen 3.2s ease-in-out infinite;
+}
+@keyframes wowSheen { 0%, 55% { transform: translateX(-120%) } 85%, 100% { transform: translateX(120%) } }
+.wow-new { animation: wowNew 1.6s ease-in-out infinite; }
+@keyframes wowNew { 0%, 100% { box-shadow: 0 0 0 1px #000, 0 0 4px #ffd100 } 50% { box-shadow: 0 0 0 1px #000, 0 0 14px #ffd100, 0 0 4px #fff } }
+.wow-figure { filter: drop-shadow(0 0 10px var(--fig)) drop-shadow(0 0 2px #000); animation: wowBreathe 5s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes wowBreathe { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.012) } }
+.wow-rays { background: repeating-conic-gradient(from 0deg, var(--ray) 0deg 8deg, transparent 8deg 22deg); animation: wowSpin 14s linear infinite; mask-image: radial-gradient(circle, #000 15%, transparent 68%); }
+@keyframes wowSpin { to { transform: rotate(360deg) } }
+.wow-pop { animation: wowPop .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes wowPop { from { transform: scale(.4); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+.wow-rise { animation: wowRise .7s ease-out .25s both; }
+@keyframes wowRise { from { transform: translateY(14px); opacity: 0 } to { transform: none; opacity: 1 } }
+.wow-banner { animation: wowBanner 5s ease-in-out both; }
+@keyframes wowBanner { 0% { opacity: 0; transform: translate(-50%, -12px) scale(.9) } 10%, 85% { opacity: 1; transform: translate(-50%, 0) scale(1) } 100% { opacity: 0; transform: translate(-50%, -8px) } }
+@media (prefers-reduced-motion: reduce) {
+  .wow-sheen::after, .wow-new, .wow-figure, .wow-rays, .wow-pop, .wow-rise { animation: none; }
+  .wow-banner { animation: none; transform: translateX(-50%); }
+}

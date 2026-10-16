@@ -213,3 +213,9 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Tooltip:** WoW-Tooltip schwebt beim Überfahren (`position: fixed`, an den Bildschirmrand geklemmt), beim Antippen öffnet er als Dialog.
   - **Backend:** Log-Einträge tragen dafür `name`/`level`/`xp`.
 - **Ausrüstung anlegen (2026-10-16):** Tabelle `hero_equipment` (slot → item_id), API `POST /hero/equip {item_id}` (404 unbekannt), `/hero/unequip {slot}`, `/hero/equip-best`. Übersicht liefert `equipment` je Platz, `inventory[].equipped` und `ilvl_avg` (nur Angelegtes). UI: Drag & Drop aus den Taschen auf den passenden Platz (leuchtet golden), Rechtsklick legt an, Antippen öffnet Dialog mit Anlegen/Ablegen, Vergleichs-Tooltip „Derzeit angelegt“ + Stufen-Δ, grüner ▲ an Taschen-Gegenständen über dem Angelegten, Knopf „Beste anlegen“. Angelegtes verschwindet aus den Taschen. Beim Start ist nichts angelegt.
+- **Visualisierung (2026-10-16):** `components/HeroVisuals.tsx`.
+  - **Charakterfigur:** im Charakterbogen; Maske `public/img/silhouette/front-filled.png`, per Flood-Fill aus `front.png` erzeugt; Verlauf in Klassenfarbe, Glow, „Atmen“, Podest. Angelegte Gegenstände leuchten an ihrer Körperstelle in Raritätsfarbe (`SPOTS`).
+  - **Attribute-Radar:** jetzt vs. vor 30 T (gestrichelt).
+  - **Chronik:** Stufenverlauf aus `progression` (Backend, je ISO-Woche EP je Quelle + kumulierte EP + Stufe mit Bruchteil) und gestapelte EP-Balken der letzten 12 Wochen.
+  - **Effekte** (`.wow-*` in globals.css, bei „Bewegung reduzieren“ aus): Glanz auf Episch/Legendär/Artefakt, gelbes Leuchten an neuer Beute (localStorage `milon.hero.seen`, erster Besuch = alles gesehen), Stufenaufstiegs-Banner (localStorage `milon.hero.level`), Truhen-Enthüllung mit rotierenden Strahlen nach der Wahl (`LootReveal`).
+  - **Flavor-Text** von Truhen-Gegenständen jetzt quellenabhängig, auch für bereits gewählte (`hero.flavor`).

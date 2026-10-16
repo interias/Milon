@@ -54,6 +54,8 @@ def test_ledger_rested_bonus_and_weekly_diminishing():
     xp = [round(e["xp"]) for e in book["entries"]]
     assert xp == [72, 72, 72, 72, 36]  # 30 min × 1,2 × 2; 5. Lauf der Woche halb
     assert all(e["bonus"] == 0 for e in book["entries"])  # vor dem ersten Lauf kein Ruhetag
+    prog = hero.progression(book["entries"], book["daily"])
+    assert len(prog) == 1 and prog[0]["laufen"] == 324 and prog[0]["xp"] == 324 and prog[0]["level"] == 1.32
     assert book["pool"] == 2 * hero.REST_PER_DAY  # Sa + So geruht
     # Zwei Krankheitstage laden den Bonus, der nächste Lauf wird verdoppelt.
     later = runs_frame([{"external_id": "a", "started_at": datetime(2026, 10, 12, 7), "distance_km": 5.0,
