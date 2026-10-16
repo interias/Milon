@@ -92,3 +92,32 @@ def money(copper: int) -> str:
     s, c = divmod(rest, SILVER)
     parts = [f"{g}g" if g else "", f"{s}s" if s else "", f"{c}k" if c or not (g or s) else ""]
     return ("−" if copper < 0 else "") + " ".join(p for p in parts if p)
+
+
+# --- Auktionshaus & Tränke ---------------------------------------------------------------
+POTIONS = {
+    "ausdauer": ("Trank der Ausdauer", "+10 % Trainings-EP für den Tag", 4 * GOLD, "🧪"),
+    "erholung": ("Elixier der Erholung", "+120 Ruhebonus sofort", 3 * GOLD, "⚗️"),
+    "glueck": ("Glückstrank", "+10 % Glücksfund-Chance für den Tag", 6 * GOLD, "🍀"),
+}
+AH_MOUNTS = [("ah_esel", "Störrischer Packesel", "🫏", 40 * GOLD), ("ah_kamel", "Goldener Kamelhengst", "🐫", 120 * GOLD),
+             ("ah_pfau", "Prunkvoller Pfau", "🦚", 80 * GOLD)]
+BAG_PRICES = {6: 6 * GOLD, 8: 10 * GOLD, 10: 15 * GOLD}
+
+
+def auction_stock(week: date, level: int, make_item) -> list[dict]:
+    """Wochenangebot (geseedet je ISO-Woche): 6 Gegenstände, 1 Tasche, evtl. ein Reittier."""
+    rng = _rng("auction", week.isoformat())
+    out = []
+    for i in range(6):
+        rarity = rng.choices(["gruen", "blau", "lila", "orange"], weights=[35, 40, 20, 5])[0]
+        item = make_item(_rng("ah-item", week.isoformat(), i), rarity, week, level)
+        item = {**item, "id": f"ah:{week.isoformat()}:{i}", "source": "auktion", "reason": "Im Auktionshaus erstanden"}
+        out.append({"idx": i, "kind": "item", "item": item, "price": sell_price(item) * 4})
+    size = rng.choice([6, 8, 10])
+    out.append({"idx": 6, "kind": "bag", "price": BAG_PRICES[size],
+                "bag": {"id": f"bag:ah:{week.isoformat()}", "name": BAG_NAMES[size], "slots": size, "source": "Auktionshaus"}})
+    if rng.random() < 0.20:
+        key, name, glyph, price = rng.choice(AH_MOUNTS)
+        out.append({"idx": 7, "kind": "mount", "price": price, "mount": {"key": key, "name": name, "glyph": glyph}})
+    return out

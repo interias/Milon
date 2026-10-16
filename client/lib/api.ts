@@ -185,7 +185,7 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
-  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event"; reason: string; date: string;
+  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event" | "auktion"; reason: string; date: string;
   lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
   set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number; price?: number; mail?: boolean;
 };
@@ -233,6 +233,9 @@ export type Hero = {
   equipment: Record<string, HeroItem>;
   dust: number;
   gold: { balance: number; earned: number; sold: number; spent: number; week: number; sources: Record<string, number>; rates: Record<string, number> };
+  auction: { week: string; ends: string; listings: { idx: number; kind: string; price: number; sold: boolean; item?: HeroItem;
+    bag?: { id: string; name: string; slots: number; source: string }; mount?: { key: string; name: string; glyph: string } }[] } | null;
+  potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];
   bags: { capacity: number; backpack: number; max_bags: number; used: HeroBag[]; spare: HeroBag[] };
   sets: { name: string; suffix: string; owned: number; equipped: number; color: string; bonus: string | null }[];
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
@@ -461,6 +464,8 @@ export const api = {
   heroTitle: (key: string | null) => post<{ key: string | null }>("/hero/title", { key }),
   heroMount: (key: string | null) => post<{ key: string | null }>("/hero/mount", { key }),
   heroSell: (itemId: string) => post<{ gold: number }>("/hero/sell", { item_id: itemId }),
+  heroBuy: (kind: "listing" | "potion", ref: string) => post<{ kind: string; price: number }>("/hero/buy", { kind, ref }),
+  heroDrink: (key: string) => post<{ key: string }>("/hero/drink", { key }),
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),

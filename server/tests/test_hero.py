@@ -425,3 +425,35 @@ def test_sell_and_gold_balance(hero_db, monkeypatch):
     after = hero.overview(TODAY)
     assert price == other["price"] and after["gold"]["balance"] == before + price
     assert other["id"] not in {it["id"] for it in after["inventory"]}
+
+
+def test_auction_potions_and_spending(hero_db, monkeypatch):
+    monkeypatch.setattr(hero, "local_today", lambda: TODAY)
+    with Session(hero_db) as session:
+        session.add(hero.HeroState(key="start", value="2026-10-01"))
+        for day in range(1, 15):
+            add_run(session, datetime(2026, 10, day, 7), km=6)
+        session.commit()
+    app = FastAPI()
+    app.include_router(hero_api.router)
+    client = TestClient(app)
+    o = hero.overview(TODAY)
+    stock = o["auction"]["listings"]
+    assert o["auction"]["week"] == "2026-10-12" and [x["kind"] for x in stock][:7] == ["item"] * 6 + ["bag"]
+    assert hero.overview(TODAY)["auction"]["listings"][0]["item"]["name"] == stock[0]["item"]["name"]  # stabil
+    start = o["gold"]["balance"]
+    assert client.post("/hero/drink", json={"key": "ausdauer"}).status_code == 409  # keiner im Gepäck
+    assert client.post("/hero/buy", json={"kind": "potion", "ref": "ausdauer"}).status_code == 200
+    assert client.post("/hero/drink", json={"key": "ausdauer"}).status_code == 200
+    assert client.post("/hero/drink", json={"key": "ausdauer"}).status_code == 409  # einmal am Tag
+    bag = stock[6]
+    assert client.post("/hero/buy", json={"kind": "listing", "ref": "6"}).status_code == 200
+    assert client.post("/hero/buy", json={"kind": "listing", "ref": "6"}).status_code == 409  # schon verkauft
+    after = hero.overview(TODAY)
+    assert after["gold"]["balance"] == start - hero.hero_economy.POTIONS["ausdauer"][2] - bag["price"]
+    assert after["bags"]["capacity"] == o["bags"]["capacity"] + bag["bag"]["slots"]  # (Boss-Taschen schon dabei)
+    assert any(b["key"] == "trank_ausdauer" for b in after["buffs"])
+    assert after["xp_sources"]["buffs"] > o["xp_sources"]["buffs"] or after["hero"]["xp"] >= o["hero"]["xp"]
+    pricey = max(stock[:6], key=lambda x: x["price"])
+    monkeypatch.setattr(hero, "gold_view", lambda data, today: {"balance": 0})
+    assert client.post("/hero/buy", json={"kind": "listing", "ref": str(pricey["idx"])}).status_code == 409  # kein Gold

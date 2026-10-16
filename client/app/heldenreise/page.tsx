@@ -7,6 +7,7 @@ import { play } from "@/lib/hero-sound";
 import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
+import { HeroAuction, HeroPotions } from "@/components/HeroTrade";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLinkContext, HeroLog, HeroLogTicker, HeroPurse, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
@@ -92,6 +93,12 @@ export default function Heldenreise() {
     }
   };
 
+  const buyThing = useCallback(async (kind: "listing" | "potion", ref: string) => {
+    await api.heroBuy(kind, ref);
+    play("loot", "lila");
+    await load();
+  }, [load]);
+
   const links = useMemo(() => ({
     items: new Map((hero?.inventory ?? []).map((it) => [it.id, it] as const)),
     achievements: new Map((ach?.achievements ?? []).map((a) => [a.name, a] as const)),
@@ -121,7 +128,7 @@ export default function Heldenreise() {
           <div>
             <div className="min-w-0">
               <div role="tablist" aria-label="Bereiche der Heldenreise"
-                   className="wow-tabs sticky top-[61px] z-20 -mx-1 mb-4 grid grid-cols-6 gap-1 px-1 pt-2 sm:static sm:mx-0 sm:flex sm:overflow-x-auto sm:overflow-y-hidden sm:px-0 sm:pr-2">
+                   className="wow-tabs sticky top-[61px] z-20 -mx-1 mb-4 grid grid-cols-7 gap-0.5 px-1 pt-2 sm:static sm:mx-0 sm:flex sm:w-0 sm:min-w-full sm:overflow-x-auto sm:overflow-y-hidden sm:px-0 sm:pr-2">
                 {TABS.map((t) => (
                   <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} id={`tab-${t.key}`}
                           aria-controls={`panel-${t.key}`} onClick={() => choose(t.key)}
@@ -164,12 +171,18 @@ export default function Heldenreise() {
                   <div id="ab-duell" className="scroll-mt-32"><HeroDuel data={hero} /></div>
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
+                {tab === "handel" && <>
+                  <HeroAuction data={hero} gear={gear} onBuy={buyThing} />
+                  <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
+                    <HeroPotions data={hero} onBuy={buyThing} onDrink={async (key) => { await api.heroDrink(key); play("quest"); await load(); }} />
+                    <HeroPurse data={hero} />
+                  </div>
+                </>}
                 {tab === "chronik" && <>
                   <HeroSagaCard />
                   <HeroChronicle data={hero} />
                   <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
                     <HeroReputation data={hero} />
-                    <HeroPurse data={hero} />
                     <HeroRules data={hero} />
                   </div>
                 </>}
@@ -190,12 +203,13 @@ export default function Heldenreise() {
 
 const JUMPS: [string, string][] = [["ab-gorm", "Gorm"], ["ab-event", "Event"], ["ab-truhe", "Truhe"], ["ab-auftraege", "Aufträge"],
   ["ab-bosse", "Bosse"], ["ab-instanzen", "Instanzen"], ["ab-duell", "Duell"]];
-type TabKey = "charakter" | "abenteuer" | "talente" | "chronik" | "sammlung" | "log";
+type TabKey = "charakter" | "abenteuer" | "talente" | "handel" | "chronik" | "sammlung" | "log";
 const TABS: { key: TabKey; label: string; short: string }[] = [
   { key: "charakter", label: "Charakter", short: "Held" },
   { key: "abenteuer", label: "Abenteuer", short: "Reise" },
   { key: "talente", label: "Talente", short: "Talente" },
-  { key: "chronik", label: "Chronik", short: "Chronik" },
+  { key: "handel", label: "Handel", short: "Handel" },
+  { key: "chronik", label: "Chronik", short: "Saga" },
   { key: "sammlung", label: "Sammlung", short: "Erfolge" },
   { key: "log", label: "Log", short: "Log" },
 ];
@@ -203,6 +217,7 @@ const TAB_ICON: Record<TabKey, React.ReactNode> = {
   charakter: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
   abenteuer: <><circle cx="12" cy="12" r="10" /><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" /></>,
   talente: <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />,
+  handel: <><circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><path d="M7 6h1v4" /><path d="m16.71 13.88.7.71-2.82 2.82" /></>,
   chronik: <><path d="M15 12h-5" /><path d="M15 8h-5" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" /></>,
   log: <><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /><path d="m3 15 2 2 4-4" /></>,
   sammlung: <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>,

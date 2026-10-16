@@ -158,3 +158,33 @@ def sell_item(body: EquipInput) -> dict:
         raise HTTPException(status_code=404, detail="Gegenstand nicht im Inventar.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+class BuyInput(BaseModel):
+    kind: str = Field(pattern="^(listing|potion)$")
+    ref: str = Field(min_length=1, max_length=20)
+
+
+class DrinkInput(BaseModel):
+    key: str = Field(min_length=2, max_length=20)
+
+
+@router.post("/buy")
+def buy(body: BuyInput) -> dict:
+    try:
+        return hero.buy(body.kind, body.ref)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/drink")
+def drink(body: DrinkInput) -> dict:
+    try:
+        hero.drink(body.key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unbekannter Trank.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"key": body.key}

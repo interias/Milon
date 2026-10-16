@@ -82,7 +82,7 @@ const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
 function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
-  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute" };
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute", auktion: "Auktionshaus" };
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
@@ -105,7 +105,7 @@ function IlvlDiff({ item, worn }: { item: HeroItem; worn?: HeroItem }) {
   return <p className="mt-1 text-[12px]" style={{ color }}>{text}</p>;
 }
 
-function useItemTip(gear?: Gear) {
+export function useItemTip(gear?: Gear) {
   const [tip, setTip] = useState<{ item: HeroItem; x: number; y: number } | null>(null);
   const [open, setOpen] = useState<HeroItem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -177,7 +177,7 @@ function useItemTip(gear?: Gear) {
   return { bind, node };
 }
 
-function Slot({ item, slot, bind, size = 44, upgrade = false, isNew = false }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number; upgrade?: boolean; isNew?: boolean }) {
+export function Slot({ item, slot, bind, size = 44, upgrade = false, isNew = false }: { item?: HeroItem; slot?: string; bind?: ReturnType<ReturnType<typeof useItemTip>["bind"]>; size?: number; upgrade?: boolean; isNew?: boolean }) {
   if (!item) {
     return <span className="wow-slot text-[#4b3a22]" style={{ width: size, height: size }} title={slot ? `${SLOT_NAME[slot]} – leer` : undefined}>
       {slot && <Icon size={size * 0.45}>{SLOT_ICON[slot]}</Icon>}
@@ -224,6 +224,7 @@ const BUFF_ICON: Record<string, React.ReactNode> = {
   battery: <><rect x="2" y="7" width="16" height="10" rx="2" /><path d="M22 11v2" /><path d="M6 11v2" /></>,
   flame: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />,
   target: <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>,
+  potion: <><path d="M10 2v7.31" /><path d="M14 9.3V1.99" /><path d="M8.5 2h7" /><path d="M14 9.3a6.5 6.5 0 1 1-4 0" /><path d="M5.52 16h12.96" /></>,
 };
 
 function BuffBar({ buffs }: { buffs: HeroBuff[] }) {

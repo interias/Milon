@@ -251,3 +251,5 @@ body {
   .wow-tab-active { padding-bottom: 6px; }
   .wow-tab-hint { top: -4px; right: 2px; }
 }
+.wow-tabs { scrollbar-width: none; }
+.wow-tabs::-webkit-scrollbar { display: none; }
