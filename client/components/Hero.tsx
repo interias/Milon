@@ -67,7 +67,7 @@ const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
 function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
-  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz" };
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute" };
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
@@ -402,7 +402,7 @@ export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear;
           <p className="absolute inset-x-0 top-1.5 z-10 text-center font-display text-[11px] uppercase tracking-wider text-muted">
             Ø Gegenstandsstufe <b className="text-sm" style={{ color: TIP_YELLOW }}>{data.ilvl_avg ?? "–"}</b>
           </p>
-          <HeroScene weather={weather ?? null} />
+          <HeroScene weather={weather ?? null} effect={data.event?.effect} />
           <Companion pet={data.companion} />
           <div className="relative h-[244px] px-2 pb-1 pt-7"><HeroFigure color={data.hero.class_color} equipment={gear.equipment}
             aura={(() => { const s = data.sets.find((x) => x.bonus); return s ? { color: s.color, pulse: s.equipped >= 4 } : null; })()} /></div>
@@ -544,6 +544,7 @@ function LogLine({ e }: { e: Hero["log"][number] }) {
     case "auftrag": return <span style={{ color: "#ffd100" }}>Auftrag abgeschlossen: {name("#ffd100")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "boss": return <span style={{ color: "#ff6a5c" }}>Boss besiegt: {name("#ff6a5c")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "instanz": return <span style={{ color: "#3d95ff" }}>Instanz bezwungen: {name("#3d95ff")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "truhe": return <span style={{ color: "#00aa00" }}>Ihr wählt aus der Truhe: {name(e.rarity ? rc(e.rarity) : "#fff")}.</span>;
     default: return <span>{e.text}</span>;
   }
@@ -564,7 +565,7 @@ export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClas
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />
@@ -582,6 +583,7 @@ export function HeroRules({ data }: { data: Hero }) {
         <li>Fokus: Läufe passend zur gewählten Spezialisierung geben ab dem Tag der Wahl +10 %.</li>
         <li>Talente wirken ab dem Tag der Wahl; Wochenaufträge geben je 150 EP.</li>
         <li>Monatsbosse geben 400 EP, jeder Instanz-Boss 50 EP.</li>
+        <li>Tagesaufgaben geben 50 EP, ein abgeschlossenes Saison-Event 300 EP.</li>
       </ul>
     </Card>
   );

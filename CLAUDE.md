@@ -284,3 +284,12 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Stimmung aus Tagesdaten: krank, stolz (epische Beute heute), froh (trainiert), schläft (22–6 Uhr), wartet. Klick zeigt eine Sprechblase.
   - **„Willkommen zurück“:** localStorage `milon.hero.visit` (EP + Log-Schlüssel). Zeigt neue Kampflog-Einträge, die EP-Leiste zählt vom alten Stand hoch. Beim ersten Besuch passiert nichts.
   - **Klänge:** WebAudio-Synthese, standardmäßig aus (`milon.hero.sound`), Schalter im Einheitenrahmen. Es gibt Fanfare für Stufenaufstieg, Truhe, Beute (Tonhöhe nach Rarität), Anlegen und Tab-Klick.
+- **Tagesaufgaben, Trainer, Saison-Events (2026-10-16):** `app/hero_events.py`, UI `components/HeroEvents.tsx`, Platz oben im Abenteuer-Tab.
+  - **Tagesaufgabe** ab Starttag, pro Datum geseedet: 8.000 Schritte, Protein ≥ 90 %, Check-in, Bewegung (Training oder ≥ 20 min Rad/Gehen) oder Nacht ≥ 7 h.
+    - 50 EP (Quelle `taeglich`). Die Serie pausiert an Krankheitstagen; heute zählt bis Tagesende als offen.
+    - Alle 7 Tage am Stück seltene Beute (`daily:<datum>`).
+    - Das Abenteuer-Tab zeigt „!“, solange die heutige Aufgabe offen ist.
+  - **Meister Gorm** (Trainer-NPC) wählt sein Tageszitat per Priorität: krank > langer Lauf gestern > wenig Schlaf > Boss unter 25 % > Truhe fast frei > offener Auftrag > Ruhebonus voll > Event offen > Zufallszitat. Rein aus Vorlagen, ohne LLM.
+  - **Saison-Event je Monat** (`EVENTS`, z. B. Oktober Herbstfest):
+    - Lauf = 1 Sammelstück, ab 10 km = 2. Ziel 12 → 300 EP (Quelle `event`) und ein fester epischer Event-Gegenstand (`event:<monat>`).
+    - Szeneneffekt nach Event: Blätter, Schnee, Blüten, Glühwürmchen oder Funken.

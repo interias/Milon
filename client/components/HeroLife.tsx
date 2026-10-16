@@ -26,10 +26,18 @@ const SKY: Record<Phase, string> = {
   abend: "linear-gradient(180deg, #1f1230 0%, #a2472b 50%, #0b0907 100%)",
   tag: "linear-gradient(180deg, #1f4466 0%, #4f7896 50%, #0b0907 100%)",
 };
+// Saisonale Effekte des laufenden Events (Blätter, Schnee, Blüten, Glühwürmchen, Funken).
+const SEASON: Record<string, { cls: string; glyph: string; colors: string[] }> = {
+  blaetter: { cls: "hero-leaf", glyph: "❧", colors: ["#d9622b", "#b8860b", "#a0522d", "#e8a33d"] },
+  schnee: { cls: "hero-leaf", glyph: "❄", colors: ["#e8f4ff", "#cfe6ff"] },
+  blueten: { cls: "hero-leaf", glyph: "✿", colors: ["#ff9ec7", "#ffd1e3", "#fff0f6"] },
+  gluehwuermchen: { cls: "hero-firefly", glyph: "•", colors: ["#ffe066", "#d4ff6b"] },
+  funken: { cls: "hero-spark", glyph: "✷", colors: ["#ffb347", "#ffd27f"] },
+};
 const WET = new Set(["drizzle", "rain", "heavy-rain", "thunder", "sleet"]);
 const CLOUDY = new Set(["cloudy", "partly-cloudy", "mostly-clear", "fog", "drizzle", "rain", "heavy-rain", "thunder", "snow", "sleet"]);
 
-export function HeroScene({ weather }: { weather: Weather | null }) {
+export function HeroScene({ weather, effect }: { weather: Weather | null; effect?: string }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
   if (!weather || !weather.configured) return null;
@@ -62,6 +70,13 @@ export function HeroScene({ weather }: { weather: Weather | null }) {
       ))}
       {icon === "fog" && <span className="hero-fog absolute inset-x-0 bottom-[20%] h-1/3" />}
       {icon === "thunder" && <span className="hero-flash absolute inset-0 bg-white" />}
+      {effect && SEASON[effect] && Array.from({ length: 9 }, (_, i) => (
+        <span key={`s${i}`} className={`absolute ${SEASON[effect].cls}`}
+              style={{ left: `${(i * 41 + 7) % 100}%`, top: SEASON[effect].cls === "hero-firefly" ? `${30 + (i * 17) % 55}%` : "-8%",
+                       color: SEASON[effect].colors[i % SEASON[effect].colors.length], animationDelay: `${i * -1.3}s`, fontSize: 10 + (i % 3) * 3 }}>
+          {SEASON[effect].glyph}
+        </span>
+      ))}
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 60%, transparent 40%, rgba(0,0,0,.55) 100%)" }} />
       <p className="absolute bottom-1 right-2 text-[9px] text-white/60">
         {weather.place.split(",")[0]} · {Math.round(weather.current.temp)} °C · {weather.current.text} · {PHASE_LABEL[phase]}

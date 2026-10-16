@@ -234,3 +234,12 @@ body {
   .hero-star, .hero-cloud, .hero-drop, .hero-flake, .hero-fog, .hero-flash, .pet-froh, .pet-wartet .pet-tail, .pet-z, .pet-stolz, .pet-spark, .hero-float { animation: none; }
   .hero-drop, .hero-flake { display: none; }
 }
+
+/* Saisonale Szeneneffekte */
+.hero-leaf { animation: heroLeaf 9s linear infinite; text-shadow: 0 0 3px rgba(0, 0, 0, .6); }
+@keyframes heroLeaf { from { transform: translate(0, 0) rotate(0) } 25% { transform: translate(14px, 80px) rotate(90deg) } 50% { transform: translate(-6px, 160px) rotate(180deg) } 75% { transform: translate(12px, 240px) rotate(270deg) } to { transform: translate(-4px, 330px) rotate(360deg) } }
+.hero-firefly { animation: heroFirefly 5s ease-in-out infinite alternate; text-shadow: 0 0 8px currentColor; }
+@keyframes heroFirefly { from { transform: translate(0, 0); opacity: .2 } 50% { opacity: 1 } to { transform: translate(18px, -22px); opacity: .3 } }
+.hero-spark { top: auto !important; bottom: -5%; animation: heroSpark 4s ease-out infinite; text-shadow: 0 0 6px currentColor; }
+@keyframes heroSpark { from { transform: translateY(0); opacity: 1 } to { transform: translateY(-300px); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .hero-leaf, .hero-firefly, .hero-spark { animation: none; display: none; } }

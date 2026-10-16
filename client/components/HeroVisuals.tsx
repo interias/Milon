@@ -75,7 +75,7 @@ const SOURCES: [keyof Hero["progression"][number], string, string][] = [
   ["laufen", "Laufen", "#aad372"], ["kraft", "Kraft", "#c69b6d"], ["alltag", "Alltag", "#3fc7eb"],
   ["erfolge", "Erfolge", "#ffd100"], ["ruhebonus", "Ausgeruht", "#3d7bd9"],
   ["buffs", "Buffs", "#ff7d0a"], ["fokus", "Fokus", "#f48cba"], ["talente", "Talente", "#a330c9"], ["auftraege", "Aufträge", "#e6cc80"],
-  ["bosse", "Bosse", "#c41e3a"], ["instanzen", "Instanzen", "#0070dd"],
+  ["bosse", "Bosse", "#c41e3a"], ["instanzen", "Instanzen", "#0070dd"], ["taeglich", "Tagesaufgaben", "#9d9d9d"], ["event", "Events", "#ff8a3d"],
 ];
 
 export function HeroChronicle({ data }: { data: Hero }) {
