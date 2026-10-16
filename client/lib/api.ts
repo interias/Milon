@@ -182,6 +182,33 @@ export type AchievementSummary = {
   to_next: number; progress: number;
 };
 export type Achievements = { achievements: Achievement[]; summary: AchievementSummary };
+
+export type HeroItem = {
+  id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
+  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran"; reason: string; date: string;
+  lucky?: boolean; run_km?: number; claimed_at?: string;
+};
+export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
+export type HeroVault = {
+  week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
+};
+export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
+export type Hero = {
+  today: string; start: string;
+  hero: {
+    level: number; title: string; xp: number; floor: number; next: number; progress: number;
+    class: string; class_label: string; class_color: string; class_desc: string;
+    spec: string | null; spec_label: string | null; spec_desc: string;
+    spec_scores: Record<string, number>; shares: { laufen: number; kraft: number; alltag: number };
+    rested: number; rested_cap: number; week_xp: number;
+  };
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus", number>;
+  attributes: HeroAttribute[];
+  vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
+  inventory: HeroItem[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe"; text: string; rarity?: Rarity }[];
+  rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
+};
 export type PaceDetail = {
   series?: { date: string; pace: number; smooth: number }[];
   current?: number; runs?: number; caveat?: string;
@@ -392,6 +419,8 @@ export const api = {
   runEf: () => get<EfTrend>("/metrics/running/ef"),
   runBestEfforts: (top = 3) => get<BestEfforts>(`/metrics/running/best-efforts?top=${top}`),
   runAchievements: () => get<Achievements>("/metrics/running/achievements"),
+  hero: () => get<Hero>("/hero"),
+  heroClaim: (week: string, slot: number) => post<{ item: HeroItem }>("/hero/vault/claim", { week, slot }),
   healthRestingHr: (days = 365) => get<RestingHr>(`/metrics/health/resting-hr?days=${days}`),
   // Kraft
   strengthSummary: () => get<StrengthSummary>("/metrics/strength/summary"),

@@ -134,17 +134,17 @@ function Tile({ a, onClick }: { a: Achievement; onClick: () => void }) {
   );
 }
 
-export function AchievementsSummary({ data }: { data: AchData }) {
+export function AchievementsSummary({ data, showLevel = true }: { data: AchData; showLevel?: boolean }) {
   const s = data.summary;
   const [sel, setSel] = useState<Achievement | null>(null);
   const artifacts = data.achievements.filter((a) => a.rarity === "rot");
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
-        <div>
+        {showLevel && <div>
           <p className="text-[11px] uppercase tracking-wide text-muted">Läufer-Level {s.level}</p>
           <p className="font-display text-2xl font-extrabold tracking-tight">{s.title}</p>
-        </div>
+        </div>}
         <div>
           <p className="text-[11px] uppercase tracking-wide text-muted">Punkte</p>
           <p className="font-display text-3xl font-extrabold text-accent">
@@ -155,7 +155,7 @@ export function AchievementsSummary({ data }: { data: AchData }) {
           <p className="text-[11px] uppercase tracking-wide text-muted">Trophäen</p>
           <p className="font-display text-3xl font-extrabold">🏆 {s.earned}<span className="ml-1 text-sm font-semibold text-muted">/ {s.total}</span></p>
         </div>
-        {s.next_points != null && (
+        {showLevel && s.next_points != null && (
           <div className="min-w-[180px] flex-1">
             <p className="mb-1 flex justify-between text-[11px] text-muted"><span>bis Level {s.level + 1}</span><span>noch {de0(s.to_next)} P</span></p>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-alt" style={{ boxShadow: "inset 0 0 0 1px var(--color-line)" }}>
