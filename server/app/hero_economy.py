@@ -61,7 +61,13 @@ def earnings(data: dict, start: date) -> list[tuple[date, int, str]]:
             out.append((date.fromisoformat(d["date"]), EARN["duell"], "Duell"))
     for r in data.get("world", {}).get("regions", []):
         if r["discovered"] and date.fromisoformat(r["discovered_on"]) >= start:
-            out.append((date.fromisoformat(r["discovered_on"]), EARN["erkundung"], "Erkundung"))
+            out.append((date.fromisoformat(r["discovered_on"]), r.get("gold", 2) * GOLD, "Erkundung"))
+    for p in data.get("world", {}).get("pois", []):
+        if p["found"] and p["gold"] and date.fromisoformat(p["found_on"]) >= start:
+            out.append((date.fromisoformat(p["found_on"]), p["gold"] * GOLD, "Erkundung"))
+    for dg in data.get("world", {}).get("dungeons", []):
+        if dg["cleared"] and date.fromisoformat(dg["cleared_on"]) >= start:
+            out.append((date.fromisoformat(dg["cleared_on"]), dg["gold"] * GOLD, "Erkundung"))
     return out
 
 

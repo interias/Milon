@@ -40,7 +40,16 @@ TITLES = [
     ("legendenjaeger", "Legendenjäger", "einen legendären Gegenstand besitzen", "legendaries", 1),
     ("held_von_wesel", "Held von Wesel", "Stufe 40 erreichen", "level", 40),
     ("kartograf", "Kartograf", "5 Gebiete der Weltkarte entdecken", "regions", 5),
-    ("weltenwanderer", "Weltenwanderer", "alle 9 Gebiete der Weltkarte entdecken", "regions", 9),
+    ("weltenwanderer", "Weltenwanderer", "9 Gebiete der Weltkarte entdecken", "regions", 9),
+    ("verliesgaenger", "Verliesgänger", "5 Strecken-Verliese bezwingen", "map_dungeons", 5),
+    ("heroischer_pfadfinder", "Heroischer Pfadfinder", "3 Verliese heroisch (in einem Lauf) bezwingen", "map_heroic", 3),
+    ("seenwaechter", "Seenwächter", "3 Wasser-Verliese bezwingen", "map_wasser", 3),
+    ("hueter_der_waelder", "Hüter der Wälder", "3 Wald-Verliese bezwingen", "map_wald", 3),
+    ("dorfchronist", "Dorfchronist", "5 Dorf-Verliese bezwingen", "map_dorf", 5),
+    ("deichgraf", "Deichgraf", "beide Deich-Verliese bezwingen", "map_deich", 2),
+    ("auenlaeufer", "Auenläufer", "3 Auen-Verliese bezwingen", "map_aue", 3),
+    ("feldherr", "Feldherr", "3 Feld-Verliese bezwingen", "map_feld", 3),
+    ("herr_der_marken", "Herr der Marken", "alle 25 Gebiete der Weltkarte entdecken", "regions", 25),
     ("ehrfuerchtig", "Der Ehrfürchtige", "bei einer Fraktion Ehrfürchtig", "exalted", 1),
 ]
 

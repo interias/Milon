@@ -362,7 +362,8 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
 
 XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung"]
 EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
-             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:"), "erkundung": ("erkundung", "Gebiet entdeckt:")}
+             "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:"), "erkundung": ("erkundung", "Gebiet entdeckt:"),
+             "verlies": ("erkundung", "Verlies bezwungen:"), "abschnitt": ("erkundung", "Abschnitt bezwungen:"), "schrein": ("erkundung", "Schrein entdeckt:"), "schatz": ("erkundung", "Schatz gefunden:")}
 
 
 class Mods:
@@ -713,6 +714,7 @@ _CHEST_FLAVOR = {
     "taeglich": "Fleißbelohnung für sieben erledigte Tagesaufgaben am Stück.",
     "event": "Festtagsbeute – nur in diesem einen Monat zu erringen.",
     "auktion": "Im Auktionshaus von Wesel erstanden – Gold gegen Glanz.",
+    "verlies": "Aus einem Verlies im Nebel geborgen – je weiter der Weg, desto reicher der Hort.",
 }
 
 
@@ -1123,6 +1125,11 @@ def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> 
         "sleep_nights": sum(1 for m in data["sleep"].values() if m >= 420),
     }
     stats["regions"] = sum(1 for r in data.get("world", {}).get("regions", []) if r["discovered"])
+    dgs = data.get("world", {}).get("dungeons", [])
+    stats["map_dungeons"] = sum(1 for d in dgs if d["cleared"])
+    stats["map_heroic"] = sum(1 for d in dgs if d["heroic"])
+    for kind in hero_world.DUNGEON_TYPES:
+        stats[f"map_{kind}"] = sum(1 for d in dgs if d["cleared"] and d["type"] == kind)
     stats["exalted"] = sum(1 for f in hero_social.reputation(stats) if f["standing"] == "Ehrfürchtig")
     return stats
 
@@ -1228,6 +1235,20 @@ def event_loot(daily: dict | None, events: list[dict], entries: list[dict]) -> l
         item = make_item(_rng("eventloot", e["month"]), "lila", datetime.combine(d, datetime.min.time()).replace(hour=19), None,
                          _level_at(entries, d), "event", f"Event „{e['name']}“ abgeschlossen")
         out.append({**item, "name": e["item"], "set": None, "id": f"event:{e['month']}"})
+    return out
+
+
+def map_loot(world: dict, start: date) -> list[dict]:
+    """Beute aus Verliesen der Weltkarte (ab Starttag); Gegenstandsstufe folgt der Stufe des Verlieses."""
+    out = []
+    for dg in world.get("dungeons", []):
+        if not dg["cleared"] or date.fromisoformat(dg["cleared_on"]) < start:
+            continue
+        d = date.fromisoformat(dg["cleared_on"])
+        mode = "heroisch" if dg["heroic"] else "normal"
+        item = make_item(_rng("maploot", dg["id"], mode), dg["loot"], datetime.combine(d, datetime.min.time()).replace(hour=13), None,
+                         dg["level"], "verlies", f"{'Heroisches ' if dg['heroic'] else ''}Verlies „{dg['name']}“ (Stufe {dg['level']}) bezwungen")
+        out.append({**item, "id": f"map:{dg['key']}"})
     return out
 
 
@@ -1422,8 +1443,15 @@ def _load(today: date) -> dict:
     extra += [(date.fromisoformat(d["date"]), d["xp"], f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}.", "duell")
               for d in duels if d["won"]]
     world = _safe(hero_world.world, {"available": False})
-    extra += [(date.fromisoformat(r["discovered_on"]), hero_world.DISCOVER_XP, r["name"], "erkundung")
+    extra += [(date.fromisoformat(r["discovered_on"]), r["xp"], r["name"], "erkundung")
               for r in world.get("regions", []) if r["discovered"]]
+    extra += [(date.fromisoformat(p["found_on"]), p["xp"], p["name"], p["kind"])
+              for p in world.get("pois", []) if p["found"]]
+    for dg in world.get("dungeons", []):
+        extra += [(date.fromisoformat(sg["cleared_on"]), sg["xp"], f"{sg['boss']} ({dg['name']})", "abschnitt")
+                  for sg in dg["segments"] if sg["cleared"]]
+        if dg["cleared"]:
+            extra.append((date.fromisoformat(dg["cleared_on"]), dg["xp"] * (1.5 if dg["heroic"] else 1), dg["name"], "verlies"))
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
@@ -1442,6 +1470,20 @@ def _load(today: date) -> dict:
         tips[("event", e["name"])] = ["Saison-Event", e["rule"], f"Belohnung: {e['xp']} EP + {e['item']}"]
     for r in world.get("regions", []):
         tips[("erkundung", r["name"])] = ["Gebiet der Weltkarte", f"{r['pct']:g} % erkundet ({r['cells']} von {r['total']} Feldern)".replace(".", ",")]
+    for p in world.get("pois", []):
+        rows = [f"{p['kind_label']} · Stufe {p['level']} · {p['region']}", f"{p['km']:g} km von der Heimat".replace(".", ",")]
+        if p["loot"]:
+            rows.append(f"Belohnung: {p['xp']} EP, {p['gold']} Gold + {RARITY_LABEL[p['loot']].lower()} Beute")
+        else:
+            rows.append(f"Belohnung: {p['xp']} EP" + (f", {p['gold']} Gold" if p["gold"] else ""))
+        tips[(p["kind"], p["name"])] = rows
+    for dg in world.get("dungeons", []):
+        head = f"{'Heroisches ' if dg['heroic'] else ''}Verlies · {dg['type_label']} · Stufe {dg['level']}"
+        tips[("verlies", dg["name"])] = [head, f"{dg['length_km']:g} km Strecke, {len(dg['segments'])} Abschnitte".replace(".", ","),
+                                         dg["desc"], f"Belohnung: {dg['xp']} EP, {dg['gold']} Gold + {RARITY_LABEL[dg['loot']].lower()} Beute"]
+        for sg in dg["segments"]:
+            tips[("abschnitt", f"{sg['boss']} ({dg['name']})")] = [f"Abschnittsboss · {dg['name']}", f"Stufe {dg['level']} · {sg['xp']} EP",
+                                                                   f"Abgedeckt: {round(sg['coverage'] * 100)} % (ab 80 % bezwungen)"]
     for d in duels:
         label = f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}."
         tips[("duell", label)] = ["Duell gegen dein früheres Ich",
@@ -1453,6 +1495,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: quest_loot(weeks, book["entries"]), [])
     loot += _safe(lambda: boss_loot(bosses, dungeons, book["entries"]), [])
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
+    loot += _safe(lambda: map_loot(world, start), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
             "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips, "world": world,
@@ -1488,7 +1531,7 @@ def overview(today: date | None = None) -> dict:
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"]), "tip": data["tips"].get((e["kind"], e["name"]))}
-                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung")]
+                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung", "verlies", "abschnitt", "schrein", "schatz")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]

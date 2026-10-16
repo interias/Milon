@@ -473,3 +473,44 @@ def test_world_map_regions_and_privacy(monkeypatch):
     assert not regions["Rheinauen"]["discovered"] and w["explored_pct"] > 0
     flat = [v for line in w["routes"] for pt in line["points"] for v in pt]
     assert max(abs(v) for v in flat) < 10_000  # nur Meter relativ zur Heimat, keine Koordinaten
+
+
+def test_world_rings_and_places(monkeypatch):
+    from app import hero_world
+    assert hero_world.region_of(0, 10_000) == "Hamminkeln" and hero_world.region_of(-20_000, 0) == "Kalkar"
+    assert hero_world.region_of(0, 31_000) is None
+    assert hero_world.poi_level(1000) < hero_world.poi_level(15_000) < hero_world.poi_level(29_000) <= 80
+    places = hero_world.pois()
+    assert {p["kind"] for p in places} == {"schrein", "schatz"} and len({p["name"] for p in places}) == len(places)
+    assert all(hero_world.region_of(p["x"], p["y"]) == p["region"] for p in places)
+    defs = hero_world.dungeon_defs()
+    assert len(defs) >= 30 and all(2 <= len(d["segments"]) <= 4 for d in defs)
+    assert {d["type"] for d in defs} == set(hero_world.DUNGEON_TYPES)
+    assert hero_world.dungeon_loot(50) == "orange" and hero_world.dungeon_loot(20, heroic=True) == "lila"
+
+
+def test_route_dungeon_segments_and_heroic(monkeypatch):
+    from app import hero_world
+    dg = next(d for d in hero_world.dungeon_defs() if d["key"] == "auesee")
+    pts = [tuple(p) for seg in dg["segments"] for p in seg["points"]]
+    home = (pts[0][0] + 0.01, pts[0][1])
+    first = [tuple(p) for p in dg["segments"][0]["points"]]
+    full = [home] + pts + [home]
+    hero_world._memo.clear()
+    monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 1), [home] + first + [home]), (date(2026, 10, 5), full)])
+    w = hero_world.world()
+    d = next(x for x in w["dungeons"] if x["key"] == "auesee")
+    assert d["discovered"] and d["segments"][0]["cleared_on"] == "2026-10-01"
+    assert d["cleared"] and d["cleared_on"] == "2026-10-05" and d["heroic"] and d["heroic_on"] == "2026-10-05"
+    assert d["loot"] == hero_world.dungeon_loot(d["level"], heroic=True)
+    other = next(x for x in w["dungeons"] if x["key"] == "isselburg")
+    assert not other["discovered"] and all(not s["points"] for s in other["segments"])  # bleibt im Nebel
+    items = hero.map_loot(w, date(2026, 10, 1))
+    assert [it["source"] for it in items if it["id"] == "map:auesee"] == ["verlies"]
+    assert not [it for it in hero.map_loot(w, date(2026, 10, 6)) if it["id"] == "map:auesee"]  # vor Starttag: keine Beute
+    # nur halbe Runde in einem Lauf: nicht heroisch, nicht bezwungen
+    hero_world._memo.clear()
+    half = [home] + pts[: len(pts) // 2] + [home]
+    monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 7), half)])
+    d = next(x for x in hero_world.world()["dungeons"] if x["key"] == "auesee")
+    assert d["discovered"] and not d["cleared"] and not d["heroic"] and any(s["cleared"] for s in d["segments"])
