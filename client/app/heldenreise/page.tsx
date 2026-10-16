@@ -8,7 +8,7 @@ import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
-import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroLogTicker, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
+import { HeroBags, HeroCharacter, HeroHeader, HeroLinkContext, HeroLog, HeroLogTicker, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
 import { HeroQuestLog, HeroTalentTree } from "@/components/HeroTalents";
 import { HeroDungeons, HeroRaid } from "@/components/HeroBosses";
@@ -91,6 +91,11 @@ export default function Heldenreise() {
     }
   };
 
+  const links = useMemo(() => ({
+    items: new Map((hero?.inventory ?? []).map((it) => [it.id, it] as const)),
+    achievements: new Map((ach?.achievements ?? []).map((a) => [a.name, a] as const)),
+  }), [hero, ach]);
+
   const hints: Partial<Record<TabKey, string>> = {};
   if (hero) {
     if (hero.vault.veteran || hero.vault.claimable.length || (hero.daily?.today && !hero.daily.today.done)) hints.abenteuer = "!";
@@ -100,6 +105,7 @@ export default function Heldenreise() {
   }
 
   return (
+    <HeroLinkContext.Provider value={links}>
     <div className={`wow ${cinzel.variable}`}>
       <div className="hidden sm:block"><PageTitle title="Heldenreise" sub="Dein Training als Rollenspiel – Klasse, Stufe, Beute und Erfolge aus echten Daten" /></div>
       <h1 className="mb-3 font-display text-xl font-bold sm:hidden" style={{ color: "#ffd100" }}>Heldenreise</h1>
@@ -176,6 +182,7 @@ export default function Heldenreise() {
         </div>
       )}
     </div>
+    </HeroLinkContext.Provider>
   );
 }
 
@@ -188,7 +195,7 @@ const TABS: { key: TabKey; label: string; short: string }[] = [
   { key: "talente", label: "Talente", short: "Talente" },
   { key: "chronik", label: "Chronik", short: "Chronik" },
   { key: "sammlung", label: "Sammlung", short: "Erfolge" },
-  { key: "log", label: "Kampflog", short: "Log" },
+  { key: "log", label: "Log", short: "Log" },
 ];
 const TAB_ICON: Record<TabKey, React.ReactNode> = {
   charakter: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,

@@ -122,6 +122,11 @@ def _read(sql: str, **kw) -> pd.DataFrame:
         return pd.read_sql(sql, con, **kw)
 
 
+def _pace(minutes: float) -> str:
+    sec = round(minutes * 60)
+    return f"{sec // 60}:{sec % 60:02d}"
+
+
 def _safe(fn, default):
     try:
         return fn()
@@ -1255,6 +1260,24 @@ def _load(today: date) -> dict:
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
+    tips: dict[tuple[str, str], list[str]] = {}
+    cat = {"lauf": "Laufen", "kraft": "Kraft", "pflege": "Pflege"}
+    for wk in weeks:
+        for q in wk["quests"]:
+            tips[("auftrag", q["title"])] = [f"Wochenauftrag · {cat.get(q['category'], q['category'])}",
+                                             f"{q['goal']}: {q['target']:g} {q['unit']}", f"Belohnung: {q['xp']} EP"]
+    for b in bosses:
+        tips[("boss", b["name"])] = [f"Monatsboss · {b['kind']}", f"Ziel: {b['goal']}", f"Belohnung: {b['xp']} EP + epische Beute"]
+    for dg in dungeons:
+        tips[("instanz", dg["name"])] = [f"{dg['tier_label']}e Instanz · {dg['km']:.1f} km".replace(".", ","),
+                                         "Bosse: " + ", ".join(b["name"] for b in dg["bosses"] if b["defeated"])]
+    for e in events:
+        tips[("event", e["name"])] = ["Saison-Event", e["rule"], f"Belohnung: {e['xp']} EP + {e['item']}"]
+    for d in duels:
+        label = f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}."
+        tips[("duell", label)] = ["Duell gegen dein früheres Ich",
+                                  f"Du: {d['km']:.1f} km in {_pace(d['pace'])}/km".replace(".", ",", 1),
+                                  f"Schatten: {d['twin_km']:.1f} km in {_pace(d['twin_pace'])}/km".replace(".", ",", 1)]
     total = sum(e["xp"] + e["bonus"] for e in book["entries"])
     level = level_for(total)["level"]
     loot = _safe(lambda: drops(runs, book["entries"], start, mods), [])
@@ -1263,7 +1286,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels,
+            "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
 
@@ -1289,21 +1312,25 @@ def overview(today: date | None = None) -> dict:
     first = min(book["daily"]) if book["daily"] else today
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
-                    "name": e["name"], "xp": round(e["xp"])} for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell")]
+                    "name": e["name"], "xp": round(e["xp"]), "tip": data["tips"].get((e["kind"], e["name"]))}
+                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
     log_events += [{"date": date.fromisoformat(it["date"]), "kind": "beute",
-                    "text": f"Beute: {it['name']} ({it['rarity_label']})", "rarity": it["rarity"], "name": it["name"]}
+                    "text": f"Beute: {it['name']} ({it['rarity_label']})", "rarity": it["rarity"], "name": it["name"],
+                    "item_id": it["id"]}
                    for it in data["drops"]]
     log_events += [{"date": c.claimed_at.date(), "kind": "truhe",
                     "text": f"Truhe gewählt: {json.loads(c.item_json)['name']}",
-                    "rarity": json.loads(c.item_json)["rarity"], "name": json.loads(c.item_json)["name"]}
+                    "rarity": json.loads(c.item_json)["rarity"], "name": json.loads(c.item_json)["name"],
+                    "item_id": json.loads(c.item_json)["id"]}
                    for c in claims.values()]
     for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None), []):
         if m["unlocked"]:
             log_events.append({"date": date.fromisoformat(m["unlocked_on"]), "kind": "reittier",
-                               "text": f"Reittier erhalten: {m['name']}", "name": m["name"]})
+                               "text": f"Reittier erhalten: {m['name']}", "name": m["name"],
+                               "tip": [f"Reittier {m['glyph']}", f"Freigeschaltet bei {m['need']:,} {m['unit']}".replace(",", ".")]})
     log_events.sort(key=lambda e: e["date"], reverse=True)
 
     week_xp = sum(e["xp"] + e["bonus"] for e in entries if e["date"] >= week_start)

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Hero, HeroAttribute, HeroBuff, HeroItem, HeroVault, Rarity, Weather } from "@/lib/api";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { Achievement, Hero, HeroAttribute, HeroBuff, HeroItem, HeroVault, Rarity, Weather } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de0, dm } from "@/lib/format";
@@ -551,8 +551,102 @@ export function HeroBags({ items, gear }: { items: HeroItem[]; gear: Gear }) {
 }
 
 // --- Kampflog im Chat-Stil ----------------------------------------------------------------
-function LogLine({ e }: { e: Hero["log"][number] }) {
-  const name = (color: string) => <span style={{ color }}>[{e.name}]</span>;
+// --- Verweise in eckigen Klammern: Tooltip beim Überfahren, Rechtsklick kopiert zum Posten ----
+export const HeroLinkContext = createContext<{ items: Map<string, HeroItem>; achievements: Map<string, Achievement> }>(
+  { items: new Map(), achievements: new Map() });
+
+const ACH_RARITY: Record<string, string> = { grau: "Schrott", weiss: "Gewöhnlich", gruen: "Ungewöhnlich", blau: "Selten", lila: "Episch", orange: "Legendär", rot: "Artefakt" };
+
+function linkText(name: string, item?: HeroItem, ach?: Achievement, lines?: string[] | null): string {
+  if (item) return `[${item.name}] (${item.rarity_label}, ${item.slot_label}, Stufe ${item.ilvl}) – verdient: ${item.reason}`;
+  if (ach) return `[${ach.name}] (Erfolg · ${ACH_RARITY[ach.rarity] ?? ach.rarity} · ${ach.points} Punkte) – ${ach.desc}`;
+  return lines?.length ? `[${name}] – ${lines.join(" · ")}` : `[${name}]`;
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* Fallback unten */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+function LinkTooltipBody({ name, color, item, ach, lines }: { name: string; color: string; item?: HeroItem; ach?: Achievement; lines?: string[] | null }) {
+  if (item) return <ItemTooltipBody item={item} />;
+  if (ach) {
+    const col = rc(ach.rarity);
+    return <>
+      <p className="text-[15px] font-bold leading-snug" style={{ color: col }}>{ach.icon} {ach.name}</p>
+      <p style={{ color: TIP_YELLOW }}>Erfolg · {ACH_RARITY[ach.rarity] ?? ach.rarity} · {ach.points} Punkte</p>
+      <p className="text-white">{ach.desc}</p>
+      {ach.flavor && <p className="mt-1 italic" style={{ color: TIP_YELLOW }}>„{ach.flavor}“</p>}
+      <p className="mt-1 text-[12px] text-[#9d9d9d]">{ach.earned ? `Errungen${ach.earned_date ? ` am ${dm(ach.earned_date)}` : ""}` : "Noch nicht errungen"}</p>
+    </>;
+  }
+  return <>
+    <p className="text-[15px] font-bold leading-snug" style={{ color }}>{name}</p>
+    {(lines ?? []).map((l, i) => <p key={i} style={{ color: i === 0 ? TIP_YELLOW : "#fff" }}>{l}</p>)}
+  </>;
+}
+
+export function HeroLink({ name, color, item, ach, lines }: { name: string; color: string; item?: HeroItem; ach?: Achievement; lines?: string[] | null }) {
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(null), 2000); return () => clearTimeout(t); }, [copied]);
+  const text = linkText(name, item, ach, lines);
+  return <>
+    <span role="button" tabIndex={0} title="Rechtsklick: zum Posten kopieren"
+          className="cursor-pointer hover:underline focus:outline-none focus-visible:underline" style={{ color }}
+          onMouseEnter={(e) => setTip({ x: e.clientX, y: e.clientY })}
+          onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY })}
+          onMouseLeave={() => setTip(null)}
+          onClick={(e) => { e.stopPropagation(); setTip(null); setOpen(true); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+          onContextMenu={async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const pos = { x: e.clientX, y: e.clientY };
+            if (await copyText(text)) { setCopied(pos); play("click"); }
+          }}>
+      [{name}]
+    </span>
+    {tip && typeof window !== "undefined" && (
+      <div className="wow-tip pointer-events-none fixed z-50 w-72"
+           style={{ left: Math.max(12, Math.min(tip.x + 16, window.innerWidth - 300)), top: Math.max(12, Math.min(tip.y + 16, window.innerHeight - 220)) }}>
+        <LinkTooltipBody name={name} color={color} item={item} ach={ach} lines={lines} />
+        <p className="mt-1.5 border-t border-[#2c3550] pt-1 text-[11px] text-[#9d9d9d]">Rechtsklick: zum Posten kopieren</p>
+      </div>
+    )}
+    {copied && (
+      <span className="wow-tip pointer-events-none fixed z-50 px-2 py-1 text-[12px]" role="status"
+            style={{ left: copied.x + 12, top: copied.y - 30, color: "#1eff00" }}>In die Zwischenablage kopiert</span>
+    )}
+    {open && (
+      <RunAnalysisDialog title={name} onClose={() => setOpen(false)}>
+        <div className="wow-tip mx-auto max-w-sm"><LinkTooltipBody name={name} color={color} item={item} ach={ach} lines={lines} /></div>
+        <div className="mt-3 text-center">
+          <button type="button" className={BTN} style={BTN_STYLE}
+                  onClick={async () => { if (await copyText(text)) { setOpen(false); setCopied({ x: window.innerWidth / 2 - 80, y: window.innerHeight - 60 }); } }}>
+            Zum Posten kopieren
+          </button>
+          <p className="mt-2 text-[11px] text-muted">{text}</p>
+        </div>
+      </RunAnalysisDialog>
+    )}
+  </>;
+}
+
+function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: boolean }) {
+  const ctx = useContext(HeroLinkContext);
+  const name = (color: string) => linkable
+    ? <HeroLink name={e.name ?? ""} color={color} lines={e.tip}
+                item={e.item_id ? ctx.items.get(e.item_id) : undefined}
+                ach={e.kind === "erfolg" && e.name ? ctx.achievements.get(e.name) : undefined} />
+    : <span style={{ color }}>[{e.name}]</span>;
   switch (e.kind) {
     case "level": return <span style={{ color: TIP_YELLOW }}>Glückwunsch! Ihr habt Stufe {e.level} erreicht{e.name ? ` – ${e.name}` : ""}.</span>;
     case "klasse": return <span style={{ color: "#ff7d0a" }}>Ihr folgt nun dem Pfad: {e.name}.</span>;
@@ -572,7 +666,7 @@ function LogLine({ e }: { e: Hero["log"][number] }) {
 export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClass?: string }) {
   return (
     <Card>
-      <CardTitle title="Kampflog" sub="Stufenaufstiege, Klassenwechsel, Beute und Erfolge" />
+      <CardTitle title="Log" sub="Stufenaufstiege, Klassenwechsel, Beute und Erfolge · Namen in [Klammern] überfahren oder antippen, Rechtsklick kopiert zum Posten" />
       <ol className={`wow-chat space-y-0.5 overflow-y-auto p-2.5 ${listClass}`}>
         {data.log.map((e, i) => (
           <li key={i}><span className="mr-1.5 tabular-nums text-[#8a8a8a]">[{dm(e.date)}]</span><LogLine e={e} /></li>
@@ -652,7 +746,7 @@ export function HeroLogTicker({ data, onOpen }: { data: Hero; onOpen?: () => voi
       <button type="button" onClick={() => (onOpen ? onOpen() : setOpen((v) => !v))} aria-expanded={onOpen ? undefined : open}
               className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px]">
         <span className="shrink-0 font-display text-[10px] font-bold uppercase tracking-wider" style={{ color: TIP_YELLOW }}>Log</span>
-        <span className="min-w-0 flex-1 truncate"><LogLine e={latest} /></span>
+        <span className="min-w-0 flex-1 truncate"><LogLine e={latest} linkable={!onOpen} /></span>
         <span className="shrink-0 text-[11px] text-muted">{onOpen ? "alle ›" : open ? "▴" : "▾"}</span>
       </button>
       {open && (

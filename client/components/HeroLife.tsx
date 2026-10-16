@@ -186,7 +186,7 @@ export function WelcomeBack({ news, gained, onClose }: { news: Hero["log"]; gain
       {news.length > 0 && (
         <ul className="mt-2 space-y-0.5 text-[13px]">
           {news.slice(0, 4).map((e, i) => <li key={i}><span className="mr-1.5 text-[#8a8a8a]">[{dm(e.date)}]</span>{e.text.replace(/ \(\+\d+ XP\)$/, "")}</li>)}
-          {news.length > 4 && <li className="text-xs text-muted">… und {news.length - 4} weitere im Kampflog</li>}
+          {news.length > 4 && <li className="text-xs text-muted">… und {news.length - 4} weitere im Log</li>}
         </ul>
       )}
     </div>
