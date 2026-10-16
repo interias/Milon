@@ -299,3 +299,10 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Reittiere:** km-Meilensteine 100–3.000 (Deichschaf … Phönix des Niederrheins) und Arbeitssätze 2.000/5.000 (Kriegsbär, Eisenmammut). Das Freischaltdatum steht im Kampflog.
     - Das gewählte Reittier liegt in `hero_state.mount` (API `POST /hero/mount`, 409 = gesperrt) und steht neben der Figur.
   - **Frontend tolerant** gegenüber älteren API-Antworten (`?? []` / `return null`): Beim Neustart lädt das Frontend manchmal noch Daten des alten Servers.
+- **Helden-Widget + Wochen-Saga (2026-10-16):**
+  - `components/HeroWidget.tsx` steht auf der Übersicht direkt unter dem Check-in: kompakter dunkler Einheitenrahmen mit Stufe, EP, Begleiter, Tagesaufgabe, Truhen-Fortschritt, Event und „Truhe wählbar“; Link zur Heldenreise.
+  - **Saga** (`app/hero_saga.py`, `GET/POST /hero/saga`, Karte oben im Chronik-Tab):
+    - Der Chronist (OpenRouter-Modell des Coaches) erzählt die Woche in 120–180 Wörtern nur aus Fakten der Übersicht.
+    - Montag und Dienstag gilt die Vorwoche, sonst die laufende Woche.
+    - Nur auf Knopfdruck. Gespeichert als `CoachReport kind='saga'` mit Prompt und Kosten.
+    - Erster echter Lauf: rund 0,0002 $ und 6 s.

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { Hero } from "@/lib/api";
+import { api, type Hero, type HeroSaga } from "@/lib/api";
+import { useEffect } from "react";
+import { Markdown } from "@/components/Markdown";
 import { Card, CardTitle } from "@/components/ui";
 import { de, de0, dm, pace } from "@/lib/format";
 
@@ -97,6 +99,41 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
           </button>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// --- Wochen-Saga: der Chronist erzählt die Woche (LLM, nur auf Knopfdruck) ------------------
+export function HeroSagaCard() {
+  const [saga, setSaga] = useState<HeroSaga | null>(null);
+  const [week, setWeek] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api.heroSaga().then((r) => { setSaga(r.saga); setWeek(r.week); }).catch(() => {}); }, []);
+  async function write() {
+    setBusy(true); setErr(null);
+    try { setSaga((await api.heroWriteSaga()).saga); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  }
+  const current = saga?.week === week;
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <CardTitle title="Saga der Woche" sub={`Der Chronist erzählt deine Woche${week ? ` ab ${dm(week)}` : ""} · nur auf Knopfdruck, kostet ein paar Cent über deinen Coach-Zugang`} />
+        <button type="button" disabled={busy} onClick={write} className="shrink-0 rounded border px-3 py-1.5 font-display text-xs font-bold"
+                style={{ background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW }}>
+          {busy ? "Der Chronist schreibt …" : current ? "Neu erzählen lassen" : "Saga dieser Woche schreiben"}
+        </button>
+      </div>
+      {err && <p className="text-xs text-bad">{err}</p>}
+      {saga ? (
+        <div className="rounded-md border border-[#3a2d1a] bg-black/30 px-4 py-3 [&_h2]:font-display [&_h2]:text-[#ffd100]">
+          <Markdown>{saga.content}</Markdown>
+          <p className="mt-2 text-[10px] text-muted">
+            {current ? "Diese Woche" : `Woche ab ${saga.week ? dm(saga.week) : "?"}`} · geschrieben {new Date(saga.created_at).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            {saga.cost_usd != null ? ` · ${saga.cost_usd.toFixed(4).replace(".", ",")} $` : ""}
+          </p>
+        </div>
+      ) : <p className="text-xs text-muted">Noch keine Saga – lass den Chronisten deine Woche erzählen.</p>}
     </Card>
   );
 }

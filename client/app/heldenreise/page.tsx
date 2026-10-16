@@ -6,7 +6,7 @@ import { api, type Achievements, type Hero, type HeroItem, type Weather } from "
 import { play } from "@/lib/hero-sound";
 import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
-import { HeroDuel, HeroMounts } from "@/components/HeroDuels";
+import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLog, HeroRules, HeroVaultCard, LootReveal, type Gear } from "@/components/Hero";
 import { HeroChronicle, LevelUpBanner } from "@/components/HeroVisuals";
@@ -138,6 +138,7 @@ export default function Heldenreise() {
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
                 {tab === "chronik" && <>
+                  <HeroSagaCard />
                   <HeroChronicle data={hero} />
                   <div className="grid items-start gap-4 @3xl:grid-cols-2 [&>*]:min-w-0">
                     <HeroReputation data={hero} />

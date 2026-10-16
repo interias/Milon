@@ -7,6 +7,7 @@ import { Card, CardTitle, PageTitle } from "@/components/ui";
 import { Heatmap } from "@/components/Heatmap";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { CheckIn, CHECKINS_CHANGED } from "@/components/CheckIn";
+import { HeroWidget } from "@/components/HeroWidget";
 import { WeatherCard } from "@/components/WeatherCard";
 import { WeeklyReview } from "@/components/WeeklyReview";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
@@ -165,6 +166,7 @@ export default function Overview() {
       </div>
     </div>
     <CheckIn />
+    <div className="mt-4"><HeroWidget /></div>
 
     <Card className="mt-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
