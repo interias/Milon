@@ -306,3 +306,17 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Montag und Dienstag gilt die Vorwoche, sonst die laufende Woche.
     - Nur auf Knopfdruck. Gespeichert als `CoachReport kind='saga'` mit Prompt und Kosten.
     - Erster echter Lauf: rund 0,0002 $ und 6 s.
+- **Mobil verdichtet + Log/Reittiere in Tabs (2026-10-16):**
+  - **Tabs:** Held · Abenteuer · Talente · Chronik · Sammlung (Reittiere + Erfolge) · Kampflog. Der alte Hash `#erfolge` öffnet `#sammlung`.
+  - **Kampflog:** Die rechte Log-Spalte ist entfallen. Oben steht eine einzeilige Log-Zeile (`HeroLogTicker`) mit dem neuesten Eintrag, die den Log-Tab öffnet.
+  - **Handy (< 640 px):**
+    - Kompakter Kopf (189 statt 667 px): Klassenanteile und Neigung hinter „Klasse ▾“, Wochen-EP unter der Leiste, Klang-Schalter oben rechts.
+    - App-artige Tab-Leiste klebt unter der Shell-Leiste (`top-[61px]`), 6 Spalten mit Symbol und Kurztext (Held, Reise, Talente, Chronik, Erfolge, Log).
+    - Ein Tabwechsel scrollt zur Leiste zurück. Im Abenteuer-Tab gibt es eine Sprungleiste zu den Karten.
+  - **Dichte:**
+    - Werte als 2-Spalten-Raster, Radar auf Wunsch.
+    - Talentreihen zeigen schmal nur die Wahl („ändern ▾“).
+    - Reittiere kompakt 2-spaltig, gesperrte auf 2 begrenzt („alle anzeigen“).
+    - Saga mit „Weiterlesen“, EP-Regeln als `<details>`.
+    - Erfolgs-Kategorien einklappbar (`AchievementsGrid collapsible`, bei Filter offen).
+  - **Gemessen bei 375 px:** Tabs ab 397 statt 1.125 px; Erfolge 1.370 statt 12.400 px; Charakter 1.410 statt 2.300 px.

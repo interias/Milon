@@ -136,7 +136,7 @@ export default function Laufen() {
         <p className="mt-2 text-[11px] text-muted">Schnellster Abschnitt innerhalb eines Laufs</p>
         {ach && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
           <p className="text-sm"><strong>{ach.summary.earned} Erfolge</strong><span className="text-muted"> · {de0(ach.summary.points)} Punkte · Level, Beute & Truhe in der Heldenreise</span></p>
-          <Link className={linkClass} href="/heldenreise#erfolge">Zur Heldenreise</Link>
+          <Link className={linkClass} href="/heldenreise#sammlung">Zur Heldenreise</Link>
         </div>}
       </Card>
     </section>

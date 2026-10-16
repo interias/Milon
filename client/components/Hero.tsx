@@ -275,14 +275,16 @@ function SpecChooser({ data, onChoose, onClose }: { data: Hero; onChoose: (spec:
 
 export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSpec: (spec: string | null) => Promise<void>; onTitle: () => void; fromXp?: number | null }) {
   const [choosing, setChoosing] = useState(false);
+  const [details, setDetails] = useState(false);
   const h = data.hero;
   const shares: [string, number, string][] = [
     ["Laufen", h.shares.laufen, "#aad372"], ["Kraft", h.shares.kraft, "#c69b6d"], ["Alltag", h.shares.alltag, "#00ff98"],
   ];
   return (
-    <Card>
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative shrink-0">
+    <Card className="relative">
+      <div className="absolute right-3 top-3 sm:hidden"><SoundToggle /></div>
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="relative shrink-0 scale-[.8] sm:scale-100" style={{ margin: "-6px" }}>
           <div className="grid h-20 w-20 place-items-center rounded-full"
                style={{ color: h.class_color, background: `radial-gradient(circle at 50% 35%, ${h.class_color}55, #0b0907 72%)`,
                         boxShadow: `0 0 0 2px #000, 0 0 0 4px ${h.class_color}, 0 0 0 5px #000, 0 0 0 7px var(--wow-gold), 0 0 18px ${h.class_color}66` }}>
@@ -292,7 +294,7 @@ export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSp
                 style={{ borderColor: GOLD, color: TIP_YELLOW }} title="Level">{h.level}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-3xl font-bold leading-none" style={{ color: h.class_color, textShadow: "0 2px 6px #000" }}>{h.class_label}</h2>
+          <h2 className="pr-9 text-2xl font-bold leading-none sm:pr-0 sm:text-3xl" style={{ color: h.class_color, textShadow: "0 2px 6px #000" }}>{h.class_label}</h2>
           <p className="mt-1 font-display text-sm" style={{ color: "var(--wow-gold-soft)" }}>
             <button type="button" onClick={onTitle} className="underline decoration-dotted underline-offset-4" title="Titel wählen">&lt;{h.title_chosen ?? h.title}&gt;</button> · Stufe {h.level}
           </p>
@@ -300,20 +302,26 @@ export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSp
             <button type="button" onClick={() => setChoosing(true)} className="font-semibold underline decoration-dotted underline-offset-4" style={{ color: "var(--wow-gold-soft)" }}>
               {h.spec_label ?? "Spezialisierung wählen"}
             </button>
-            {h.spec_chosen ? " · Fokus" : " · automatisch"} — {h.class_desc}
+            {h.spec_chosen ? " · Fokus" : " · automatisch"}<span className="hidden sm:inline"> — {h.class_desc}</span>
           </p>
           <div className="relative mt-2"><BuffBar buffs={data.buffs} /></div>
         </div>
-        <div className="text-right tabular-nums">
+        <div className="hidden text-right tabular-nums sm:block">
           <div className="mb-1 flex justify-end"><SoundToggle /></div>
           <p className="font-display text-[11px] uppercase tracking-wider text-muted">Diese Woche</p>
           <p className="font-display text-2xl font-bold" style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</p>
           <p className="text-[11px] text-muted">noch {de0(h.next - h.xp)} bis Stufe {h.level + 1}</p>
         </div>
       </div>
-      <div className="mt-4"><XpBar data={data} fromXp={fromXp} /></div>
-      <div className="wow-rule my-4" />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="mt-3 sm:mt-4"><XpBar data={data} fromXp={fromXp} /></div>
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-muted sm:hidden">
+        <span><b style={{ color: TIP_YELLOW }}>+{de0(h.week_xp)} EP</b> diese Woche · noch {de0(h.next - h.xp)} bis {h.level + 1}</span>
+        <button type="button" onClick={() => setDetails((v) => !v)} aria-expanded={details} className="shrink-0 underline decoration-dotted underline-offset-4">
+          {details ? "weniger ▴" : "Klasse ▾"}
+        </button>
+      </div>
+      <div className={`wow-rule my-4 ${details ? "" : "hidden sm:block"}`} />
+      <div className={`gap-4 sm:grid sm:grid-cols-2 ${details ? "grid" : "hidden"}`}>
         <div>
           <p className="mb-1.5 font-display text-[11px] uppercase tracking-wider text-muted">Klasse · Anteil der EP (90 T)</p>
           <div className="flex h-2.5 overflow-hidden rounded-full border border-black">
@@ -365,6 +373,7 @@ function StatRow({ a }: { a: HeroAttribute }) {
 export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear; weather?: Weather | null }) {
   const { bind, node } = useItemTip(gear);
   const [busy, setBusy] = useState(false);
+  const [radar, setRadar] = useState(false);
   const upgrades = data.inventory.filter((it) => !it.equipped && it.ilvl > (gear.equipment[it.slot]?.ilvl ?? 0));
   const upgradeSlots = new Set(upgrades.map((it) => it.slot)).size;
   function target(slot: string) {
@@ -387,7 +396,7 @@ export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear;
   return (
     <Card>
       <div className="flex items-start justify-between gap-2">
-        <CardTitle title="Charakter" sub="Anlegen: in den Platz ziehen, Rechtsklick oder antippen · Werte 0–100, ± zu vor 30 T" />
+        <CardTitle title="Charakter" sub="Anlegen: antippen, ziehen oder Rechtsklick · Werte 0–100, ± zu vor 30 T" />
         {upgradeSlots > 0 && (
           <button type="button" disabled={busy} className={`${BTN} shrink-0`} style={{ ...BTN_STYLE, color: "#1eff00" }}
                   onClick={async () => { setBusy(true); try { await gear.equipBest(); } finally { setBusy(false); } }}>
@@ -415,12 +424,15 @@ export function HeroCharacter({ data, gear, weather }: { data: Hero; gear: Gear;
         {column(RIGHT_SLOTS)}
       </div>
       <div className="wow-rule my-4" />
+      <button type="button" onClick={() => setRadar((v) => !v)} className="mb-2 text-[11px] text-muted underline decoration-dotted underline-offset-4 sm:hidden">
+        {radar ? "Radar ausblenden ▴" : "Werte als Radar ▾"}
+      </button>
       <div className="grid items-center gap-3 sm:grid-cols-2">
-        <div>
+        <div className={radar ? "" : "hidden sm:block"}>
           <AttributeRadar items={data.attributes} color={data.hero.class_color} />
           <p className="text-center text-[10px] text-muted">gestrichelt: vor 30 Tagen</p>
         </div>
-        <div className="rounded-md border border-[#2c2216] bg-black/30 px-3 py-1">
+        <div className="grid grid-cols-2 gap-x-3 rounded-md border border-[#2c2216] bg-black/30 px-3 py-1 sm:block">
           {data.attributes.map((a) => <StatRow key={a.key} a={a} />)}
         </div>
       </div>
@@ -579,8 +591,9 @@ export function HeroRules({ data }: { data: Hero }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums">
         {rows.map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="text-right font-semibold" style={{ color: TIP_YELLOW }}>{de0(v)}</dd></div>)}
       </dl>
-      <div className="wow-rule my-3" />
-      <ul className="list-disc space-y-1 pl-4 text-[11px] text-muted">
+      <details className="mt-3 border-t border-[#3a2d1a] pt-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-muted">Wie entstehen EP? ▾</summary>
+      <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted">
         <li>Lauf: 2 EP je Minute × Puls-Zone (Z1 1,0 · Z2 1,2 · Z3 1,5 · Z4 1,8).</li>
         <li>Kraft: 6 EP je Arbeitssatz, höchstens 180 je Training.</li>
         <li>Ab dem {data.rules.runs_full_xp + 1}. Lauf bzw. {data.rules.workouts_full_xp + 1}. Krafttraining einer Woche nur halbe EP – Erholung zählt.</li>
@@ -592,6 +605,7 @@ export function HeroRules({ data }: { data: Hero }) {
         <li>Monatsbosse geben 400 EP, jeder Instanz-Boss 50 EP.</li>
         <li>Tagesaufgaben geben 50 EP, ein abgeschlossenes Saison-Event 300 EP.</li>
       </ul>
+      </details>
     </Card>
   );
 }
@@ -624,6 +638,28 @@ export function LootReveal({ item, onClose }: { item: HeroItem; onClose: () => v
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- Kampflog als Ticker (Handy): neuester Eintrag immer sichtbar, antippen klappt auf -------
+export function HeroLogTicker({ data, onOpen }: { data: Hero; onOpen?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const latest = data.log[0];
+  if (!latest) return null;
+  return (
+    <div className="wow-chat">
+      <button type="button" onClick={() => (onOpen ? onOpen() : setOpen((v) => !v))} aria-expanded={onOpen ? undefined : open}
+              className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px]">
+        <span className="shrink-0 font-display text-[10px] font-bold uppercase tracking-wider" style={{ color: TIP_YELLOW }}>Log</span>
+        <span className="min-w-0 flex-1 truncate"><LogLine e={latest} /></span>
+        <span className="shrink-0 text-[11px] text-muted">{onOpen ? "alle ›" : open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <ol className="max-h-64 space-y-0.5 overflow-y-auto border-t border-[#2c2216] px-2.5 py-2 text-[12px]">
+          {data.log.map((e, i) => <li key={i}><span className="mr-1.5 tabular-nums text-[#8a8a8a]">[{dm(e.date)}]</span><LogLine e={e} /></li>)}
+        </ol>
+      )}
     </div>
   );
 }
