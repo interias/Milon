@@ -39,6 +39,8 @@ TITLES = [
     ("schatzhueter", "Schatzhüter", "10 Gegenstände besitzen", "items", 10),
     ("legendenjaeger", "Legendenjäger", "einen legendären Gegenstand besitzen", "legendaries", 1),
     ("held_von_wesel", "Held von Wesel", "Stufe 40 erreichen", "level", 40),
+    ("kartograf", "Kartograf", "5 Gebiete der Weltkarte entdecken", "regions", 5),
+    ("weltenwanderer", "Weltenwanderer", "alle 9 Gebiete der Weltkarte entdecken", "regions", 9),
     ("ehrfuerchtig", "Der Ehrfürchtige", "bei einer Fraktion Ehrfürchtig", "exalted", 1),
 ]
 
