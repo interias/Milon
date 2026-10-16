@@ -377,3 +377,9 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Titel:** Verliesgänger, Heroischer Pfadfinder, Seenwächter, Hüter der Wälder, Dorfchronist, Deichgraf, Auenläufer, Feldherr, Herr der Marken (25 Gebiete). **Erfolge:** neue Kategorie „Weltkarte“ (17 Erfolge) in `metrics/achievements.py` über `hero_world.world()`.
   - **UI** (`HeroWorld.tsx`): Ansichten Erkundet/Nahland/30 km, Verlies-Strecken (gestrichelt = offen), Fokus-Panel mit Abschnittsbossen und Abdeckung, „Nächste Verliese“, Karte **Expeditionsbuch** (Sammlung nach Landschaft, Abschnitts-Balken, Klick zoomt die Karte).
   - `world()` cacht das Ergebnis je Routenstand (`_memo`), weil Heldenreise und Erfolge es beide brauchen.
+- **Bericht zum Teilen (2026-10-16):** statische Seite `report/` (index.html + `img/`, ohne Build).
+  - Lokal läuft sie als Compose-Service `report` (nginx) auf **Port 8090** (`REPORT_PORT`).
+  - Für Cloudflare Pages vorbereitet: `wrangler.toml`, `_headers` und README mit `npx wrangler pages deploy report --project-name milon-heldenreise`.
+  - Die Screenshots stammen per Headless-Chrome von der Live-Version.
+  - Entfernungen und Richtungen zu Orten sind ausgeblendet, weil sich sonst die Heimat triangulieren ließe.
+  - Die Auesee-Vorschau ist ein simulierter Lauf auf einer DB-Kopie.

@@ -1,0 +1,4 @@
+# Cloudflare Pages: statischer Bericht zur Heldenreise (kein Build-Schritt)
+name = "milon-heldenreise"
+pages_build_output_dir = "."
+compatibility_date = "2026-10-01"

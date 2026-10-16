@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Milon Heldenreise</title>
+<meta name="description" content="Wie aus einem privaten Fitness-Dashboard ein Rollenspiel wurde: Klasse, Stufe, Beute, Bosse und eine Weltkarte im Nebel – alles aus echten Trainingsdaten.">
+<meta property="og:title" content="Milon · Heldenreise">
+<meta property="og:description" content="Training als Rollenspiel – Klasse, Stufe, Beute und Strecken-Verliese aus echten Lauf- und Kraftdaten.">
+<meta property="og:image" content="img/02-kopf.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0a07; --surface: #17120d; --surface2: #1f1811; --line: #3a2d1a; --line2: #5a4424;
+    --text: #efe3c8; --muted: #b3a283; --gold: #ffd100; --gold2: #e3b64f;
+    --epic: #c08cff; --rare: #3d95ff; --green: #40c040; --legendary: #ff8000; --cyan: #6fd3e8;
+  }
+  :root[data-theme="light"] { --bg: #0d0a07; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d0a07; } }
+  :root[data-theme="dark"] { --bg: #0d0a07; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 Inter, system-ui, sans-serif;
+         background-image: radial-gradient(1200px 500px at 15% -10%, rgba(120,82,28,.35), transparent 70%), radial-gradient(900px 400px at 100% 10%, rgba(80,40,120,.18), transparent 70%); background-attachment: fixed; }
+  a { color: var(--gold2); }
+  h1, h2, h3 { font-family: Cinzel, Georgia, serif; font-weight: 700; letter-spacing: .02em; line-height: 1.2; }
+  h1 { font-size: clamp(2.2rem, 6vw, 4rem); margin: 0; color: var(--gold); text-shadow: 0 2px 0 #000, 0 0 30px rgba(255,209,0,.25); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.2rem); color: var(--gold); margin: 0 0 .4rem; }
+  h3 { font-size: 1.1rem; color: var(--gold2); margin: 1.6rem 0 .4rem; }
+  p { margin: .6rem 0; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  header.hero { padding: 72px 0 40px; }
+  .kicker { text-transform: uppercase; letter-spacing: .18em; font-size: .78rem; color: var(--muted); }
+  .lead { font-size: clamp(1.05rem, 2vw, 1.25rem); color: #d8c9a6; max-width: 760px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+  .chips li { border: 1px solid var(--line2); background: rgba(0,0,0,.35); border-radius: 999px; padding: 4px 12px; font-size: .85rem; color: var(--muted); }
+  nav.toc { position: sticky; top: 0; z-index: 10; background: rgba(13,10,7,.88); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  nav.toc ul { display: flex; gap: 4px; overflow-x: auto; margin: 0 auto; padding: 8px 16px; list-style: none; max-width: 1120px; scrollbar-width: none; }
+  nav.toc a { display: block; white-space: nowrap; padding: 4px 10px; border-radius: 6px; text-decoration: none; color: var(--muted); font-size: .88rem; }
+  nav.toc a:hover { color: var(--gold); background: var(--surface2); }
+  section { padding: 56px 0 8px; scroll-margin-top: 48px; }
+  .sub { color: var(--muted); max-width: 760px; }
+  figure { margin: 18px 0; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line2); box-shadow: 0 10px 40px rgba(0,0,0,.55); cursor: zoom-in; background: #0a0806; }
+  figcaption { font-size: .86rem; color: var(--muted); margin-top: 8px; }
+  .grid2 { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  .grid3 { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } .grid3 { grid-template-columns: repeat(3, 1fr); } .split { display: grid; grid-template-columns: 1fr 1.25fr; gap: 28px; align-items: start; } }
+  .card { background: linear-gradient(180deg, var(--surface), #110d09); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card h3 { margin-top: 0; }
+  ul.list { padding-left: 1.1rem; margin: .4rem 0; }
+  ul.list li { margin: .25rem 0; }
+  .tag { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; padding: 2px 8px; border-radius: 4px; border: 1px solid; margin-bottom: 6px; }
+  .tag.new { color: var(--epic); border-color: rgba(192,140,255,.5); }
+  .tag.sim { color: var(--legendary); border-color: rgba(255,128,0,.5); }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 22px 0; }
+  @media (min-width: 720px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: rgba(0,0,0,.3); }
+  .stat b { display: block; font-family: Cinzel, serif; font-size: 1.6rem; color: var(--gold); line-height: 1.1; }
+  .stat span { font-size: .82rem; color: var(--muted); }
+  .phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .phones img { display: block; width: 100%; height: auto; border-radius: 22px; border: 6px solid #241b12; cursor: zoom-in; }
+  @media (max-width: 560px) { .phones { gap: 8px; } .phones img { border-width: 3px; border-radius: 12px; } }
+  .rar-epic { color: var(--epic); } .rar-rare { color: var(--rare); } .rar-leg { color: var(--legendary); } .gold { color: var(--gold); } .cyan { color: var(--cyan); }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--gold2); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+  footer { margin-top: 64px; padding: 28px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  .note { border-left: 3px solid var(--gold2); padding: 8px 14px; background: rgba(227,182,79,.07); border-radius: 0 8px 8px 0; color: #d8c9a6; font-size: .92rem; }
+  dialog#zoom { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
+  dialog#zoom::backdrop { background: rgba(0,0,0,.85); }
+  dialog#zoom img { max-width: 96vw; max-height: 94vh; display: block; border-radius: 8px; cursor: zoom-out; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Milon · persönliches Fitness-Dashboard</div>
+    <h1>Die Heldenreise</h1>
+    <p class="lead">Wie aus Lauf-, Kraft- und Schlafdaten ein kleines Rollenspiel wurde: Klasse, Stufe, Beute, Monatsbosse, ein Auktionshaus – und eine Weltkarte im Nebel, die man nur aufdeckt, indem man wirklich losläuft.</p>
+    <ul class="chips">
+      <li>alles aus echten Daten</li><li>keine erfundenen Werte</li><li>läuft lokal</li><li>Garmin · Health Connect · Hevy · FDDB</li>
+    </ul>
+    <figure>
+      <img src="img/02-kopf.jpg" width="1680" height="833" alt="Einheitenrahmen der Heldenreise mit Porträt, Klasse Jäger, Stufe 43, EP-Leiste und Klassenanteilen" loading="eager">
+      <figcaption>Der Einheitenrahmen: Klasse und Spezialisierung ergeben sich aus dem Training der letzten 90 Tage, die EP aus jeder echten Einheit.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Inhalt">
+  <ul>
+    <li><a href="#idee">Idee</a></li><li><a href="#held">Held</a></li><li><a href="#beute">Beute & Handel</a></li>
+    <li><a href="#abenteuer">Abenteuer</a></li><li><a href="#welt">Weltkarte</a></li><li><a href="#fortschritt">Fortschritt</a></li>
+    <li><a href="#mobil">Mobil</a></li><li><a href="#technik">Technik</a></li>
+  </ul>
+</nav>
+
+<main class="wrap">
+  <section id="idee">
+    <h2>Die Idee</h2>
+    <p class="sub">Ausgangspunkt war Zwift: Dort machen Level, Freischaltungen und Fahrertypen aus Wattzahlen ein Spiel. Milon ist ein lokales Dashboard für Körper, Laufen und Kraft. Die Frage war: Was passiert, wenn man dieselben Daten wie in World of Warcraft erzählt?</p>
+    <div class="grid3">
+      <div class="card"><h3>Echte Daten, echte Belohnung</h3><p>Jede EP-Quelle ist messbar: Laufminuten nach Pulszone, Arbeitssätze, Schritte, Protein, Schlaf. Nichts wird geschätzt, nichts geschenkt.</p></div>
+      <div class="card"><h3>Stabil statt zufällig</h3><p>Beute, Aufträge und Auktionsangebote sind geseedet: Derselbe Lauf ergibt immer denselben Gegenstand. Der Spielstand bleibt reproduzierbar.</p></div>
+      <div class="card"><h3>Gespeichert wird nur die Wahl</h3><p>Alles wird live berechnet. In der Datenbank stehen nur Entscheidungen: Truhenwahl, Talente, Ausrüstung, Käufe.</p></div>
+    </div>
+    <figure>
+      <img src="img/01-widget.jpg" width="1680" height="129" alt="Kompaktes Helden-Widget auf der Übersichtsseite" loading="lazy">
+      <figcaption>Auf der Startseite des Dashboards erinnert ein kleiner Einheitenrahmen an Tagesaufgabe, Truhe und Event.</figcaption>
+    </figure>
+  </section>
+
+  <section id="held">
+    <h2>Der Held</h2>
+    <p class="sub">Die Klasse ergibt sich aus dem Anteil von Lauf- und Kraft-EP: Jäger, Krieger, Paladin oder Mönch. Die Spezialisierung lässt sich als Trainingsfokus wählen, z. B. Waldläufer · Strecke. Passende Läufe geben dann 10 % mehr EP.</p>
+    <div class="grid2">
+      <figure>
+        <img src="img/03-charakter.jpg" width="1611" height="1110" alt="Charakterbogen mit Figur, Ausrüstungsplätzen, Radar und Attributen" loading="lazy">
+        <figcaption><b>Charakterbogen.</b> Die angelegte Ausrüstung ist am Körper zu sehen, in Raritätsfarbe. Die sechs Attribute (0–100) stammen aus VO₂max, 5-km-Bestzeit, Kraftindex, Trainingstagen, Schlaf und Schritten.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/04-tooltip.jpg" width="1611" height="1109" alt="WoW-artiger Tooltip eines Gegenstands mit Stufe, Herkunft und Verkaufspreis" loading="lazy">
+        <figcaption><b>Tooltip wie im Original.</b> Er zeigt Gegenstandsstufe, Herkunft („Normale Instanz bezwungen“), Garnitur, Flavor-Text und Händlerpreis. Porträts und Item-Bilder wurden mit gpt-image-2 generiert (zusammen 1,38 $).</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <img src="img/12-talente.jpg" width="1611" height="860" alt="Talentbaum mit Reihen auf Stufe 10 bis 50" loading="lazy">
+      <figcaption><b>Talente.</b> Alle 10 Stufen gibt es eine Reihe mit drei Optionen, etwa Morgenläufer, Tiefschlaf oder Bossjäger. Jedes Talent ändert eine echte Regel ab dem Tag der Wahl.</figcaption>
+    </figure>
+  </section>
+
+  <section id="beute">
+    <h2>Beute, Truhe & Handel</h2>
+    <p class="sub">Jeder Lauf kann einen Gegenstand fallen lassen. Die Seltenheit misst sich an den eigenen 90 Tagen davor: Eine neue 5-km-Bestzeit ist legendär, ein Halbmarathon ein Artefakt, ein kurzer Pflichtlauf Schrott.</p>
+    <div class="grid2">
+      <figure>
+        <img src="img/07-truhe-auftraege.jpg" width="1611" height="537" alt="Wochentruhe und Auftragslog" loading="lazy">
+        <figcaption><b>Wochentruhe & Aufträge.</b> Ab 1, 3 und 4 Läufen pro Woche öffnet sich je ein Truhenplatz; man wählt einen Gegenstand. Dazu kommen drei Wochenaufträge aus Laufen, Kraft und Pflege.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/13-auktionshaus.jpg" width="1611" height="641" alt="Auktionshaus mit Wochenangebot" loading="lazy">
+        <figcaption><b>Auktionshaus.</b> Jeden Montag gibt es sechs neue Gegenstände, eine Tasche und mit etwas Glück ein seltenes Reittier. Gold verdient man mit Kilometern, Bossen und Verkäufen.</figcaption>
+      </figure>
+    </div>
+    <div class="grid2">
+      <figure>
+        <img src="img/14-traenke.jpg" width="794" height="512" alt="Tränke: Ausdauer, Erholung, Glück" loading="lazy">
+        <figcaption><b>Tränke.</b> Ein Ausdauertrank gibt +10 % Trainings-EP für einen Tag, ein Erholungstrank füllt den Ruhebonus auf.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/18-reittiere.jpg" width="1611" height="374" alt="Reittiere nach Kilometer-Meilensteinen" loading="lazy">
+        <figcaption><b>Reittiere</b> für Kilometer-Meilensteine, vom Deichschaf bis zum Phönix des Niederrheins.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="abenteuer">
+    <h2>Abenteuer</h2>
+    <p class="sub">Ausbilder, Monatsbosse, Instanzen und ein Duell gegen das eigene frühere Ich. Jedes Ziel ist relativ zur eigenen Form gesetzt, also nie unerreichbar und nie geschenkt.</p>
+    <figure>
+      <img src="img/06-gorm-event.jpg" width="1611" height="344" alt="Meister Gorm mit Tageszitat und Tagesaufgabe" loading="lazy">
+      <figcaption><b>Meister Gorm</b> kommentiert die Lage, etwa einen Boss mit wenig Leben, einen langen Lauf gestern oder zu wenig Schlaf. Dazu kommt jeden Tag eine Aufgabe.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/08-bosse-instanzen.jpg" width="1611" height="564" alt="Schlachtzug mit vier Monatsbossen und Instanzen" loading="lazy">
+      <figcaption><b>Schlachtzug & Instanzen.</b> Vier Monatsbosse mit Lebensleiste: 5-km-Bestzeit −2 %, längster Lauf +1 km, Monats-km und Kraftsätze. Jeder Lauf ab 10 km ist eine Instanz, Kilometermarken sind ihre Bosse.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/09-duell.jpg" width="1611" height="405" alt="Doppelgänger-Duell gegen frühere Läufe" loading="lazy">
+      <figcaption><b>Doppelgänger.</b> Jeder Lauf tritt gegen einen ähnlich langen Lauf von vor drei Monaten an. Gewonnen hat, wer schneller und effizienter ist.</figcaption>
+    </figure>
+  </section>
+
+  <section id="welt">
+    <span class="tag new">Neu</span>
+    <h2>Weltkarte im Nebel & Strecken-Verliese</h2>
+    <p class="sub">Die GPS-Spuren der Garmin-Läufe decken eine Karte rund um den häufigsten Startpunkt auf. Die Welt reicht 30 km weit, in drei Ringen mit 25 Gebieten. Im Nebel liegen Schreine, Schätze und <b class="rar-epic">35 Verliese, die echte Laufstrecken sind</b>.</p>
+    <figure>
+      <img src="img/10-weltkarte.jpg" width="1611" height="1356" alt="Weltkarte mit drei Ringen, aufgedeckten Gebieten und Fragezeichen für unentdeckte" loading="lazy">
+      <figcaption><b>30-km-Ansicht.</b> Nahland bis 6 km, Grenzland bis 15 km, Fernland bis 30 km. Bisher sind 5 von 25 Gebieten entdeckt; jedes neue bringt EP und Gold.</figcaption>
+    </figure>
+    <div class="split">
+      <div>
+        <h3>Wie ein Verlies funktioniert</h3>
+        <ul class="list">
+          <li>Jedes Verlies ist eine <b>echte Strecke</b>, gebaut aus OpenStreetMap-Wegen: um den Auesee, durchs Schwarze Wasser, durch den Diersfordter Wald, über den Rheindeich, durch Dörfer wie Bislich oder Flüren.</li>
+          <li>Eine Strecke hat <b>2–4 Abschnitte</b>, jeder mit eigenem Boss (Tiefenwächter, Schlammkrake, Nebelnixe …).</li>
+          <li>Ein Abschnitt fällt, wenn ein Lauf <b>80 %</b> davon abdeckt (50 m Toleranz). Abschnitte dürfen aus verschiedenen Läufen stammen.</li>
+          <li>Alle Abschnitte in <b>einem</b> Lauf bezwungen = <span class="rar-leg">heroisch</span>: +50 % EP und bessere Beute.</li>
+          <li><b>Je weiter weg, desto höher die Stufe</b>: Der Auesee ist Stufe 19, Isselburg im Fernland Stufe 55. Die Stufenfarbe zeigt wie in WoW, ob es leicht oder gefährlich ist.</li>
+          <li>Eine Strecke erscheint erst, wenn der Nebel in ihrer Nähe gelichtet ist.</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="img/21-demo-verlies.jpg" width="1611" height="1811" alt="Fokusansicht des Verlieses Spiegel des Auesees mit vier bezwungenen Abschnitten" loading="lazy">
+        <figcaption><span class="tag sim">Vorschau · simulierter Lauf</span><br><b>„Spiegel des Auesees“</b>, heroisch bezwungen. Simuliert auf einer Kopie der Datenbank; im echten Spielstand liegt die Runde noch im Nebel.</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <img src="img/11-expeditionsbuch.jpg" width="1611" height="1808" alt="Expeditionsbuch mit 35 Verliesen nach Landschaft" loading="lazy">
+      <figcaption><b>Expeditionsbuch.</b> Alle 35 Verliese zum Sammeln, nach Landschaft: 6 × Wasser, 5 × Wald, 3 × Aue, 2 × Deich & Festung, 4 × Feld, 15 × Dorf. Die Balken zeigen die Abschnitte.</figcaption>
+    </figure>
+    <div class="grid2">
+      <figure>
+        <img src="img/22-demo-expedition.jpg" width="1548" height="240" alt="Expeditionsbuch: Spiegel des Auesees heroisch bezwungen" loading="lazy">
+        <figcaption><span class="tag sim">Vorschau</span> So sieht ein bezwungenes Verlies im Buch aus.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/23-demo-log.jpg" width="1611" height="609" alt="Log mit Abschnittsbossen, Schatz, Schrein und Verlies" loading="lazy">
+        <figcaption><span class="tag sim">Vorschau</span> Der Log nach der Runde: vier Abschnittsbosse, ein Schatz, ein Schrein und das Verlies.</figcaption>
+      </figure>
+    </div>
+    <div class="card">
+      <h3>Titel & Erfolge rund um die Karte</h3>
+      <p><b>Titel:</b> Kartograf · Weltenwanderer · Verliesgänger · Heroischer Pfadfinder · Seenwächter · Hüter der Wälder · Dorfchronist · Deichgraf · Auenläufer · Feldherr · Herr der Marken.</p>
+      <p><b>17 neue Erfolge</b> in der Kategorie „Weltkarte“, von „Erster Schritt in den Nebel“ bis zum Artefakt „Herr der Marken“ (alle 25 Gebiete).</p>
+    </div>
+  </section>
+
+  <section id="fortschritt">
+    <h2>Chronik, Ruf & Erfolge</h2>
+    <div class="grid2">
+      <figure>
+        <img src="img/16-chronik.jpg" width="1611" height="521" alt="Chronik: Stufenverlauf und EP je Woche" loading="lazy">
+        <figcaption><b>Chronik.</b> Stufenverlauf und EP je Woche, gestapelt nach Quelle.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/15-saga.jpg" width="1611" height="584" alt="Saga der Woche, von einem Sprachmodell erzählt" loading="lazy">
+        <figcaption><b>Saga der Woche.</b> Ein Sprachmodell erzählt die Woche nur aus den Fakten der Übersicht nach, auf Knopfdruck, für etwa 0,0002 $.</figcaption>
+      </figure>
+    </div>
+    <div class="grid2">
+      <figure>
+        <img src="img/17-ruf.jpg" width="794" height="530" alt="Ruf bei vier Fraktionen" loading="lazy">
+        <figcaption><b>Ruf.</b> Vier Fraktionen: Läufergilde, Eisenbund, Tafelrunde der Versorger (Protein) und Orden der stillen Nacht (Schlaf).</figcaption>
+      </figure>
+      <figure>
+        <img src="img/20-log.jpg" width="1611" height="609" alt="Log im Chat-Stil mit verlinkten Namen" loading="lazy">
+        <figcaption><b>Log.</b> Namen in [Klammern] zeigen einen Tooltip; ein Rechtsklick kopiert die Zeile zum Posten.</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <img src="img/19-erfolge.jpg" width="1680" height="1500" alt="Erfolge mit Raritäten von Schrott bis Artefakt" loading="lazy">
+      <figcaption><b>197 Erfolge</b> in Raritäten von Schrott bis Artefakt; die Punkte fließen als EP in die Heldenreise ein.</figcaption>
+    </figure>
+  </section>
+
+  <section id="mobil">
+    <h2>Auf dem Handy</h2>
+    <p class="sub">Kompakter Kopf, App-artige Tab-Leiste und Sprungmarken: Gedacht ist es für den Blick direkt nach dem Lauf.</p>
+    <div class="phones">
+      <img src="img/24-mobil-held.jpg" width="780" height="1688" alt="Mobil: Held" loading="lazy">
+      <img src="img/25-mobil-abenteuer.jpg" width="780" height="1688" alt="Mobil: Abenteuer" loading="lazy">
+      <img src="img/26-mobil-handel.jpg" width="780" height="1688" alt="Mobil: Handel" loading="lazy">
+    </div>
+  </section>
+
+  <section id="technik">
+    <h2>Unter der Haube</h2>
+    <div class="stats">
+      <div class="stat"><b>636</b><span>automatische Tests</span></div>
+      <div class="stat"><b>35</b><span>Strecken-Verliese aus OSM</span></div>
+      <div class="stat"><b>197</b><span>Erfolge</span></div>
+      <div class="stat"><b>1,38 $</b><span>für alle generierten Bilder</span></div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <tr><th>Baustein</th><th>Umsetzung</th></tr>
+        <tr><td>Daten</td><td>Health Connect (Läufe, Puls, Schritte, Schlaf), Garmin (GPS-Routen), Hevy (Krafttraining), FDDB (Ernährung). Alles lokal in SQLite.</td></tr>
+        <tr><td>Backend</td><td>FastAPI + SQLModel. Die Heldenreise ist eine reine Berechnung über die Rohdaten; gespeichert werden nur Spielerentscheidungen.</td></tr>
+        <tr><td>Frontend</td><td>Next.js 16 + Tailwind v4, Diagramme und Karte als Inline-SVG, eigenes dunkles WoW-Thema mit Cinzel.</td></tr>
+        <tr><td>Weltkarte</td><td>150-m-Raster um den Heimatpunkt. Die Verliese wurden einmalig über Nominatim + BRouter (Profil Wandern) aus OSM-Wegen gebaut; zur Laufzeit fragt die App nichts extern ab.</td></tr>
+        <tr><td>Bilder</td><td>Porträts und Item-Symbole mit gpt-image-2 auf Chroma-Key-Hintergrund, freigestellt.</td></tr>
+        <tr><td>Betrieb</td><td>Zwei Docker-Container (rund 145 MB RAM), erreichbar im Heimnetz und auf dem Handy.</td></tr>
+      </table>
+    </div>
+    <p class="note">Datenschutz: Die API gibt nur Meter relativ zum Startpunkt heraus, nie Koordinaten. In diesem Bericht sind außerdem Entfernungs- und Richtungsangaben zu Orten ausgeblendet („··· km“), damit sich der Startpunkt nicht zurückrechnen lässt.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Milon ist ein privates, lokal laufendes Projekt. Kartendaten: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-Mitwirkende</a> (ODbL), Routen über <a href="https://brouter.de/">BRouter</a>. Gebaut mit Claude Code.</p>
+    <p>Stand: 16. Oktober 2026.</p>
+  </div>
+</footer>
+
+<dialog id="zoom" aria-label="Bild vergrößert"><img alt=""></dialog>
+<script>
+  const dlg = document.getElementById("zoom"), big = dlg.querySelector("img");
+  document.querySelectorAll("main img, header img").forEach((img) => img.addEventListener("click", () => {
+    big.src = img.src; big.alt = img.alt; dlg.showModal();
+  }));
+  dlg.addEventListener("click", () => dlg.close());
+</script>
+</body>
+</html>
