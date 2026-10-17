@@ -701,6 +701,7 @@ function HeroOwnRoutes({ onChanged, onPick }: { onChanged?: () => void | Promise
         <button type="button" className={btn} disabled={!file || busy} onClick={() => upload("dungeon")}>Als eigenes Verlies</button>
         <button type="button" className={btn} disabled={!file || busy} onClick={() => upload("track")}>Als gelaufene Spur</button>
       </div>
+      <p data-testid="komoot-hint" className="mt-2 text-[11px] text-muted">Komoot: Tour in Komoot als GPX exportieren und hier hochladen.</p>
       {msg && <p className="mt-2 text-[12px]" style={{ color: msg.ok ? "#40c040" : "#ff6b6b" }}>{msg.text}</p>}
       {list && list.length > 0 && (
         <ul className="mt-3 space-y-1.5 text-[12px]">
