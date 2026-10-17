@@ -201,10 +201,10 @@ export type HeroAttribute = { key: string; label: string; source: string; score:
 export type HeroTile = { key: string; x: number; y: number; w: number; h: number };
 export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
   km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
-  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string;
+  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null;
   segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number }[] };
 export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
-  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null };
+  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null };
 
 export type Hero = {
   today: string; start: string;

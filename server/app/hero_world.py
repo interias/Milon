@@ -35,12 +35,13 @@ RINGS = [
 ]
 DISCOVER_XP = RINGS[0][3]
 # Entdeckungsradius eines Ortes je Ring (Kern = Nahland)
-POI_REACH_M = [250.0, 400.0, 600.0]
+SIGHT_M = 300.0  # Sichtweite: so weit um die Spur lichtet sich der Nebel
+POI_REACH_M = [0.0, 0.0, 0.0]  # gefunden, sobald ein aufgedecktes Feld (Mitte) ≤ 150 m entfernt ist = in Sichtweite
 DUNGEON_FILE = Path(__file__).with_name("hero_dungeons.json")
 DUNGEON_TYPES = {"wasser": "Wasser", "wald": "Wald", "aue": "Aue", "deich": "Deich & Festung", "feld": "Feld", "dorf": "Dorf"}
 COVER_M = 50.0       # Abstand, in dem ein Streckenpunkt als gelaufen gilt
 COVER_SHARE = 0.8    # Anteil eines Abschnitts für den Sieg
-SEEN_M = 300.0       # Verlies erscheint, wenn erkundete Zellen so nah an der Strecke liegen
+SEEN_M = CELL_M      # Verlies erscheint, sobald aufgedeckte Zellen die Strecke berühren
 SHRINES = ["Schrein des Windes", "Schrein der Stille", "Schrein der Morgenröte", "Schrein der Quelle", "Schrein der Eiche",
            "Schrein der Ausdauer", "Schrein der Sterne", "Schrein des Flusses", "Schrein der Heide"]
 TREASURES = ["Vergrabene Truhe", "Schmugglerversteck", "Verlorener Beutel", "Alte Kiste", "Glitzernder Schatz", "Hort im Wurzelwerk"]
@@ -230,6 +231,66 @@ def pois() -> list[dict]:
     return out
 
 
+LOOP_CLOSE_M = 300.0     # Start und Ende so nah beieinander = geschlossene Runde
+LOOP_MAX_KM2 = 40.0      # Schutz gegen GPS-Ausreißer
+NEAR_M = 1500.0          # bis hierhin meldet die Karte „du warst schon auf X m dran“
+
+
+_SIGHT_K = int(SIGHT_M // CELL_M) + 1
+
+
+def _sight(x: float, y: float) -> list[tuple[int, int]]:
+    """Zellen, deren Mitte von (x, y) aus in Sichtweite liegt (inkl. der eigenen Zelle)."""
+    ci, cj = math.floor(x / CELL_M), math.floor(y / CELL_M)
+    out = [(ci, cj)] if math.hypot(x, y) <= WORLD_RADIUS_M else []
+    for i in range(ci - _SIGHT_K, ci + _SIGHT_K + 1):
+        for j in range(cj - _SIGHT_K, cj + _SIGHT_K + 1):
+            cx, cy = (i + 0.5) * CELL_M, (j + 0.5) * CELL_M
+            if (i, j) != (ci, cj) and math.hypot(cx - x, cy - y) <= SIGHT_M and math.hypot(cx, cy) <= WORLD_RADIUS_M:
+                out.append((i, j))
+    return out
+
+
+def _loop_cells(meters: list[tuple[float, float]]) -> list[tuple[int, int]]:
+    """Zellen im Inneren einer geschlossenen Runde (gerade-ungerade-Regel, Hin-und-zurück bleibt leer)."""
+    if len(meters) < 10 or math.hypot(meters[0][0] - meters[-1][0], meters[0][1] - meters[-1][1]) > LOOP_CLOSE_M:
+        return []
+    poly = meters[::3] + [meters[-1]]
+    area = abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]))) / 2
+    if area < CELL_M * CELL_M or area > LOOP_MAX_KM2 * 1e6:
+        return []
+    xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+    edges = list(zip(poly, poly[1:] + poly[:1]))
+    out = []
+    for i in range(math.floor(min(xs) / CELL_M), math.floor(max(xs) / CELL_M) + 1):
+        for j in range(math.floor(min(ys) / CELL_M), math.floor(max(ys) / CELL_M) + 1):
+            cx, cy = (i + 0.5) * CELL_M, (j + 0.5) * CELL_M
+            if math.hypot(cx, cy) > WORLD_RADIUS_M:
+                continue
+            inside = False
+            for (x1, y1), (x2, y2) in edges:
+                if (y1 > cy) != (y2 > cy) and cx < (x2 - x1) * (cy - y1) / (y2 - y1) + x1:
+                    inside = not inside
+            if inside:
+                out.append((i, j))
+    return out
+
+
+def _closest(cells: dict, points: list[tuple[float, float]]) -> int | None:
+    """Kleinster Abstand (m, auf 10 gerundet) einer aufgedeckten Zelle zu den Punkten, None jenseits NEAR_M."""
+    k = int(NEAR_M // CELL_M) + 1
+    best = None
+    for x, y in points:
+        ci, cj = math.floor(x / CELL_M), math.floor(y / CELL_M)
+        for i in range(ci - k, ci + k + 1):
+            for j in range(cj - k, cj + k + 1):
+                if (i, j) in cells:
+                    d = math.hypot((i + 0.5) * CELL_M - x, (j + 0.5) * CELL_M - y)
+                    if best is None or d < best:
+                        best = d
+    return None if best is None or best > NEAR_M else int(round(best, -1))
+
+
 def world() -> dict:
     routes = _routes()
     home = _home(routes)
@@ -248,9 +309,10 @@ def world() -> dict:
             steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // (CELL_M / 2)))
             for i in range(steps + 1):
                 x, y = x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps
-                if math.hypot(x, y) <= WORLD_RADIUS_M:
-                    key = (math.floor(x / CELL_M), math.floor(y / CELL_M))
+                for key in _sight(x, y):
                     cells[key] = min(cells.get(key, day.isoformat()), day.isoformat())
+        for key in _loop_cells(meters):  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
+            cells[key] = min(cells.get(key, day.isoformat()), day.isoformat())
     total = _region_totals()
     found: dict[str, dict] = {}
     for (i, j), day in cells.items():
@@ -274,9 +336,16 @@ def world() -> dict:
         k = int(reach // CELL_M) + 1
         ci, cj = math.floor(p["x"] / CELL_M), math.floor(p["y"] / CELL_M)
         hits = [cells[(i, j)] for i in range(ci - k, ci + k + 1) for j in range(cj - k, cj + k + 1)
-                if (i, j) in cells and math.hypot((i + 0.5) * CELL_M - p["x"], (j + 0.5) * CELL_M - p["y"]) <= reach + CELL_M / 2]
-        places.append({**p, "reach_m": reach, "found": bool(hits), "found_on": min(hits) if hits else None})
+                if (i, j) in cells and math.hypot((i + 0.5) * CELL_M - p["x"], (j + 0.5) * CELL_M - p["y"]) <= reach + CELL_M]
+        places.append({**p, "reach_m": reach, "found": bool(hits), "found_on": min(hits) if hits else None,
+                       "closest_m": 0 if hits else _closest(cells, [(p["x"], p["y"])])})
     dgs = dungeons(home, routes_m, cells)
+    for d, dg in zip(dgs, dungeon_defs()):
+        if d["discovered"]:
+            d["closest_m"] = 0
+        else:
+            pts = [_to_m(home, la, lo) for seg in dg["segments"] for la, lo in seg["points"]]
+            d["closest_m"] = _closest(cells, pts[::6])
     for d in dgs:  # ohne Entdeckung bleibt die Strecke im Nebel
         if not d["discovered"]:
             d["segments"] = [{**s, "points": []} for s in d["segments"]]

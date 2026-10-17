@@ -391,3 +391,13 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Schlüssel `z_dx_dy` relativ zur Heimatkachel, Lage in Metern. `GET /hero/world/tile/{key}` liefert 404 außerhalb des Aufgedeckten.
   - **Anzeige:** im SVG unter einer weichgezeichneten Maske aus den 150-m-Zellen, Pergament-Filter (`TILE_FILTER`).
   - **Aufdeck-Regeln** stehen in der Karte unter „Wie decke ich auf?“ (Zelle 150 m, Schrein/Schatz 250/400/600 m, Verlies sichtbar ab ~300 m, Abschnitt 80 % auf 50 m).
+- **Weltkarte IV (2026-10-17): Sichtweite, Runden, klickbare Symbole.**
+  - **Sichtweite 300 m** (`SIGHT_M`): Jedes Feld, dessen Mitte ≤ 300 m von der GPS-Spur liegt, wird aufgedeckt; das ergibt einen gut 600 m breiten Streifen. Vorher war es nur das Feld unter der Spur (~150 m).
+  - **Geschlossene Runden** (Start und Ende ≤ 300 m, Fläche ≤ 40 km²) decken ihr Inneres auf (`_loop_cells`, gerade-ungerade-Regel). Hin und zurück auf demselben Weg bleibt eine Linie.
+  - **Fundregel = Sichtweite:** Ein Schrein oder Schatz gilt als gefunden, wenn ein aufgedecktes Feld (Mitte) ≤ 150 m entfernt ist. Ein Verlies wird sichtbar, sobald aufgedeckte Felder die Strecke berühren. Bezwingen weiter nur durch Ablaufen (80 % auf 50 m).
+    - Die Ringabstände 250/400/600 m entfallen. Alle bisherigen Funde bleiben erhalten (geprüft).
+  - `closest_m` je Ort/Verlies: Abstand des aufgedeckten Bereichs, `None` über 1,5 km. Das Popup zeigt dann „Dein aufgedeckter Bereich endet etwa X m davor“.
+  - **Symbole:** feste Bildschirmgröße (~24–30 px, `unit` aus Pixelbreite per ResizeObserver).
+    - Truhe, Schrein-Kristall, Verlies-Tor (mit Stufe in Schwierigkeitsfarbe), Burg = Heimat.
+    - Drei Stufen: entdeckt = volles Symbol; nah (≤ 1 km) = Art erkennbar, gedimmt mit „?“; fern = nur „?“.
+    - Antippen öffnet ein Popup mit Infos je Stufe; beim Verlies führt „Strecke & Bosse ansehen“ zum Fokus.
