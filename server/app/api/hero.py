@@ -1,10 +1,13 @@
 """Heldenreise (Gamification): Cockpit lesen, Wochentruhe wählen."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Response
+import hmac
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from .. import hero, hero_world
+from ..config import settings
 
 router = APIRouter(prefix="/hero", tags=["hero"])
 
@@ -33,6 +36,59 @@ class TitleInput(BaseModel):
 
 class UnequipInput(BaseModel):
     slot: str = Field(min_length=2, max_length=20)
+
+
+SESSION_PATTERN = r"^[A-Za-z0-9_.:-]{1,64}$"
+
+
+class LivePointInput(BaseModel):
+    ts: float = Field(gt=0)  # epoch seconds or milliseconds (UTC)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    acc: float = Field(ge=0)  # GPS accuracy in m; > 100 m is dropped, not rejected
+
+
+class LiveInput(BaseModel):
+    session: str = Field(pattern=SESSION_PATTERN)
+    points: list[LivePointInput] = Field(max_length=2000)
+
+
+class LiveTargetInput(BaseModel):
+    session: str | None = Field(default=None, pattern=SESSION_PATTERN)
+    kind: str | None = Field(default=None, pattern="^(poi|dungeon)$")
+    id: str | None = Field(default=None, max_length=80)
+
+
+def live_token(x_hero_token: str | None = Header(default=None)) -> None:
+    """Live endpoints: off (403) without HERO_LIVE_TOKEN, 401 for a missing or wrong X-Hero-Token."""
+    token = settings.hero_live_token
+    if not token:
+        raise HTTPException(status_code=403, detail="Live-Schnittstelle ist aus (HERO_LIVE_TOKEN nicht gesetzt).")
+    if not x_hero_token or not hmac.compare_digest(x_hero_token.encode(), token.encode()):
+        raise HTTPException(status_code=401, detail="Ungültiger Live-Token.")
+
+
+@router.post("/live", dependencies=[Depends(live_token)])
+def live_points(body: LiveInput) -> dict:
+    return hero_world.ingest_live(body.session, [p.model_dump() for p in body.points])
+
+
+@router.get("/live/state", dependencies=[Depends(live_token)])
+def live_state(session: str = Query(pattern=SESSION_PATTERN)) -> dict:
+    return hero_world.live_state(session)
+
+
+@router.post("/live/target", dependencies=[Depends(live_token)])
+def live_target(body: LiveTargetInput) -> dict:
+    if (body.kind is None) != (body.id is None):
+        raise HTTPException(status_code=422, detail="kind und id nur gemeinsam angeben.")
+    try:
+        session = hero_world.set_live_target(body.session, body.kind, body.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unbekanntes Ziel.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"session": session, "kind": body.kind, "id": body.id}
 
 
 @router.get("")

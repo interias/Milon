@@ -68,6 +68,9 @@ def _run_migrations() -> None:
         if mod_cols and "sold" not in mod_cols:
             con.exec_driver_sql("ALTER TABLE hero_item_mods ADD COLUMN sold BOOLEAN NOT NULL DEFAULT 0")
             con.exec_driver_sql("ALTER TABLE hero_item_mods ADD COLUMN gold INTEGER NOT NULL DEFAULT 0")
+        if cols("hero_live_points"):
+            con.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_hero_live_points_session_ts "
+                                "ON hero_live_points (session, ts)")
         checkin_cols = cols("checkins")
         if checkin_cols and "sick" not in checkin_cols:
             con.exec_driver_sql("ALTER TABLE checkins ADD COLUMN sick BOOLEAN")

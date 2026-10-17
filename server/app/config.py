@@ -77,6 +77,10 @@ class Settings(BaseSettings):
 
     scheduler_enabled: bool = True
 
+    # Heldenreise live map: shared secret for /hero/live* (header X-Hero-Token).
+    # Empty = live endpoints off (403) and world() ignores live points.
+    hero_live_token: str = ""
+
     # Maximalpuls für die Lauf-Puls-Zonen (%HFmax). Fester Wert ist robuster als die
     # Datenableitung (einzelne Sensor-Spikes verschieben das beobachtete Max). 0 = aus
     # den Daten ableiten (robustes 95.-Perzentil der max_hr, Boden 180).
