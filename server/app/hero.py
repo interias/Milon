@@ -93,6 +93,20 @@ class HeroPotionUse(SQLModel, table=True):
     used_at: datetime
 
 
+class HeroLivePoint(SQLModel, table=True):
+    """Provisional live position of a running session (watch/phone); deleted once the Garmin track
+    covers the session or after 48 h at the latest. Never returned by the API as lat/lon."""
+    __tablename__ = "hero_live_points"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session: str = Field(index=True)
+    ts: int  # epoch milliseconds (UTC)
+    lat: float
+    lon: float
+    acc: float
+    received_at: datetime
+
+
 RARITIES = ["grau", "weiss", "gruen", "blau", "lila", "orange", "rot"]
 RARITY_LABEL = {"grau": "Schrott", "weiss": "Gewöhnlich", "gruen": "Ungewöhnlich", "blau": "Selten",
                 "lila": "Episch", "orange": "Legendär", "rot": "Artefakt"}

@@ -13,13 +13,17 @@ import json
 import math
 import random
 import threading
+import time
 import urllib.request
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
+from .config import settings
 from .db import engine
 
 CELL_M = 150.0
@@ -170,7 +174,7 @@ def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells:
                     per_route.setdefault(ri, (day, set()))[1].add(si)
             seg_out.append({"boss": seg["boss"], "points": [[round(x), round(y)] for x, y in pts[::2]],
                             "coverage": round(best, 2), "cleared": won is not None, "cleared_on": won,
-                            "xp": 5 * level})
+                            "xp": 5 * level, "provisional": False})
         cleared = all(s["cleared"] for s in seg_out)
         heroic_days = sorted(day for day, idx in per_route.values() if len(idx) == len(seg_out))
         out.append({"id": f"dungeon:{dg['key']}", "key": dg["key"], "name": dg["name"], "type": dg["type"],
@@ -181,7 +185,7 @@ def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells:
                     "discovered_on": min(seen) if seen else None,
                     "cleared": cleared, "cleared_on": max(s["cleared_on"] for s in seg_out) if cleared else None,
                     "heroic": bool(heroic_days), "heroic_on": heroic_days[0] if heroic_days else None,
-                    "loot": dungeon_loot(level, bool(heroic_days)), "segments": seg_out})
+                    "loot": dungeon_loot(level, bool(heroic_days)), "segments": seg_out, "provisional": False})
     return out
 
 
@@ -291,28 +295,37 @@ def _closest(cells: dict, points: list[tuple[float, float]]) -> int | None:
     return None if best is None or best > NEAR_M else int(round(best, -1))
 
 
-def world() -> dict:
-    routes = _routes()
-    home = _home(routes)
-    if home is None:
-        return {"available": False}
-    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes))
-    if _memo.get("key") == key:
-        return _memo["value"]
+def _reveal(meters: list[tuple[float, float]], day: str, cells: dict) -> None:
+    """Sichtweite entlang der Spur + Inneres geschlossener Runden aufdecken (Zelle → frühester Tag)."""
+    if len(meters) == 1:
+        for key in _sight(*meters[0]):
+            cells[key] = min(cells.get(key, day), day)
+    for (x1, y1), (x2, y2) in zip(meters, meters[1:]):
+        steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // (CELL_M / 2)))
+        for i in range(steps + 1):
+            x, y = x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps
+            for key in _sight(x, y):
+                cells[key] = min(cells.get(key, day), day)
+    for key in _loop_cells(meters):  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
+        cells[key] = min(cells.get(key, day), day)
+
+
+def _poi_hits(cells: dict, p: dict) -> list[str]:
+    reach = POI_REACH_M[p["ring"]]
+    k = int(reach // CELL_M) + 1
+    ci, cj = math.floor(p["x"] / CELL_M), math.floor(p["y"] / CELL_M)
+    return [cells[(i, j)] for i in range(ci - k, ci + k + 1) for j in range(cj - k, cj + k + 1)
+            if (i, j) in cells and math.hypot((i + 0.5) * CELL_M - p["x"], (j + 0.5) * CELL_M - p["y"]) <= reach + CELL_M]
+
+
+def _build(home, routes) -> tuple[dict, dict]:
     cells: dict[tuple[int, int], str] = {}  # Zelle → Tag der Entdeckung
     lines, routes_m = [], []
     for day, pts in routes:
         meters = [_to_m(home, lat, lon) for lat, lon in pts]
         routes_m.append((day.isoformat(), meters))
         lines.append({"date": day.isoformat(), "points": [[round(x), round(y)] for x, y in meters[::5]]})
-        for (x1, y1), (x2, y2) in zip(meters, meters[1:]):
-            steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // (CELL_M / 2)))
-            for i in range(steps + 1):
-                x, y = x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps
-                for key in _sight(x, y):
-                    cells[key] = min(cells.get(key, day.isoformat()), day.isoformat())
-        for key in _loop_cells(meters):  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
-            cells[key] = min(cells.get(key, day.isoformat()), day.isoformat())
+        _reveal(meters, day.isoformat(), cells)
     total = _region_totals()
     found: dict[str, dict] = {}
     for (i, j), day in cells.items():
@@ -329,16 +342,12 @@ def world() -> dict:
         f = found.get(r["name"], {})
         r.update(cells=f.get("cells", 0), total=total.get(r["name"], 1),
                  pct=round(100 * f.get("cells", 0) / total.get(r["name"], 1), 1),
-                 discovered=r["name"] in found, discovered_on=f.get("first"))
+                 discovered=r["name"] in found, discovered_on=f.get("first"), provisional=False)
     places = []
     for p in pois():
-        reach = POI_REACH_M[p["ring"]]
-        k = int(reach // CELL_M) + 1
-        ci, cj = math.floor(p["x"] / CELL_M), math.floor(p["y"] / CELL_M)
-        hits = [cells[(i, j)] for i in range(ci - k, ci + k + 1) for j in range(cj - k, cj + k + 1)
-                if (i, j) in cells and math.hypot((i + 0.5) * CELL_M - p["x"], (j + 0.5) * CELL_M - p["y"]) <= reach + CELL_M]
-        places.append({**p, "reach_m": reach, "found": bool(hits), "found_on": min(hits) if hits else None,
-                       "closest_m": 0 if hits else _closest(cells, [(p["x"], p["y"])])})
+        hits = _poi_hits(cells, p)
+        places.append({**p, "reach_m": POI_REACH_M[p["ring"]], "found": bool(hits), "found_on": min(hits) if hits else None,
+                       "closest_m": 0 if hits else _closest(cells, [(p["x"], p["y"])]), "provisional": False})
     dgs = dungeons(home, routes_m, cells)
     for d, dg in zip(dgs, dungeon_defs()):
         if d["discovered"]:
@@ -350,15 +359,340 @@ def world() -> dict:
         if not d["discovered"]:
             d["segments"] = [{**s, "points": []} for s in d["segments"]]
     value = {"available": True, "cell_m": CELL_M, "radius_m": WORLD_RADIUS_M, "core_m": CORE_M,
-            "rings": [{"name": n, "outer_m": o} for n, o, *_ in RINGS],
-            "cells": [[i, j] for (i, j) in cells], "routes": lines, "regions": regions, "pois": places, "dungeons": dgs,
-            "explored_pct": round(100 * len(cells) / max(1, sum(total.values())), 3),
-            "km2": round(len(cells) * CELL_M * CELL_M / 1e6, 2)}
-    _memo.update(key=key, value=value, home=home, cellset=set(cells), tilesets={})
-    return value
+             "rings": [{"name": n, "outer_m": o} for n, o, *_ in RINGS],
+             "cells": [[i, j] for (i, j) in cells], "routes": lines, "regions": regions, "pois": places, "dungeons": dgs,
+             "explored_pct": round(100 * len(cells) / max(1, sum(total.values())), 3),
+             "km2": round(len(cells) * CELL_M * CELL_M / 1e6, 2), "live": None}
+    return value, cells
+
+
+def world() -> dict:
+    routes = _routes()
+    home = _home(routes)
+    if home is None:
+        return {"available": False}
+    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes))
+    if _memo.get("key") != key:
+        value, cells = _build(home, routes)
+        _memo.update(key=key, value=value, home=home, base_cells=cells, cellset=set(cells), tilesets={},
+                     live_key=(), live_value=value, tracks=[])
+    tracks = _live_tracks()
+    lkey = _track_key(tracks)
+    if _memo.get("live_key") != lkey:  # Live-Overlay nur neu rechnen, wenn neue Punkte kamen
+        live = _overlay(tracks) if tracks else None
+        _memo.update(live_key=lkey, live_value=live["value"] if live else _memo["value"], tracks=tracks,
+                     cellset=set(_memo["base_cells"]) | set(live["cells"] if live else ()), tilesets={})
+    return _memo["live_value"]
 
 
 _memo: dict = {}
+
+
+def dungeon_route(key: str) -> dict | None:
+    """Öffentliche Strecke eines Verlieses für den Datei-Export; None = unbekannt oder noch im Nebel.
+
+    Gleiche Sichtbarkeit wie die Karte: `discovered` (Garmin-Wahrheit) oder `provisional` (Live) –
+    genau dann liefert `world()` auch die Streckenpunkte."""
+    w = world()
+    if not w.get("available"):
+        return None
+    d = next((x for x in w["dungeons"] if x["key"] == key), None)
+    if d is None or not (d["discovered"] or d.get("provisional")):
+        return None
+    dg = next((x for x in dungeon_defs() if x["key"] == key), None)
+    if dg is None:
+        return None
+    return {"name": dg["name"], "segments": [{"boss": s["boss"], "points": s["points"]} for s in dg["segments"]]}
+
+
+# --- Live-Positionen (vorläufig) -----------------------------------------------------------------
+# Uhr/Handy senden während des Laufs Positionen. Sie decken die Karte VORLÄUFIG auf: Funde tragen
+# `provisional: true`, die Wahrheitsfelder (found/discovered/cleared) bleiben unverändert, damit kein
+# Verbraucher (EP, Gold, Beute, Log, Erfolge) Live-Daten belohnt. Die Garmin-Spur ersetzt sie: deckt
+# eine Garmin-Route den Zeitraum einer Session ab, werden deren Punkte gelöscht, spätestens nach 48 h.
+LIVE_TTL_MS = 48 * 3600 * 1000
+LIVE_MAX_ACC_M = 100.0     # schlechtere GPS-Genauigkeit wird verworfen
+LIVE_MAX_SPEED = 15.0      # m/s; schnellere Sprünge zum letzten Punkt = GPS-Ausreißer
+LIVE_FUTURE_MS = 5 * 60 * 1000
+TARGET_PREFIX = "live_target:"
+_live_memo: dict = {}
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _norm_ts(ts: float) -> int:
+    """Epoch-Sekunden oder -Millisekunden → Millisekunden."""
+    return int(ts * 1000) if ts < 1e11 else int(ts)
+
+
+def _track_key(tracks) -> tuple:
+    return tuple((sid, len(pts), pts[-1][0]) for sid, pts in tracks)
+
+
+def _route_span(route) -> tuple[int, int] | None:
+    """UTC-Zeitraum (ms) einer Garmin-Route: Punktzeiten, sonst Start + Dauer."""
+    times = []
+    try:
+        for seg in json.loads(route.segments_json):
+            for p in seg:
+                if p.get("time"):
+                    times.append(datetime.fromisoformat(p["time"]).timestamp())
+    except (ValueError, TypeError, AttributeError):
+        times = []
+    if times:
+        return int(min(times) * 1000), int(max(times) * 1000)
+    try:
+        start = (datetime.fromisoformat(route.started_at_utc) if route.started_at_utc
+                 else route.started_at.replace(tzinfo=ZoneInfo(settings.timezone)))
+    except (ValueError, TypeError):
+        return None
+    dur = route.elapsed_duration_seconds or route.duration_seconds or 0
+    return int(start.timestamp() * 1000), int((start.timestamp() + dur) * 1000)
+
+
+def purge_live(now_ms: int | None = None) -> list[str]:
+    """Löscht Sessions, die eine Garmin-Route abdeckt oder deren letzter Punkt > 48 h alt ist (+ ihre Ziele)."""
+    from sqlalchemy import delete, func
+
+    from .garmin_routes import GarminRoute
+    from .hero import HeroLivePoint, HeroState
+    now_ms = now_ms if now_ms is not None else _now_ms()
+    with Session(engine) as s:
+        spans = s.exec(select(HeroLivePoint.session, func.min(HeroLivePoint.ts), func.max(HeroLivePoint.ts))
+                       .group_by(HeroLivePoint.session)).all()
+        drop = {sid for sid, _, hi in spans if hi < now_ms - LIVE_TTL_MS}
+        rest = [(sid, lo, hi) for sid, lo, hi in spans if sid not in drop]
+        if rest:
+            since = datetime.fromtimestamp(min(lo for _, lo, _ in rest) / 1000, ZoneInfo(settings.timezone))
+            since = since.replace(tzinfo=None) - timedelta(days=2)
+            route_spans = [sp for r in s.exec(select(GarminRoute).where(GarminRoute.started_at >= since)).all()
+                           if (sp := _route_span(r))]
+            drop |= {sid for sid, lo, hi in rest if any(a <= hi and b >= lo for a, b in route_spans)}
+        alive = {sid for sid, _, _ in spans} - drop
+        for row in s.exec(select(HeroState).where(HeroState.key.startswith(TARGET_PREFIX, autoescape=True))).all():
+            sid = row.key[len(TARGET_PREFIX):]
+            try:
+                set_at = json.loads(row.value).get("set_at", 0)
+            except ValueError:
+                set_at = 0
+            if sid in drop or (sid not in alive and set_at < now_ms - LIVE_TTL_MS):
+                s.delete(row)
+        if drop:
+            s.exec(delete(HeroLivePoint).where(HeroLivePoint.session.in_(drop)))
+        s.commit()
+    return sorted(drop)
+
+
+def _live_tracks() -> list[tuple[str, list[tuple[int, float, float]]]]:
+    """Offene Sessions als (session, [(ts, lat, lon)]) — nur wenn die Live-Schnittstelle an ist."""
+    if not settings.hero_live_token:
+        return []
+    from .hero import HeroLivePoint
+    try:
+        purge_live()
+        with Session(engine) as s:
+            rows = s.exec(select(HeroLivePoint.session, HeroLivePoint.ts, HeroLivePoint.lat, HeroLivePoint.lon)
+                          .order_by(HeroLivePoint.session, HeroLivePoint.ts)).all()
+    except OperationalError:  # Tabelle fehlt (DB ohne init_db)
+        return []
+    out: dict[str, list] = {}
+    for sid, ts, lat, lon in rows:
+        out.setdefault(sid, []).append((ts, lat, lon))
+    return list(out.items())
+
+
+def ingest_live(session_id: str, points: list[dict], now_ms: int | None = None) -> dict:
+    """Nimmt einen Stapel Positionen an; verwirft ungenaue (> 100 m), veraltete und Sprünge > 15 m/s."""
+    from .hero import HeroLivePoint
+    now_ms = now_ms if now_ms is not None else _now_ms()
+    accepted = rejected = 0
+    with Session(engine) as s:
+        last = s.exec(select(HeroLivePoint).where(HeroLivePoint.session == session_id)
+                      .order_by(HeroLivePoint.ts.desc()).limit(1)).first()
+        prev = (last.ts, last.lat, last.lon) if last else None
+        received = datetime.now(timezone.utc).replace(tzinfo=None)
+        for ts, p in sorted(((_norm_ts(q["ts"]), q) for q in points), key=lambda tq: tq[0]):
+            ok = p["acc"] <= LIVE_MAX_ACC_M and now_ms - LIVE_TTL_MS <= ts <= now_ms + LIVE_FUTURE_MS
+            if ok and prev:
+                dt = (ts - prev[0]) / 1000
+                dx, dy = _to_m((prev[1], prev[2]), p["lat"], p["lon"])
+                ok = dt > 0 and math.hypot(dx, dy) / dt <= LIVE_MAX_SPEED
+            if not ok:
+                rejected += 1
+                continue
+            s.add(HeroLivePoint(session=session_id, ts=ts, lat=p["lat"], lon=p["lon"], acc=p["acc"], received_at=received))
+            prev = (ts, p["lat"], p["lon"])
+            accepted += 1
+        s.commit()
+    return {"session": session_id, "accepted": accepted, "rejected": rejected}
+
+
+def _overlay(tracks) -> dict:
+    """Weltkarte + vorläufige Aufdeckung aus Live-Spuren (gemerkt je Basis- und Live-Stand)."""
+    mkey = (_memo["key"], _track_key(tracks))
+    if mkey in _live_memo:
+        return _live_memo[mkey]
+    home, base_cells, base = _memo["home"], _memo["base_cells"], _memo["value"]
+    tz = ZoneInfo(settings.timezone)
+    live: dict[tuple[int, int], str] = {}
+    routes_m, lines = [], []
+    for sid, pts in tracks:
+        day = datetime.fromtimestamp(pts[0][0] / 1000, tz).date().isoformat()
+        meters = [_to_m(home, lat, lon) for _, lat, lon in pts]
+        routes_m.append((day, meters))
+        lines.append({"session": sid, "date": day, "points": [[round(x), round(y)] for x, y in meters]})
+        _reveal(meters, day, live)
+    new = {c: d for c, d in live.items() if c not in base_cells}
+    finds = []
+    per_region: dict[str, int] = {}
+    for i, j in new:
+        name = region_of((i + 0.5) * CELL_M, (j + 0.5) * CELL_M)
+        if name:
+            per_region[name] = per_region.get(name, 0) + 1
+    regions = []
+    for r in base["regions"]:
+        n = per_region.get(r["name"], 0)
+        if n:
+            r = {**r, "live_cells": n, "provisional": not r["discovered"]}
+            if r["provisional"]:
+                finds.append({"kind": "gebiet", "id": f"region:{r['name']}", "name": r["name"], "xp": r["xp"]})
+        regions.append(r)
+    places = []
+    for p in base["pois"]:
+        if not p["found"] and _poi_hits(live, p):
+            p = {**p, "provisional": True, "closest_m": 0}
+            finds.append({"kind": p["kind"], "id": p["id"], "name": p["name"], "xp": p["xp"]})
+        places.append(p)
+    dgs = []
+    for d, ld in zip(base["dungeons"], dungeons(home, routes_m, live)):
+        if not ld["discovered"]:
+            dgs.append(d)
+            continue
+        segs = []
+        for si, (sg, ls) in enumerate(zip(d["segments"], ld["segments"])):
+            sg = {**sg, "live_coverage": ls["coverage"]}
+            if not d["discovered"]:  # vorläufig entdeckt: Strecke zeigen
+                sg["points"] = ls["points"]
+            if ls["cleared"] and not sg["cleared"]:
+                sg["provisional"] = True
+                finds.append({"kind": "abschnitt", "id": f"{d['id']}:{si}", "name": f"{sg['boss']} ({d['name']})", "xp": sg["xp"]})
+            segs.append(sg)
+        d = {**d, "segments": segs}
+        if not d["discovered"]:
+            d.update(provisional=True, closest_m=0)
+            finds.append({"kind": "verlies_entdeckt", "id": d["id"], "name": d["name"], "xp": 0})
+        if not d["cleared"] and all(sg["cleared"] or sg["provisional"] for sg in segs):
+            d["provisional_cleared"] = True
+            finds.append({"kind": "verlies", "id": d["id"], "name": d["name"], "xp": d["xp"]})
+        dgs.append(d)
+    for f in finds:
+        f["provisional"] = True
+    value = {**base, "regions": regions, "pois": places, "dungeons": dgs,
+             "live": {"sessions": [sid for sid, _ in tracks], "cells": [[i, j] for i, j in new], "routes": lines,
+                      "km2": round(len(new) * CELL_M * CELL_M / 1e6, 2)}}
+    out = {"value": value, "cells": new, "finds": finds}
+    if len(_live_memo) >= 4:
+        _live_memo.clear()
+    _live_memo[mkey] = out
+    return out
+
+
+def _bearing(x: float, y: float, tx: float, ty: float) -> tuple[int, int]:
+    """(Richtung in Grad ab Nord im Uhrzeigersinn, Entfernung in m)."""
+    return round((math.degrees(math.atan2(tx - x, ty - y)) + 360) % 360) % 360, round(math.hypot(tx - x, ty - y))
+
+
+def _get_target(session_id: str) -> dict | None:
+    from .hero import HeroState
+    with Session(engine) as s:
+        row = s.get(HeroState, TARGET_PREFIX + session_id)
+    try:
+        return json.loads(row.value) if row else None
+    except ValueError:
+        return None
+
+
+def set_live_target(session_id: str | None, kind: str | None, ref: str | None) -> str:
+    """Setzt (oder löscht mit kind=None) das Ziel einer Session; ohne Session die zuletzt aktive.
+    ValueError = keine offene Session, KeyError = unbekanntes Ziel."""
+    from .hero import HeroState
+    if session_id is None:
+        tracks = _live_tracks()
+        if not tracks:
+            raise ValueError("Keine laufende Session.")
+        session_id = max(tracks, key=lambda t: t[1][-1][0])[0]
+    if kind is not None:
+        ids = ({p["id"] for p in pois()} if kind == "poi"
+               else {f"dungeon:{d['key']}" for d in dungeon_defs()} if kind == "dungeon" else set())
+        if ref not in ids:
+            raise KeyError(ref)
+    with Session(engine) as s:
+        row = s.get(HeroState, TARGET_PREFIX + session_id)
+        if kind is None:
+            if row:
+                s.delete(row)
+        else:
+            value = json.dumps({"kind": kind, "id": ref, "set_at": _now_ms()})
+            row = row or HeroState(key=TARGET_PREFIX + session_id, value=value)
+            row.value = value
+            s.add(row)
+        s.commit()
+    return session_id
+
+
+def _target_point(item: dict, kind: str, pos) -> tuple[float, float]:
+    """Zielpunkt: Ort selbst; Verlies = nächster Punkt eines offenen, sichtbaren Abschnitts, sonst Mitte."""
+    if kind == "dungeon":
+        pts = [p for sg in item["segments"] if not (sg["cleared"] or sg["provisional"]) for p in sg["points"]]
+        if pts and pos:
+            return min(pts, key=lambda p: math.hypot(p[0] - pos[0], p[1] - pos[1]))
+    return item["x"], item["y"]
+
+
+def live_state(session_id: str) -> dict:
+    """Kompakter Stand für Uhr/Handy — nur Meter, Grad und Namen, keine Koordinaten."""
+    out = {"session": session_id, "available": False, "active": False, "points": 0, "first_ts": None, "last_ts": None,
+           "revealed": {"cells": 0, "km2": 0.0}, "finds": [], "target": None, "dungeon": None}
+    if not world().get("available"):
+        return out
+    out["available"] = True
+    track = [t for t in _memo.get("tracks", []) if t[0] == session_id]
+    view, pos = _memo["value"], None
+    if track:
+        ov = _overlay(track)
+        pts = track[0][1]
+        view, pos = ov["value"], _to_m(_memo["home"], pts[-1][1], pts[-1][2])
+        out.update(active=True, points=len(pts), first_ts=pts[0][0], last_ts=pts[-1][0], finds=ov["finds"],
+                   revealed={"cells": len(ov["cells"]), "km2": round(len(ov["cells"]) * CELL_M * CELL_M / 1e6, 2)})
+    by_id = {p["id"]: ("poi", p) for p in view["pois"]} | {d["id"]: ("dungeon", d) for d in view["dungeons"]}
+    chosen = _get_target(session_id)
+    if chosen and chosen.get("id") in by_id:
+        kind, item = by_id[chosen["id"]]
+    elif pos:
+        open_ = [("poi", p) for p in view["pois"] if not (p["found"] or p["provisional"])]
+        open_ += [("dungeon", d) for d in view["dungeons"] if not (d["cleared"] or d.get("provisional_cleared"))]
+        if not open_:
+            return out
+        kind, item = min(open_, key=lambda ki: math.hypot(*(a - b for a, b in zip(_target_point(ki[1], ki[0], pos), pos))))
+        chosen = None
+    else:
+        return out
+    target = {"kind": kind, "id": item["id"], "name": item["name"], "chosen": chosen is not None,
+              "label": item["kind_label"] if kind == "poi" else "Verlies", "level": item["level"],
+              "bearing_deg": None, "distance_m": None}
+    if pos:
+        target["bearing_deg"], target["distance_m"] = _bearing(*pos, *_target_point(item, kind, pos))
+    out["target"] = target
+    if kind == "dungeon":
+        out["dungeon"] = {"id": item["id"], "name": item["name"], "discovered": item["discovered"],
+                          "cleared": item["cleared"], "provisional": item["provisional"],
+                          "provisional_cleared": bool(item.get("provisional_cleared")),
+                          "segments": [{"boss": sg["boss"], "coverage": max(sg["coverage"], sg.get("live_coverage", 0.0)),
+                                        "cleared": sg["cleared"], "provisional": sg["provisional"]}
+                                       for sg in item["segments"]]}
+    return out
 
 
 # --- Kartenkacheln im aufgedeckten Bereich ------------------------------------------------------
