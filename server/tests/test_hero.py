@@ -372,6 +372,75 @@ def test_duels_shadows_and_mounts():
     assert mounts["kriegsbaer"]["unlocked"] and not mounts["mammut"]["unlocked"] and mounts["nebelwolf"]["value"] == 600
 
 
+def test_ride_mounts_unlock_level_and_history(hero_db, monkeypatch):
+    from app.garmin_routes import GarminRide
+    sep = lambda d, h=7: datetime(2026, 9, d, h)  # noqa: E731
+    with Session(hero_db) as session:
+        for d in (2, 3, 4, 5):  # 100 Lauf-km -> Deichschaf ab 05.09.
+            add_run(session, sep(d), km=25.0, minutes=150)
+        for i, (d, km) in enumerate([(3, 60), (8, 50), (9, 24), (15, 30), (20, 10)]):
+            session.add(GarminRide(activity_id=f"ride{i}", title="Rad", started_at=sep(d), distance_km=km,
+                                   point_count=2, segments_json="[]", synced_at=sep(d)))
+        session.commit()
+    hero.start_date(date(2026, 9, 1))
+    # Ein älterer, undatierter Wert gilt ab Starttag.
+    hero._state_set("mount", "deichschaf")
+    assert hero._mount_history(date(2026, 9, 1)) == [{"from": "2026-09-01", "value": "deichschaf"}]
+    hero._state_set("mount", "")
+    monkeypatch.setattr(hero, "local_today", lambda: date(2026, 9, 9))
+    with pytest.raises(ValueError):
+        hero.choose_mount("auenhengst")  # erst 134 Rad-km, Schwelle 500
+    hero.choose_mount("deichgaul")  # 60 + 50 Rad-km am 08.09. => freigeschaltet
+    monkeypatch.setattr(hero, "local_today", lambda: date(2026, 9, 18))
+    hero.choose_mount("deichschaf")
+    o = hero.overview(date(2026, 9, 20))
+    mounts = {m["key"]: m for m in o["mounts"]}
+    assert mounts["deichgaul"]["unlocked_on"] == "2026-09-08" and mounts["deichgaul"]["unlocked"]
+    assert not mounts["auenhengst"]["unlocked"] and mounts["auenhengst"]["value"] == 174
+    # Fahrten zählen für das zur Fahrtzeit gewählte Tier: 24 + 30 km (Deichgaul), 10 km (Deichschaf), davor nichts.
+    assert mounts["deichgaul"]["ride_km"] == 54 and mounts["deichgaul"]["level"] == 3 and not mounts["deichgaul"]["chosen"]
+    assert mounts["deichschaf"]["ride_km"] == 10 and mounts["deichschaf"]["level"] == 1 and mounts["deichschaf"]["chosen"]
+    rides = [e for e in o["log"] if e["kind"] == "fahrt"]
+    assert [(e["date"], e["name"], e["km"]) for e in rides] == [
+        ("2026-09-20", "Deichschaf", 10.0), ("2026-09-15", "Deichgaul", 30.0), ("2026-09-09", "Deichgaul", 24.0)]
+    assert rides[2]["text"] == "[Deichgaul] trabte 24 km" and rides[2]["tip"]
+    assert any(e["kind"] == "reittier" and e["name"] == "Deichgaul" and e["date"] == "2026-09-08" for e in o["log"])
+
+
+def test_ride_feed_legacy_switch_unchosen_and_auction_mount(hero_db, monkeypatch):
+    import json
+    from app.garmin_routes import GarminRide
+    sep = lambda d: datetime(2026, 9, d, 7)  # noqa: E731
+    with Session(hero_db) as session:
+        for d in (1, 2, 3, 4):  # 100 Lauf-km -> Deichschaf freigeschaltet
+            add_run(session, sep(d), km=25.0, minutes=150)
+        for i, d in enumerate((2, 6, 10, 14, 18)):
+            session.add(GarminRide(activity_id=f"r{i}", title="Rad", started_at=sep(d), distance_km=20.0,
+                                   point_count=2, segments_json="[]", synced_at=sep(d)))
+        session.add(hero.HeroPurchase(id="p1", week="2026-W36", kind="mount", price=1, bought_at=sep(1),
+                                      payload=json.dumps({"key": "pfau", "name": "Pfau", "glyph": "P"})))
+        session.commit()
+    hero.start_date(date(2026, 9, 1))
+    # Bestandsnutzer: alter Wert ohne Historie gilt ab Starttag; Lesen schreibt nichts.
+    hero._state_set("mount", "deichschaf")
+    mounts = {m["key"]: m for m in hero.overview(date(2026, 9, 20))["mounts"]}
+    assert mounts["deichschaf"]["ride_km"] == 100 and mounts["deichschaf"]["chosen"] and mounts["deichschaf"]["level"] == 5
+    assert hero._state_get("mount_history") is None and hero._state_get("mount") == "deichschaf"
+    # Wechsel am selben Tag ersetzt die Wahl; die frühere Historie bleibt erhalten.
+    monkeypatch.setattr(hero, "local_today", lambda: date(2026, 9, 8))
+    hero.choose_mount("pfau")
+    hero.choose_mount("pfau")
+    hist = json.loads(hero._state_get("mount_history"))
+    assert hist == [{"from": "2026-09-01", "value": "deichschaf"}, {"from": "2026-09-08", "value": "pfau"}]
+    # Abwahl: spätere Fahrten füttern kein Tier.
+    monkeypatch.setattr(hero, "local_today", lambda: date(2026, 9, 12))
+    hero.choose_mount(None)
+    mounts = {m["key"]: m for m in hero.overview(date(2026, 9, 20))["mounts"]}
+    assert mounts["deichschaf"]["ride_km"] == 40 and mounts["pfau"]["ride_km"] == 20  # 02.+06. / 10.
+    assert not any(m["chosen"] for m in mounts.values())
+    assert [e["name"] for e in hero.overview(date(2026, 9, 20))["log"] if e["kind"] == "fahrt"] == ["Pfau", "Deichschaf", "Deichschaf"]
+
+
 def test_saga_week_facts_and_storage(hero_db, monkeypatch):
     from app import hero_saga
     from app.coach import client

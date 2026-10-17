@@ -1090,24 +1090,52 @@ def upgrade(item_id: str) -> dict:
     return {**item, "upgrades": ups + 1, "ilvl": item["ilvl"] + UPGRADE_ILVL}
 
 
+def _ride_days() -> list[tuple[date, float]]:
+    """GPS-Radfahrten aus Garmin (Tag, km) — nur sie füttern Reittiere (HC-Pendelfahrten ohne Spur zählen nicht)."""
+    df = _read("SELECT started_at, distance_km FROM garmin_rides")
+    out = []
+    for ts, km in zip(pd.to_datetime(df["started_at"]), df["distance_km"]):
+        if pd.notna(km) and 0 < float(km) <= 300:
+            out.append((ts.date(), float(km)))
+    return out
+
+
+def _mount_history(start: date) -> list[dict]:
+    """Datierte Reittier-Wahl [{from, value}]; ein älterer, undatierter Wert gilt ab Starttag."""
+    hist = _history("mount_history")
+    if not hist:
+        legacy = _state_get("mount")
+        if legacy:
+            hist = [{"from": start.isoformat(), "value": legacy}]
+    return hist
+
+
 def _all_mounts(data: dict, chosen: str | None) -> list[dict]:
-    mounts = hero_extras.mounts(data["runs"], data["workouts"], chosen)
+    fed: dict[str, float] = data.get("fed") or {}
+    mounts = hero_extras.mounts(data["runs"], data["workouts"], chosen, data.get("rides"), fed)
     for p in _purchases():
         if p.kind == "mount":
             m = json.loads(p.payload)
+            km = round(fed.get(m["key"], 0.0), 1)
             mounts.append({**m, "kind": "auktion", "need": 0, "value": 0, "unlocked": True, "unit": "Auktionshaus",
-                           "unlocked_on": p.bought_at.date().isoformat(), "chosen": m["key"] == chosen})
+                           "unlocked_on": p.bought_at.date().isoformat(), "chosen": m["key"] == chosen,
+                           "ride_km": km, "level": hero_extras.mount_level(km)})
     return mounts
 
 
 def choose_mount(key: str | None) -> None:
+    today = local_today()
     if key is not None:
-        data = _load(local_today())
+        data = _load(today)
         m = next((m for m in _all_mounts(data, None) if m["key"] == key), None)
         if m is None:
             raise KeyError(key)
         if not m["unlocked"]:
             raise ValueError("Reittier noch nicht freigeschaltet.")
+    # Die Historie wird zuerst aus dem bisherigen Wert aufgebaut, damit frühere Fahrten ihrem Tier bleiben.
+    if not _history("mount_history"):
+        _state_set("mount_history", json.dumps(_mount_history(start_date(today))))
+    _choose("mount_history", key or "", today)
     _state_set("mount", key or "")
 
 
@@ -1472,6 +1500,12 @@ def _load(today: date) -> dict:
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
+    rides = [(d, km) for d, km in _safe(_ride_days, []) if d >= start]
+    mount_hist = _mount_history(start)
+    mount_feed = hero_extras.ride_feed(rides, lambda d: _active(mount_hist, d) or None)
+    fed: dict[str, float] = {}
+    for f in mount_feed:
+        fed[f["mount"]] = fed.get(f["mount"], 0.0) + f["km"]
     tips: dict[tuple[str, str], list[str]] = {}
     cat = {"lauf": "Laufen", "kraft": "Kraft", "pflege": "Pflege"}
     for wk in weeks:
@@ -1518,6 +1552,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: map_loot(world, start), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
+            "rides": rides, "mount_hist": mount_hist, "mount_feed": mount_feed, "fed": fed,
             "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips, "world": world,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
 
@@ -1567,11 +1602,20 @@ def overview(today: date | None = None) -> dict:
     for b in bags:
         log_events.append({"date": date.fromisoformat(b["date"][:10]), "kind": "tasche", "text": f"Tasche erhalten: {b['name']}",
                            "name": b["name"], "tip": [f"Tasche · {b['slots']} Plätze", f"Gefunden: {b['source']}"]})
-    for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None), []):
+    for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None, data.get("rides"), data.get("fed")), []):
         if m["unlocked"]:
             log_events.append({"date": date.fromisoformat(m["unlocked_on"]), "kind": "reittier",
                                "text": f"Reittier erhalten: {m['name']}", "name": m["name"],
                                "tip": [f"Reittier {m['glyph']}", f"Freigeschaltet bei {m['need']:,} {m['unit']}".replace(",", ".")]})
+    mount_by_key = {m["key"]: m for m in _safe(lambda: _all_mounts(data, None), [])}
+    for f in data.get("mount_feed", []):
+        m = mount_by_key.get(f["mount"])
+        if m:
+            km = f"{f['km']:g}".replace(".", ",")
+            log_events.append({"date": date.fromisoformat(f["date"]), "kind": "fahrt", "km": f["km"],
+                               "text": f"[{m['name']}] trabte {km} km", "name": m["name"],
+                               "tip": [f"Reittier {m['glyph']} · Stufe {m['level']}", f"Radfahrt: {km} km",
+                                       f"Gefüttert insgesamt: {str(m['ride_km']).replace('.', ',')} km"]})
     log_events.sort(key=lambda e: e["date"], reverse=True)
 
     week_xp = sum(e["xp"] + e["bonus"] for e in entries if e["date"] >= week_start)
@@ -1606,7 +1650,7 @@ def overview(today: date | None = None) -> dict:
                   "won": sum(1 for d in data["duels"] if d["won"]), "total": len(data["duels"]),
                   "shadows": [hero_extras.shadow(runs, today, 91, "vor 3 Monaten"),
                               hero_extras.shadow(runs, today, 365, "vor einem Jahr")]},
-        "mounts": _safe(lambda: _all_mounts(data, _state_get("mount") or None), []),
+        "mounts": _safe(lambda: _all_mounts(data, _active(data["mount_hist"], today) or None), []),
         "auction": _safe(lambda: auction_view(lv["level"], today), None),
         "world": data["world"],
         "potions": _safe(lambda: potions_view(today), []),

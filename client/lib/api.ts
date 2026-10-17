@@ -248,7 +248,7 @@ export type Hero = {
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
       rows?: { key: string; name: string; now: number | null; then: number | null; better: boolean | null }[] }[] };
-  mounts: { key: string; name: string; kind: string; need: number; glyph: string; value: number; unlocked: boolean; unlocked_on: string | null; chosen: boolean; unit: string }[];
+  mounts: { key: string; name: string; kind: string; need: number; glyph: string; value: number; unlocked: boolean; unlocked_on: string | null; chosen: boolean; unit: string; ride_km?: number; level?: number }[];
   daily: { streak: number; today: HeroDaily | null; last7: HeroDaily[] } | null;
   event: { month: string; name: string; token: string; item: string; effect: string; tokens: number; goal: number; done: boolean; done_on: string | null; xp: number; rule: string } | null;
   trainer: { name: string; role: string; quote: string };
@@ -281,7 +281,7 @@ export type Hero = {
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz" | "fahrt"; text: string; rarity?: Rarity; name?: string; level?: number; km?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {

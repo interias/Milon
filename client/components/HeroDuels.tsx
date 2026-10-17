@@ -81,7 +81,7 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
   }
   return (
     <Card>
-      <CardTitle title={`Reittiere · ${owned}/${data.mounts.length}`} sub="Freigeschaltet über deine Gesamt-km bzw. Arbeitssätze · eines reitet neben deiner Figur" />
+      <CardTitle title={`Reittiere · ${owned}/${data.mounts.length}`} sub="Freigeschaltet über deine Gesamt-km, Arbeitssätze bzw. Rad-km · deine Rad-km füttern das gewählte Reittier (Stufe) · eines reitet neben deiner Figur" />
       <div className="grid grid-cols-2 gap-2 @3xl:grid-cols-3">
         {shown.map((m) => (
           <button key={m.key} type="button" disabled={!m.unlocked || busy} onClick={() => pick(m.chosen ? null : m.key)}
@@ -92,7 +92,12 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-semibold sm:text-[13px]" style={{ color: m.unlocked ? TIP_YELLOW : "#9d9d9d" }}>{m.name}</span>
               {m.unlocked
-                ? <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
+                ? <>
+                    <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
+                    {m.chosen || (m.ride_km ?? 0) > 0
+                      ? <span className="block truncate text-[11px] text-muted">Stufe {m.level ?? 1} · {String(m.ride_km ?? 0).replace(".", ",")} km zu Rad</span>
+                      : null}
+                  </>
                 : <>
                     <span className="block text-[11px] text-muted">{de0(m.value)}/{de0(m.need)} {m.unit}</span>
                     <span className="mt-1 block h-1 overflow-hidden rounded-full bg-[#0a0807]"><span className="block h-full rounded-full bg-[#b36cf0]" style={{ width: `${(m.value / m.need) * 100}%` }} /></span>

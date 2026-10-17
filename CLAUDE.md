@@ -451,6 +451,12 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **API/UI:** `world()["rides"]` = `[{date, points}]` in Metern relativ zur Heimat (wie `routes`). `HeroWorld.tsx` zeichnet Radspuren grün gestrichelt (`RIDE_TRACK`) neben den goldenen Laufspuren, Legende + Regel unter „Wie decke ich auf?“, „zu Rad“ bei Gebiet/Ort.
 - Tests: `server/tests/test_hero_rides.py` (150 m vs. 300 m, Schatzfund, Verlies nicht bezwungen, Heimat fest, Doppelfund-Regel, halbe EP/Gold).
 
+## Rad-Erkundung III (2026-10-17) — Rad-km füttern das Reittier (#58)
+- **Quelle:** nur GPS-Fahrten aus `garmin_rides` seit Starttag (`hero._ride_days`); HC-Pendelfahrten ohne Spur zählen nicht. Radspuren fließen nie in Laufstatistiken.
+- **Wahl-Historie:** `hero_state.mount_history` = `[{from, value}]` (wie `spec_history`); `POST /hero/mount` schreibt sie (`choose_mount`), der alte undatierte Wert `hero_state.mount` gilt ab Starttag (`_mount_history`) und wird weiter mitgeschrieben. Eine Fahrt füttert das Reittier, das am Fahrttag gewählt war (`hero_extras.ride_feed`).
+- **Reittier-Stufe:** `1 + gefütterte km / 25`, höchstens 10 (`hero_extras.mount_level`); `mounts[]` trägt `ride_km` und `level` (auch Auktions-Reittiere). Neue Rad-Reittiere (`kind "rad"`, Einheit „Rad-km“, Schwelle über alle Fahrten): Deichgaul 100 km, Auenhengst 500 km, Freischaltdatum wie bei den anderen.
+- **Log:** Art `fahrt`, je Fahrt „[Deichgaul] trabte 24 km“ mit Tooltip (Stufe, Fahrt-km, gefütterte km). UI: Karte Reittiere zeigt „Stufe n · x km zu Rad“. Test: `test_ride_mounts_unlock_level_and_history`.
+
 ## Abenteuerlauf I (2026-10-17) — Stein aktivieren, Mythisch+ je Verlies (#61)
 `server/app/hero_keystone.py`, Tabelle `hero_keystones` (Index in `db._run_migrations`). Opt-in: ohne aktiven Stein bleibt alles wie bisher (`live/state.keystone = null`).
 - **API (Live-Token):** `GET /hero/live/keystone?dungeon=` = Vorschau (Stufen, `suggested_level`, Zeitlimit je Stufe, Wochen-Affix, Affix-Liste), `POST /hero/live/keystone {session, dungeon, level, affixes[]}` (404 = unbekannt/nicht entdeckt, 422 = Stufe/Affix ungültig; setzt das Live-Ziel aufs Verlies; ein neuer Stein in derselben Session bricht den alten ab), `POST /hero/live/keystone/abort {session}`.
