@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Hero, type HeroDungeon, type HeroPlace, type HeroTile } from "@/lib/api";
+import { api, dungeonFileUrl, type Hero, type HeroDungeon, type HeroPlace, type HeroTile } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { dm } from "@/lib/format";
 
@@ -145,6 +145,7 @@ function DungeonInfo({ d, heroLevel, onDetails }: { d: HeroDungeon; heroLevel: n
       <p className="mt-1 text-muted">Die Strecke liegt noch im Nebel.</p>
       {near(d.closest_m) && <p className="mt-1 text-[11px] text-[#cbb98f]">{near(d.closest_m)}</p>}
     </>}
+    {(d.discovered || d.provisional) && <div className="mt-1.5"><a href={dungeonFileUrl(d.key, "gpx")} download className="inline-block rounded border border-[#4b3a22] px-2 py-0.5 text-[11px] text-[#ffd100] hover:bg-[#2a2013]">Strecke herunterladen (GPX)</a></div>}
   </>;
 }
 
@@ -430,6 +431,7 @@ export function HeroWorld({ data }: { data: Hero }) {
                   </li>
                 ))}
               </ol>
+              {(focus.discovered || focus.provisional) && <a href={dungeonFileUrl(focus.key, "gpx")} download className="mt-1.5 inline-block rounded border border-[#4b3a22] px-2 py-0.5 text-[11px] text-[#ffd100] hover:bg-[#2a2013]">Strecke herunterladen (GPX)</a>}
               <p className="mt-1.5 text-[10px] text-muted">Belohnung: {focus.xp} EP + {focus.segments.length} × {focus.segments[0]?.xp} EP je Boss, {focus.gold} Gold, Beute · heroisch (alles in einem Lauf) +50 % EP und bessere Beute</p>
             </section>}
             {targets.length > 0 && <section>
