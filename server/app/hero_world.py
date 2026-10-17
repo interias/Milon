@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import math
 import random
+import threading
+import urllib.request
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -283,8 +285,110 @@ def world() -> dict:
             "cells": [[i, j] for (i, j) in cells], "routes": lines, "regions": regions, "pois": places, "dungeons": dgs,
             "explored_pct": round(100 * len(cells) / max(1, sum(total.values())), 3),
             "km2": round(len(cells) * CELL_M * CELL_M / 1e6, 2)}
-    _memo.update(key=key, value=value)
+    _memo.update(key=key, value=value, home=home, cellset=set(cells), tilesets={})
     return value
 
 
 _memo: dict = {}
+
+
+# --- Kartenkacheln im aufgedeckten Bereich ------------------------------------------------------
+# OSM-Standardkacheln, serverseitig geholt und dauerhaft unter data/hero_tiles gecacht. Die API
+# spricht nur relative Kachel-Schlüssel („z_dx_dy“ zur Heimatkachel) — keine absoluten Koordinaten.
+TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+TILE_UA = "Milon/1.0 (personal fitness dashboard; single user)"
+TILE_DIR = Path(__file__).resolve().parents[2] / "data" / "hero_tiles"
+TILE_Z = (11, 17)
+TILE_MAX = 160
+_tile_gate = threading.BoundedSemaphore(2)  # OSM-Richtlinie: höchstens 2 parallele Verbindungen
+# Stichproben je Zelle (in Zellbreiten, inkl. Maskenrand) – dicht genug für die kleinsten Kacheln (z17 ≈ 190 m)
+_TILE_PROBE = [(-0.5 + a * 0.5, -0.5 + b * 0.5) for a in range(5) for b in range(5)]
+
+
+def _from_m(home, x: float, y: float) -> tuple[float, float]:
+    return home[0] + y / 110_540, home[1] + x / (111_320 * math.cos(math.radians(home[0])))
+
+
+def _tile_of(lat: float, lon: float, z: int) -> tuple[float, float]:
+    n = 2 ** z
+    return (lon + 180) / 360 * n, (1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n
+
+
+def _tile_bounds(tx: int, ty: int, z: int) -> tuple[float, float, float, float]:
+    """(lat_nord, lon_west, lat_süd, lon_ost) einer Kachel."""
+    n = 2 ** z
+    lat = lambda y: math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))  # noqa: E731
+    return lat(ty), tx / n * 360 - 180, lat(ty + 1), (tx + 1) / n * 360 - 180
+
+
+def _explored() -> tuple | None:
+    if "home" not in _memo:
+        if not world().get("available"):
+            return None
+    return _memo["home"], _memo["cellset"]
+
+
+def _tileset(z: int) -> set[tuple[int, int]]:
+    """Kacheln, die aufgedeckte Zellen berühren (inkl. weichem Maskenrand)."""
+    home, cells = _explored()
+    cache = _memo.setdefault("tilesets", {})
+    if z not in cache:
+        out = set()
+        for i, j in cells:
+            for dx, dy in _TILE_PROBE:  # inkl. weichem Maskenrand
+                lat, lon = _from_m(home, (i + dx) * CELL_M, (j + dy) * CELL_M)
+                tx, ty = _tile_of(lat, lon, z)
+                out.add((int(tx), int(ty)))
+        cache[z] = out
+    return cache[z]
+
+
+def tiles(x0: float, y0: float, x1: float, y1: float, px: int) -> dict:
+    """Kacheln für einen Kartenausschnitt (Meter relativ zur Heimat, y nach Norden)."""
+    ex = _explored()
+    if ex is None:
+        return {"z": None, "tiles": []}
+    home = ex[0]
+    mpp = max(1e-3, (x1 - x0) / max(1, px))
+    z = round(math.log2(40_075_016 * math.cos(math.radians(home[0])) / (256 * mpp)))
+    z = max(TILE_Z[0], min(TILE_Z[1], z))
+    while True:
+        (ax, ay), (bx, by) = _tile_of(*_from_m(home, x0, y1), z), _tile_of(*_from_m(home, x1, y0), z)
+        found = [(tx, ty) for tx, ty in _tileset(z) if int(ax) <= tx <= int(bx) and int(ay) <= ty <= int(by)]
+        if len(found) <= TILE_MAX or z == TILE_Z[0]:
+            break
+        z -= 1
+    hx, hy = (int(v) for v in _tile_of(home[0], home[1], z))
+    out = []
+    for tx, ty in found[:TILE_MAX]:
+        north, west, south, east = _tile_bounds(tx, ty, z)
+        xw, yn = _to_m(home, north, west)
+        xe, ys = _to_m(home, south, east)
+        out.append({"key": f"{z}_{tx - hx}_{ty - hy}", "x": round(xw, 1), "y": round(-yn, 1),
+                    "w": round(xe - xw, 1), "h": round(yn - ys, 1)})
+    return {"z": z, "tiles": out}
+
+
+def tile_png(key: str) -> bytes | None:
+    """PNG einer Kachel im aufgedeckten Bereich (sonst None); holt sie einmalig von OSM."""
+    try:
+        z, dx, dy = (int(v) for v in key.split("_"))
+    except ValueError:
+        return None
+    ex = _explored()
+    if ex is None or not TILE_Z[0] <= z <= TILE_Z[1]:
+        return None
+    hx, hy = (int(v) for v in _tile_of(ex[0][0], ex[0][1], z))
+    tx, ty = hx + dx, hy + dy
+    if (tx, ty) not in _tileset(z):
+        return None
+    path = TILE_DIR / str(z) / str(tx) / f"{ty}.png"
+    if path.exists():
+        return path.read_bytes()
+    with _tile_gate:
+        req = urllib.request.Request(TILE_URL.format(z=z, x=tx, y=ty), headers={"User-Agent": TILE_UA})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = r.read()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return data

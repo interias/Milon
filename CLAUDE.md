@@ -383,3 +383,11 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - Die Screenshots stammen per Headless-Chrome von der Live-Version.
   - Entfernungen und Richtungen zu Orten sind ausgeblendet, weil sich sonst die Heimat triangulieren ließe.
   - Die Auesee-Vorschau ist ein simulierter Lauf auf einer DB-Kopie.
+- **Weltkarte III (2026-10-17): Navigation + echte Wege im aufgedeckten Bereich.**
+  - **Navigation:** ziehen, Mausrad, Pinch mit zwei Fingern, Doppelklick, Knöpfe +/−/⌂. Die Ansicht ist State; die Voreinstellungen (Erkundet/Nahland/30 km/Fokus) setzen sie, eigenes Verschieben schaltet auf `frei`.
+  - **Klick vs. Ziehen:** Ab 5 px Bewegung wird der Klick unterdrückt. Pointer-Listener liegen auf `window`; kein `setPointerCapture`, sonst kommen Klicks auf Verliese nicht mehr an.
+  - **Kartenkacheln:** OSM-Standardkacheln, serverseitig geholt (max. 2 parallel, User-Agent „Milon/1.0“) und dauerhaft gecacht unter `data/hero_tiles/z/x/y.png`.
+    - `GET /hero/world/tiles?x0,y0,x1,y1,px` liefert nur Kacheln, die aufgedeckte Zellen berühren. Zoom z11–17 aus Meter pro Pixel, max. 160 Kacheln.
+    - Schlüssel `z_dx_dy` relativ zur Heimatkachel, Lage in Metern. `GET /hero/world/tile/{key}` liefert 404 außerhalb des Aufgedeckten.
+  - **Anzeige:** im SVG unter einer weichgezeichneten Maske aus den 150-m-Zellen, Pergament-Filter (`TILE_FILTER`).
+  - **Aufdeck-Regeln** stehen in der Karte unter „Wie decke ich auf?“ (Zelle 150 m, Schrein/Schatz 250/400/600 m, Verlies sichtbar ab ~300 m, Abschnitt 80 % auf 50 m).
