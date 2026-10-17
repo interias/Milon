@@ -40,38 +40,112 @@ function status(d: HeroDungeon) {
   return { label: "Im Nebel", color: "#6b5a40" };
 }
 
-function PlaceMark({ p, size }: { p: HeroPlace; size: number }) {
-  const x = p.x, y = -p.y, c = KIND_COLOR[p.kind];
-  return <g><title>{`${p.name} · ${p.kind_label} · Stufe ${p.level}`}</title>
-    {p.kind === "schrein" && <path d={`M${x} ${y - size}l${size * 0.75} ${size}l${-size * 0.75} ${size}l${-size * 0.75} ${-size}z`} fill={c} stroke="#000" strokeWidth={size / 8} />}
-    {p.kind === "schatz" && <rect x={x - size * 0.7} y={y - size * 0.5} width={size * 1.4} height={size} rx={size / 6} fill={c} stroke="#000" strokeWidth={size / 8} />}
-  </g>;
+// --- Kartensymbole: feste Bildschirmgröße, klare Formen je Art -----------------------------------
+type MarkKind = HeroPlace["kind"] | "verlies" | "heimat";
+type MarkState = "found" | "near" | "far";
+const NEAR_HINT_M = 1000;  // ab hier ist die Art des Ortes zu erkennen
+const MARK_COLOR: Record<MarkKind, string> = { schatz: TIP_YELLOW, schrein: "#6fd3e8", verlies: DUNGEON, heimat: "#ff8000" };
+const tier = (found: boolean, closest: number | null | undefined): MarkState =>
+  found ? "found" : closest != null && closest <= NEAR_HINT_M ? "near" : "far";
+
+function Glyph({ kind }: { kind: MarkKind }) {
+  switch (kind) {
+    case "schatz": return <>
+      <path d="M-9 -2Q0 -11 9 -2Z" fill="#ffe27a" stroke="#3a2400" strokeWidth="1.2" />
+      <rect x="-9" y="-2" width="18" height="11" rx="1.5" fill={TIP_YELLOW} stroke="#3a2400" strokeWidth="1.2" />
+      <rect x="-1.6" y="-5" width="3.2" height="14" fill="#8a5a00" /><rect x="-2.4" y="0" width="4.8" height="4" rx="1" fill="#3a2400" />
+    </>;
+    case "schrein": return <>
+      <path d="M0 -12L6.5 -3L0 6L-6.5 -3Z" fill="#9de8f5" stroke="#0c3a44" strokeWidth="1.2" />
+      <path d="M0 -12L0 6M-6.5 -3H6.5" stroke="#0c3a44" strokeWidth=".8" opacity=".6" />
+      <rect x="-7.5" y="7" width="15" height="3.5" rx="1" fill="#3a8fa0" stroke="#0c3a44" strokeWidth="1" />
+    </>;
+    case "verlies": return <>
+      <path d="M-9 10V0A9 9 0 0 1 9 0V10Z" fill={DUNGEON} stroke="#1a0f24" strokeWidth="1.2" />
+      <path d="M-4.5 10V1.5A4.5 4.5 0 0 1 4.5 1.5V10Z" fill="#1a0f24" />
+      <path d="M-9 4H-4.5M4.5 4H9M-7 -4L-4 -2M7 -4L4 -2" stroke="#1a0f24" strokeWidth="1" />
+    </>;
+    default: return <path d="M-10 10V-3H-7V-8H-3V-3H3V-8H7V-3H10V10H3V4A3 3 0 0 0 -3 4V10Z" fill="#ff8000" stroke="#3a1a00" strokeWidth="1.2" />;
+  }
 }
 
-function Teaser({ x, y, size, title, color = DUNGEON }: { x: number; y: number; size: number; title: string; color?: string }) {
-  return <g opacity=".8"><title>{title}</title>
-    <circle cx={x} cy={-y} r={size * 0.9} fill="#000" fillOpacity=".5" stroke={color} strokeOpacity=".7" strokeWidth={size / 8} strokeDasharray={`${size / 4} ${size / 5}`} />
-    <text x={x} y={-y + size * 0.38} textAnchor="middle" fontSize={size * 1.1} fill={color} fontWeight="700">?</text>
-  </g>;
-}
-
-function DungeonTrack({ d, view, active, onPick }: { d: HeroDungeon; view: Box; active: boolean; onPick: () => void }) {
-  const w = Math.max(view.s / 220, 18) * (active ? 1.6 : 1);
-  const first = d.segments[0]?.points[0];
+function Marker({ x, y, unit, kind, state, level, levelCol, ring, selected, title, onSelect }: {
+  x: number; y: number; unit: number; kind: MarkKind; state: MarkState; level?: number; levelCol?: string; ring?: string;
+  selected: boolean; title: string; onSelect: () => void;
+}) {
+  const c = MARK_COLOR[kind];
   return (
-    <g onClick={onPick} className="cursor-pointer">
-      <title>{`${d.name} · ${d.type_label} · Stufe ${d.level} · ${status(d).label}`}</title>
-      {d.segments.map((s, i) => (
-        <polyline key={i} points={s.points.map(([x, y]) => `${x},${-y}`).join(" ")} fill="none"
-                  stroke={s.cleared ? DUNGEON : "#7a5aa8"} strokeOpacity={s.cleared ? 0.95 : 0.7} strokeWidth={w}
-                  strokeDasharray={s.cleared ? undefined : `${w * 2} ${w * 1.6}`} strokeLinecap="round" strokeLinejoin="round" />
-      ))}
-      {first && <g>
-        <circle cx={first[0]} cy={-first[1]} r={w * 2.4} fill="#1a0f24" stroke={d.heroic ? "#ff8000" : DUNGEON} strokeWidth={w / 1.5} />
-        <path d={`M${first[0] - w * 1.1} ${-first[1] + w * 1.2}v${-w * 1.2}a${w * 1.1} ${w * 1.1} 0 0 1 ${w * 2.2} 0v${w * 1.2}z`} fill={d.heroic ? "#ff8000" : DUNGEON} />
+    <g transform={`translate(${x} ${-y}) scale(${unit * (selected ? 1.25 : 1)})`} className="cursor-pointer"
+       onClick={(e) => { e.stopPropagation(); onSelect(); }}>
+      <title>{title}</title>
+      <circle r="15" fill="#120d08" fillOpacity={state === "far" ? 0.75 : 0.92} stroke={selected ? "#fff" : state === "far" ? "#8a7a5c" : ring ?? c}
+              strokeWidth={selected ? 2.5 : 2} strokeDasharray={state === "found" ? undefined : "4 3"} />
+      {state === "far"
+        ? <text y="6" textAnchor="middle" fontSize="18" fontWeight="700" fill="#d9c08a">?</text>
+        : <g opacity={state === "near" ? 0.5 : 1}><Glyph kind={kind} /></g>}
+      {state === "near" && <g transform="translate(10 -10)"><circle r="6" fill="#120d08" stroke="#d9c08a" strokeWidth="1.2" />
+        <text y="3.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="#d9c08a">?</text></g>}
+      {level != null && <g transform="translate(0 19)">
+        <rect x="-10" y="-6" width="20" height="11" rx="3" fill="#120d08" stroke={levelCol} strokeWidth="1" />
+        <text y="3" textAnchor="middle" fontSize="8.5" fontWeight="700" fill={levelCol}>{level}</text>
       </g>}
     </g>
   );
+}
+
+function DungeonTrack({ d, unit, active, onPick }: { d: HeroDungeon; unit: number; active: boolean; onPick: () => void }) {
+  const w = unit * (active ? 6 : 4);
+  return (
+    <g onClick={(e) => { e.stopPropagation(); onPick(); }} className="cursor-pointer">
+      <title>{`${d.name} · ${d.type_label} · Stufe ${d.level} · ${status(d).label}`}</title>
+      {d.segments.map((s, i) => (
+        <polyline key={i} points={s.points.map(([x, y]) => `${x},${-y}`).join(" ")} fill="none"
+                  stroke={s.cleared ? DUNGEON : "#7a5aa8"} strokeOpacity={s.cleared ? 0.95 : 0.75} strokeWidth={w}
+                  strokeDasharray={s.cleared ? undefined : `${w * 2} ${w * 1.6}`} strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+    </g>
+  );
+}
+
+type Sel = { kind: "poi" | "verlies" | "heimat"; id: string };
+
+const near = (m: number | null | undefined) => m != null ? `Dein aufgedeckter Bereich endet etwa ${m >= 1000 ? `${num(Math.round(m / 100) / 10)} km` : `${m} m`} davor.` : null;
+
+function PlaceInfo({ p }: { p: HeroPlace }) {
+  const st = tier(p.found, p.closest_m);
+  if (st === "far") return <>
+    <p className="wow-title text-[13px] text-[#d9c08a]">Unbekannter Ort</p>
+    <p className="text-muted">Irgendetwas liegt hier im Nebel.</p>
+    {near(p.closest_m) && <p className="mt-1 text-[11px] text-[#cbb98f]">{near(p.closest_m)}</p>}
+  </>;
+  if (st === "near") return <>
+    <p className="wow-title text-[13px]" style={{ color: MARK_COLOR[p.kind] }}>{p.kind === "schrein" ? "Ein Schrein im Nebel" : "Ein Schatz im Nebel"}</p>
+    <p className="text-muted">{p.kind === "schrein" ? "Ein schwaches Leuchten zwischen den Schwaden." : "Etwas glitzert zwischen den Schwaden."}</p>
+    <p className="mt-1 text-[11px] text-[#cbb98f]">{near(p.closest_m)} Komm näher.</p>
+  </>;
+  return <>
+    <p className="wow-title pr-4 text-[13px]" style={{ color: MARK_COLOR[p.kind] }}>{p.name}</p>
+    <p className="text-[11px] text-muted">{p.kind_label} · Stufe {p.level} · {p.region}</p>
+    <p className="mt-1">Belohnung: {p.xp} EP{p.gold ? `, ${p.gold} Gold` : ""}</p>
+    {p.found_on && <p className="text-[11px] text-[#40c040]">gefunden am {dm(p.found_on)}</p>}
+  </>;
+}
+
+function DungeonInfo({ d, heroLevel, onDetails }: { d: HeroDungeon; heroLevel: number; onDetails: () => void }) {
+  const st = status(d);
+  const done = d.segments.filter((s) => s.cleared).length;
+  return <>
+    <p className="wow-title pr-4 text-[13px]" style={{ color: d.heroic ? "#ff8000" : DUNGEON }}>{TYPE_ICON[d.type]} {d.name}</p>
+    <p className="text-[11px] text-muted">{d.type_label} · <span style={{ color: levelColor(d.level, heroLevel) }}>Stufe {d.level}</span> · {num(d.length_km)} km Strecke</p>
+    {d.discovered ? <>
+      <p className="mt-1 italic text-[#cbb98f]">„{d.desc}“</p>
+      <p className="mt-1"><span style={{ color: st.color }}>{st.label}</span> · {done}/{d.segments.length} Abschnittsbosse</p>
+      <button type="button" onClick={onDetails} className="mt-1.5 rounded border border-[#4b3a22] px-2 py-0.5 text-[11px] text-[#ffd100] hover:bg-[#2a2013]">Strecke & Bosse ansehen</button>
+    </> : <>
+      <p className="mt-1 text-muted">Die Strecke liegt noch im Nebel.</p>
+      {near(d.closest_m) && <p className="mt-1 text-[11px] text-[#cbb98f]">{near(d.closest_m)}</p>}
+    </>}
+  </>;
 }
 
 // --- Weltkarte: echte GPS-Routen decken den Nebel auf; Verliese sind echte Strecken -----------------
@@ -100,6 +174,15 @@ export function HeroWorld({ data }: { data: Hero }) {
   const [view, setView] = useState<Box | null>(null);
   useEffect(() => { if (preset && mode !== "frei") setView(preset); }, [preset, mode]);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [sel, setSel] = useState<Sel | null>(null);
+  const [pxW, setPxW] = useState(700);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPxW(el.clientWidth || 700));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [view == null]);  // eslint-disable-line react-hooks/exhaustive-deps
   const viewRef = useRef<Box | null>(null);
   viewRef.current = view;
   const dragged = useRef(false);
@@ -138,6 +221,7 @@ export function HeroWorld({ data }: { data: Hero }) {
       if (pts.size === 1 && prev) {
         if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 5) dragged.current = true;
         if (!dragged.current) return;
+        setSel(null);
         const k = v.s / r.width;
         setView({ ...v, x: v.x - (ev.clientX - prev[0]) * k, y: v.y - (ev.clientY - prev[1]) * k });
         setMode("frei");
@@ -189,12 +273,19 @@ export function HeroWorld({ data }: { data: Hero }) {
   const regionsByName = Object.fromEntries(w.regions.map((r) => [r.name, r]));
   const sectorNames = (ring: number) => w.regions.filter((r) => r.ring === ring && r.name !== "Zitadelle").map((r) => r.name);
   const font = view.s / 34;
-  const icon = view.s / 70;
+  const unit = view.s / Math.max(200, pxW) * (pxW < 500 ? 0.8 : 1);  // Symbol ≈ 24–30 px, unabhängig vom Zoom
   const targetKeys = new Set(targets.map((t) => t.key));
   const found = pois.filter((p) => p.found).sort((a, b) => (b.found_on ?? "").localeCompare(a.found_on ?? ""));
   const shown = dungeons.filter((d) => d.discovered);
-  const teasers = dungeons.filter((d) => !d.discovered && (targetKeys.has(d.key) || d.key === picked || (d.region && regionsByName[d.region]?.discovered)));
-  const placeTeasers = pois.filter((p) => !p.found && regionsByName[p.region]?.discovered);
+  const dungeonMarks = dungeons.filter((d) => d.discovered || targetKeys.has(d.key) || d.key === picked || d.closest_m != null || (d.region && regionsByName[d.region]?.discovered));
+  const poiMarks = pois.filter((p) => p.found || p.closest_m != null || regionsByName[p.region]?.discovered);
+  const markAt = (d: HeroDungeon): [number, number] => {
+    const first = d.segments[0]?.points[0];
+    return d.discovered && first ? [first[0], first[1]] : [d.x, d.y];
+  };
+  const selPoi = sel?.kind === "poi" ? pois.find((p) => p.id === sel.id) : undefined;
+  const selDg = sel?.kind === "verlies" ? dungeons.find((d) => d.key === sel.id) : undefined;
+  const selAt: [number, number] | null = selPoi ? [selPoi.x, selPoi.y] : selDg ? markAt(selDg) : sel?.kind === "heimat" ? [0, 0] : null;
   const discoveredCount = w.regions.filter((r) => r.discovered).length;
   const cleared = dungeons.filter((d) => d.cleared).length;
   return (
@@ -216,6 +307,7 @@ export function HeroWorld({ data }: { data: Hero }) {
                aria-label={`Weltkarte: ${discoveredCount} von ${w.regions.length} Gebieten entdeckt`}
                onPointerDown={onPointerDown}
                onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }}
+               onClick={() => setSel(null)}
                onDoubleClick={(e) => { const [cx, cy] = toMap(e.clientX, e.clientY); zoomAt(0.5, cx, cy); setMode("frei"); }}>
             <defs>
               <mask id="world-reveal" maskUnits="userSpaceOnUse" x={view.x} y={view.y} width={view.s} height={view.s}>
@@ -272,22 +364,50 @@ export function HeroWorld({ data }: { data: Hero }) {
               <text key={ring.name} x={ring.outer_m * 0.71} y={-ring.outer_m * 0.71} fontSize={font * 0.7} fill="#6b5a40" textAnchor="middle"
                     style={{ paintOrder: "stroke" }} stroke="#000" strokeWidth={font / 8}>{ring.name} · {num(ring.outer_m / 1000)} km</text>
             ))}
-            {shown.map((d) => <DungeonTrack key={d.key} d={d} view={view} active={d.key === picked} onPick={() => pick(d.key)} />)}
-            {teasers.map((d) => <Teaser key={d.key} x={d.x} y={d.y} size={icon * (d.key === picked ? 1.5 : 1)} title={`${d.name} (im Nebel) · Stufe ${d.level}`} />)}
-            {placeTeasers.map((p) => <Teaser key={p.id} x={p.x} y={p.y} size={icon * 0.6} color={KIND_COLOR[p.kind]} title={`Unentdeckt · ${p.kind_label}`} />)}
-            {found.map((p) => <PlaceMark key={p.id} p={p} size={icon} />)}
-            <g>
-              <circle cx="0" cy="0" r={view.s / 80} fill="#ff8000" stroke="#000" strokeWidth={view.s / 400} />
-              <text x="0" y={view.s / 28} textAnchor="middle" fontSize={font * 0.8} fill="#efe3c8" stroke="#000" strokeWidth={font / 7} style={{ paintOrder: "stroke" }}>Zitadelle · Heimat</text>
-            </g>
+            {shown.map((d) => <DungeonTrack key={d.key} d={d} unit={unit} active={d.key === picked} onPick={() => setSel({ kind: "verlies", id: d.key })} />)}
+            <Marker x={0} y={0} unit={unit} kind="heimat" state="found" selected={sel?.kind === "heimat"} title="Zitadelle · Heimat"
+                    onSelect={() => setSel({ kind: "heimat", id: "heimat" })} />
+            {poiMarks.map((p) => {
+              const st = tier(p.found, p.closest_m);
+              return <Marker key={p.id} x={p.x} y={p.y} unit={unit * 0.85} kind={p.kind} state={st} selected={sel?.id === p.id}
+                             title={st === "found" ? p.name : st === "near" ? `${p.kind_label} im Nebel` : "Unbekannter Ort"}
+                             onSelect={() => setSel({ kind: "poi", id: p.id })} />;
+            })}
+            {dungeonMarks.map((d) => {
+              const [mx, my] = markAt(d);
+              const st: MarkState = d.discovered ? "found" : tier(false, d.closest_m) === "near" ? "near" : "far";
+              return <Marker key={d.key} x={mx} y={my} unit={unit} kind="verlies" state={st === "far" ? "near" : st} level={d.level}
+                             levelCol={levelColor(d.level, heroLevel)} ring={d.heroic ? "#ff8000" : d.cleared ? "#40c040" : undefined}
+                             selected={sel?.id === d.key} title={`${d.name} · Stufe ${d.level}`} onSelect={() => setSel({ kind: "verlies", id: d.key })} />;
+            })}
           </svg>
+          {sel && selAt && (() => {
+            const lx = (selAt[0] - view.x) / view.s * 100, ly = (-selAt[1] - view.y) / view.s * 100;
+            if (lx < -2 || lx > 102 || ly < -2 || ly > 102) return null;
+            const below = ly < 35;
+            const tx = lx < 22 ? "-12%" : lx > 78 ? "-88%" : "-50%";
+            return (
+              <div role="dialog" aria-label="Ort auf der Karte"
+                   className="absolute z-10 w-60 rounded-md border border-[#5a4424] bg-[#0f0b07f2] p-2.5 text-[12px] text-[#efe3c8] shadow-[0_8px_30px_rgba(0,0,0,.7)]"
+                   style={{ left: `${lx}%`, top: `${ly}%`, transform: `translate(${tx}, ${below ? "26px" : "calc(-100% - 26px)"})` }}
+                   onPointerDown={(e) => e.stopPropagation()}>
+                <button type="button" aria-label="Schließen" onClick={() => setSel(null)} className="absolute right-1.5 top-1 text-muted hover:text-[#ffd100]">×</button>
+                {sel.kind === "heimat" && <>
+                  <p className="wow-title text-[13px] text-[#ff8000]">Zitadelle · Heimat</p>
+                  <p className="text-muted">Dein häufigster Startpunkt – die Mitte der Welt.</p>
+                </>}
+                {selPoi && <PlaceInfo p={selPoi} />}
+                {selDg && <DungeonInfo d={selDg} heroLevel={heroLevel} onDetails={() => { pick(selDg.key); setSel(null); }} />}
+              </div>
+            );
+          })()}
           <div className="absolute right-2 top-2 flex flex-col overflow-hidden rounded border border-[#4b3a22] bg-black/70 text-[15px] leading-none">
             <button type="button" aria-label="Hineinzoomen" onClick={() => { zoomAt(0.6); setMode("frei"); }} className="px-2.5 py-1.5 text-[#efe3c8] hover:text-[#ffd100]">+</button>
             <button type="button" aria-label="Herauszoomen" onClick={() => { zoomAt(1 / 0.6); setMode("frei"); }} className="border-t border-[#4b3a22] px-2.5 py-1.5 text-[#efe3c8] hover:text-[#ffd100]">−</button>
             <button type="button" aria-label="Zur Heimat" title="Zur Heimat" onClick={() => { setPicked(null); setMode("erkundet"); if (mode === "erkundet" && preset) setView(preset); }}
                     className="border-t border-[#4b3a22] px-2.5 py-1.5 text-[12px] text-[#efe3c8] hover:text-[#ffd100]">⌂</button>
           </div>
-          <p className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-muted">Ziehen · Mausrad oder zwei Finger zoomen · Doppelklick</p>
+          <p className="pointer-events-none absolute bottom-2 left-2 hidden rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-muted sm:block">Ziehen · Mausrad oder zwei Finger zoomen · Doppelklick</p>
           </div>
           <div className="space-y-3 text-[12px]">
             {focus && <section className="rounded border border-[#4b3a22] bg-black/40 p-2">
@@ -375,10 +495,10 @@ export function HeroWorld({ data }: { data: Hero }) {
         <details className="mt-2 rounded border border-[#3a2d1a] bg-black/30 px-3 py-2 text-[12px]">
           <summary className="wow-title cursor-pointer text-[#ffd100]">Wie decke ich auf?</summary>
           <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[#d8c9a6]">
-            <li><b>Nebel:</b> Die Karte ist in 150-m-Felder geteilt. Jedes Feld, durch das deine GPS-Spur läuft, wird aufgedeckt – du legst also einen rund 150 m breiten Streifen frei. Es zählen nur Läufe mit GPS (Garmin).</li>
+            <li><b>Nebel:</b> Du siehst rund 300 m weit – alles in diesem Umkreis um deine GPS-Spur wird aufgedeckt, also ein gut 600 m breiter Streifen. Läufst du eine geschlossene Runde, ist auch die Fläche darin aufgedeckt. Es zählen nur Läufe mit GPS (Garmin).</li>
             <li><b>Gebiet:</b> entdeckt, sobald ein einziges Feld darin aufgedeckt ist.</li>
-            <li><b>Schrein / Schatz:</b> gefunden, wenn deine Spur auf etwa 250 m herankommt (Grenzland 400 m, Fernland 600 m).</li>
-            <li><b>Verlies sichtbar:</b> Die Strecke erscheint, sobald aufgedeckte Felder etwa 300 m an sie heranreichen – oder du ein Stück davon läufst.</li>
+            <li><b>Schrein / Schatz:</b> gefunden, sobald er in Sichtweite kommt.</li>
+            <li><b>Verlies sichtbar:</b> Die Strecke erscheint, sobald ein Stück davon in Sichtweite liegt.</li>
             <li><b>Abschnitt bezwungen:</b> Ein einzelner Lauf muss 80 % des Abschnitts abdecken; als abgedeckt gilt ein Streckenpunkt, wenn deine Spur höchstens 50 m entfernt war. Die Richtung ist egal.</li>
             <li><b>Verlies bezwungen:</b> alle Abschnitte, gern über mehrere Läufe verteilt. Alle in <i>einem</i> Lauf = heroisch.</li>
             <li><b>Wege & Straßen</b> der Karte erscheinen nur in aufgedeckten Feldern.</li>

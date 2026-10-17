@@ -540,3 +540,25 @@ def test_world_tiles_only_in_explored_area(monkeypatch, tmp_path):
     assert len(calls) == 1 and calls[0].startswith("https://tile.openstreetmap.org/")  # zweiter Abruf aus dem Cache
     z = int(key.split("_")[0])
     assert hero_world.tile_png(f"{z}_500_500") is None and hero_world.tile_png("x") is None
+
+
+def test_closed_loop_reveals_inside_and_reports_distance(monkeypatch):
+    from app import hero_world
+    home = (51.66, 6.62)
+    dlat, dlon = 1500 / 110_540, 1500 / (111_320 * hero_world.math.cos(hero_world.math.radians(home[0])))
+    side = 60
+    square = ([(home[0], home[1] + dlon * i / side) for i in range(side)]
+              + [(home[0] + dlat * i / side, home[1] + dlon) for i in range(side)]
+              + [(home[0] + dlat, home[1] + dlon * (1 - i / side)) for i in range(side)]
+              + [(home[0] + dlat * (1 - i / side), home[1]) for i in range(side + 1)])
+    out_and_back = [(home[0] - dlat * i / side, home[1]) for i in range(side)] + [(home[0] - dlat * (1 - i / side), home[1]) for i in range(side + 1)]
+    hero_world._memo.clear()
+    monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 1), square), (date(2026, 10, 2), out_and_back)])
+    w = hero_world.world()
+    cells = {tuple(c) for c in w["cells"]}
+    assert (5, 5) in cells  # Mitte der 1,5-km-Runde ist aufgedeckt
+    assert (3, -5) not in cells and (-3, -5) not in cells  # Hin-und-zurück deckt nur den Weg auf
+    assert all(p["closest_m"] == 0 for p in w["pois"] if p["found"])
+    near = [p for p in w["pois"] if not p["found"] and p["closest_m"] is not None]
+    assert all(0 < p["closest_m"] <= hero_world.NEAR_M for p in near)
+    assert all("closest_m" in d for d in w["dungeons"])
