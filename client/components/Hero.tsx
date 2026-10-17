@@ -565,7 +565,7 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}</p>
+      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}{cur.stone_level ? ` · höchster Stein +${cur.stone_level} bestimmt Slot 1` : ""}</p>
       {(data.vault.veteran || data.vault.claimable.length > 0) && (
         <div className="mt-4 space-y-3">
           {data.vault.veteran && <VaultChoice vault={data.vault.veteran} title="Veteranentruhe · für deine bisherige Reise" onClaim={onClaim} />}
