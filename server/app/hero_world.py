@@ -388,6 +388,23 @@ def world() -> dict:
 _memo: dict = {}
 
 
+def dungeon_route(key: str) -> dict | None:
+    """Öffentliche Strecke eines Verlieses für den Datei-Export; None = unbekannt oder noch im Nebel.
+
+    Gleiche Sichtbarkeit wie die Karte: `discovered` (Garmin-Wahrheit) oder `provisional` (Live) –
+    genau dann liefert `world()` auch die Streckenpunkte."""
+    w = world()
+    if not w.get("available"):
+        return None
+    d = next((x for x in w["dungeons"] if x["key"] == key), None)
+    if d is None or not (d["discovered"] or d.get("provisional")):
+        return None
+    dg = next((x for x in dungeon_defs() if x["key"] == key), None)
+    if dg is None:
+        return None
+    return {"name": dg["name"], "segments": [{"boss": s["boss"], "points": s["points"]} for s in dg["segments"]]}
+
+
 # --- Live-Positionen (vorläufig) -----------------------------------------------------------------
 # Uhr/Handy senden während des Laufs Positionen. Sie decken die Karte VORLÄUFIG auf: Funde tragen
 # `provisional: true`, die Wahrheitsfelder (found/discovered/cleared) bleiben unverändert, damit kein

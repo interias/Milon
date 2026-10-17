@@ -6,7 +6,7 @@ import hmac
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from .. import hero, hero_world
+from .. import hero, hero_export, hero_world
 from ..config import settings
 
 router = APIRouter(prefix="/hero", tags=["hero"])
@@ -110,6 +110,28 @@ def world_tile(key: str) -> Response:
     if data is None:
         raise HTTPException(404, "Kachel nicht im aufgedeckten Bereich")
     return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
+
+
+def _dungeon_file(key: str, ext: str) -> Response:
+    route = hero_world.dungeon_route(key)
+    if route is None:
+        raise HTTPException(404, "Verlies unbekannt oder noch im Nebel")
+    if ext == "gpx":
+        data, media = hero_export.gpx_bytes(route), "application/gpx+xml"
+    else:
+        data, media = hero_export.fit_bytes(route), "application/vnd.ant.fit"
+    name = f"{hero_export.file_stem(route['name'])}.{ext}"
+    return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/world/dungeon/{key}.gpx")
+def dungeon_gpx(key: str) -> Response:
+    return _dungeon_file(key, "gpx")
+
+
+@router.get("/world/dungeon/{key}.fit")
+def dungeon_fit(key: str) -> Response:
+    return _dungeon_file(key, "fit")
 
 
 @router.post("/vault/claim")
