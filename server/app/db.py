@@ -44,6 +44,9 @@ def _run_migrations() -> None:
                 con.exec_driver_sql(f"ALTER TABLE coach_reports ADD COLUMN {col} {typ}")
         if "visuals" not in cr:
             con.exec_driver_sql("ALTER TABLE coach_reports ADD COLUMN visuals TEXT")
+        for col, typ in (("provider", "TEXT"), ("fallback_reason", "TEXT"), ("cache_read_tokens", "INTEGER")):
+            if col not in cr:
+                con.exec_driver_sql(f"ALTER TABLE coach_reports ADD COLUMN {col} {typ}")
         sync_cols = cols("sync_state")
         if "status" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")

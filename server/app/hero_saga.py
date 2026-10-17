@@ -67,7 +67,6 @@ def latest() -> dict | None:
 
 def generate(overview: dict, today: date) -> dict:
     from .coach import client
-    from .config import settings
     week = saga_week(today)
     data = facts(overview, week, today)
     messages = [{"role": "system", "content": SYSTEM},
@@ -75,8 +74,6 @@ def generate(overview: dict, today: date) -> dict:
     content, usage = client.complete(messages, temperature=0.8)
     with Session(engine) as session:
         session.add(CoachReport(created_at=datetime.now(), kind="saga", content=content,
-                                prompt=json.dumps(messages, ensure_ascii=False), model=settings.openrouter_model,
-                                prompt_tokens=usage.get("prompt_tokens"), completion_tokens=usage.get("completion_tokens"),
-                                cost_usd=usage.get("cost")))
+                                prompt=json.dumps(messages, ensure_ascii=False), **client.report_fields(usage)))
         session.commit()
     return latest()
