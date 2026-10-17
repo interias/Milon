@@ -5,11 +5,17 @@ usage = {prompt_tokens, completion_tokens, cost, cache_read_tokens, provider, mo
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import anthropic
 from openai import OpenAI
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel import Session
 
 from ..config import settings
+from ..db import engine
+from ..models import CoachReport
 
 BASE_URL = "https://openrouter.ai/api/v1"
 _EXTRA = {"usage": {"include": True}}  # OpenRouter liefert damit die Kosten im usage-Objekt
@@ -132,10 +138,43 @@ def _anthropic_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=60.0, max_retries=0)
 
 
+BUDGET_WARN = 0.8  # Warnung ab 80 % des Monatsbudgets
+
+
+def month_costs(now: datetime | None = None) -> dict[str, float]:
+    """Kosten (USD) des laufenden Kalendermonats aus coach_reports, je Anbieter.
+    Berichte aus der Zeit vor der Provider-Spalte (provider NULL) liefen ueber OpenRouter."""
+    now = now or datetime.now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    with Session(engine) as s:
+        rows = s.execute(select(CoachReport.provider, CoachReport.cost_usd)
+                         .where(CoachReport.created_at >= start)).all()
+    totals = {"anthropic": 0.0, "openrouter": 0.0}
+    for provider, cost in rows:
+        totals["anthropic" if provider == "anthropic" else "openrouter"] += cost or 0
+    return {k: round(v, 4) for k, v in totals.items()}
+
+
+def budget_status(now: datetime | None = None) -> dict:
+    """Monatsbudget gegen die Anthropic-Kosten (OpenRouter ist separat abgerechnet und zaehlt nicht)."""
+    now = now or datetime.now()
+    spent = month_costs(now)
+    budget = settings.llm_monthly_budget_usd
+    ratio = spent["anthropic"] / budget if budget > 0 else 0.0
+    return {"month": now.strftime("%Y-%m"), "budget_usd": budget, "spent": spent,
+            "ratio": round(ratio, 4), "warn": budget > 0 and ratio >= BUDGET_WARN,
+            "exceeded": budget > 0 and ratio >= 1.0}
+
+
 def _skip_reason() -> str | None:
-    """Grund, Anthropic gar nicht erst zu versuchen (Einhaengepunkt z. B. fuer ein Budget-Limit)."""
+    """Grund, Anthropic gar nicht erst zu versuchen: fehlender Key oder ausgeschoepftes Monatsbudget."""
     if not settings.anthropic_api_key:
         return "no_key"
+    try:
+        if budget_status()["exceeded"]:
+            return "budget"
+    except SQLAlchemyError:  # unlesbare Statistik darf den Coach nicht lahmlegen; echte Programmfehler schon sichtbar
+        pass
     return None
 
 

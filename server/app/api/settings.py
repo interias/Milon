@@ -4,21 +4,27 @@ Secrets werden maskiert ausgegeben; PUT aktualisiert nur übergebene, nicht-leer
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import SQLAlchemyError
 
 from .. import weather
-from ..coach import profile
+from ..coach import client, profile
 from ..config import settings, update_env_file
 from ..sync import scheduler
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-SECRET_FIELDS = ["openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"]
-TEXT_FIELDS = ["openrouter_model", "openrouter_api_key", "hevy_api_key",
+SECRET_FIELDS = ["anthropic_api_key", "openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"]
+TEXT_FIELDS = ["openrouter_model", "anthropic_api_key", "openrouter_api_key", "hevy_api_key",
                "fddb_user", "fddb_pw", "fddb_cookie", "fddb_phpsessid"]
+
+
+LLM_PROVIDERS = ("anthropic", "openrouter")
+ANTHROPIC_EFFORTS = ("low", "medium", "high")
 
 
 def _mask(v: str | None) -> dict:
@@ -35,9 +41,23 @@ def _mask_user(v: str | None) -> str:
     return f"{v[:2]}…"
 
 
+def _budget() -> dict:
+    try:
+        return client.budget_status()
+    except SQLAlchemyError:  # Statistik nicht lesbar: Einstellungen bleiben bedienbar
+        return {"month": datetime.now().strftime("%Y-%m"), "budget_usd": settings.llm_monthly_budget_usd,
+                "spent": {"anthropic": 0.0, "openrouter": 0.0}, "ratio": 0.0, "warn": False, "exceeded": False}
+
+
 def _current() -> dict:
     return {
         "openrouter_model": settings.openrouter_model,
+        "llm_provider": settings.llm_provider.strip().lower(),  # "" = automatisch
+        "llm_provider_resolved": settings.resolved_llm_provider(),
+        "anthropic_model": settings.anthropic_model,
+        "anthropic_effort": settings.anthropic_effort,
+        "llm_monthly_budget_usd": settings.llm_monthly_budget_usd,
+        "llm_budget": _budget(),
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
@@ -64,6 +84,11 @@ def update_coach_profile(body: profile.Profile) -> dict:
 
 class SettingsIn(BaseModel):
     openrouter_model: str | None = None
+    llm_provider: str | None = None  # "" = automatisch; None = unveraendert
+    anthropic_model: str | None = None
+    anthropic_effort: str | None = None
+    llm_monthly_budget_usd: float | None = None
+    anthropic_api_key: str | None = None
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
     weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
@@ -75,8 +100,21 @@ class SettingsIn(BaseModel):
     fddb_phpsessid: str | None = None
 
 
+def _validate_llm(body: SettingsIn) -> None:
+    """Coach-Anbieter-Werte pruefen, bevor irgendetwas live oder in die .env geht (kein halb angewendetes PUT)."""
+    if body.llm_provider is not None and body.llm_provider.strip().lower() not in ("", *LLM_PROVIDERS):
+        raise HTTPException(status_code=422, detail="Anbieter: anthropic, openrouter oder leer (automatisch).")
+    if body.anthropic_model is not None and body.anthropic_model not in client.PRICES:
+        raise HTTPException(status_code=422, detail="Unbekanntes Anthropic-Modell.")
+    if body.anthropic_effort is not None and body.anthropic_effort not in ANTHROPIC_EFFORTS:
+        raise HTTPException(status_code=422, detail="Effort: low, medium oder high.")
+    if body.llm_monthly_budget_usd is not None and not 0 <= body.llm_monthly_budget_usd < float("inf"):
+        raise HTTPException(status_code=422, detail="Budget muss eine Zahl ≥ 0 sein (0 = kein Limit).")
+
+
 @router.put("")
 def update_settings(body: SettingsIn) -> dict:
+    _validate_llm(body)
     env_updates: dict[str, str] = {}
 
     for f in TEXT_FIELDS:
@@ -84,6 +122,20 @@ def update_settings(body: SettingsIn) -> dict:
         if val is not None and val != "":
             setattr(settings, f, val)
             env_updates[f.upper()] = val
+
+    if body.llm_provider is not None:
+        provider = body.llm_provider.strip().lower()
+        settings.llm_provider = provider
+        env_updates["LLM_PROVIDER"] = provider
+    if body.anthropic_model is not None:
+        settings.anthropic_model = body.anthropic_model
+        env_updates["ANTHROPIC_MODEL"] = body.anthropic_model
+    if body.anthropic_effort is not None:
+        settings.anthropic_effort = body.anthropic_effort
+        env_updates["ANTHROPIC_EFFORT"] = body.anthropic_effort
+    if body.llm_monthly_budget_usd is not None:
+        settings.llm_monthly_budget_usd = body.llm_monthly_budget_usd
+        env_updates["LLM_MONTHLY_BUDGET_USD"] = str(body.llm_monthly_budget_usd)
 
     if body.scheduler_enabled is not None:
         settings.scheduler_enabled = body.scheduler_enabled

@@ -5,14 +5,47 @@ import { api, type AppSettings, type SettingsUpdate } from "@/lib/api";
 import { Card, CardTitle, PageTitle, Loading, ApiError } from "@/components/ui";
 import CoachGoals from "@/components/CoachGoals";
 
-type SecretKey = "openrouter_api_key" | "hevy_api_key" | "fddb_pw" | "fddb_cookie" | "fddb_phpsessid";
+type SecretKey = "anthropic_api_key" | "openrouter_api_key" | "hevy_api_key" | "fddb_pw" | "fddb_cookie" | "fddb_phpsessid";
+const ANTHROPIC_MODELS = [
+  { id: "claude-opus-5-5", label: "Opus 5.5" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+  { id: "claude-haiku-5-5", label: "Haiku 5.5" },
+];
+const EFFORTS = ["low", "medium", "high"] as const;
+const usd = (v: number) => `${v.toFixed(2).replace(".", ",")} $`;
 const INPUT =
   "w-full rounded-lg border border-line bg-surface-alt px-3 py-2 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none sm:text-sm";
+
+function BudgetBar({ b }: { b: AppSettings["llm_budget"] }) {
+  const pct = Math.min(100, Math.round(b.ratio * 100));
+  const color = b.exceeded ? "var(--color-bad)" : b.warn ? "#b7791f" : "var(--color-accent)";
+  return (
+    <div aria-label="Monatskosten">
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px] text-muted">
+        <span>Kosten {b.month}</span>
+        <span>{b.budget_usd > 0 ? `${usd(b.spent.anthropic)} von ${usd(b.budget_usd)} · ${Math.round(b.ratio * 100)} %` : `${usd(b.spent.anthropic)} · kein Limit`}</span>
+      </div>
+      {b.budget_usd > 0 && (
+        <div className="h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+        </div>
+      )}
+      <p className="mt-1 text-[11px] text-muted">Anthropic {usd(b.spent.anthropic)} · OpenRouter {usd(b.spent.openrouter)} (zählt nicht zum Budget)</p>
+      {b.exceeded
+        ? <p className="mt-1 text-[11px] font-semibold text-bad">Budget ausgeschöpft — der Coach läuft bis Monatsende über OpenRouter.</p>
+        : b.warn && <p className="mt-1 text-[11px] font-semibold" style={{ color }}>Achtung: über 80 % des Monatsbudgets verbraucht.</p>}
+    </div>
+  );
+}
 
 export default function Einstellungen() {
   const [s, setS] = useState<AppSettings | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [model, setModel] = useState("");
+  const [provider, setProvider] = useState("");
+  const [aModel, setAModel] = useState("claude-opus-5-5");
+  const [effort, setEffort] = useState("medium");
+  const [budget, setBudget] = useState("100");
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
   const [places, setPlaces] = useState<string[]>([]);
@@ -22,9 +55,14 @@ export default function Einstellungen() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  function applyLlm(d: AppSettings) {
+    setProvider(d.llm_provider); setAModel(d.anthropic_model); setEffort(d.anthropic_effort);
+    setBudget(String(d.llm_monthly_budget_usd));
+  }
+
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlaces(d.weather_places ?? []); })
+      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -35,16 +73,22 @@ export default function Einstellungen() {
     try {
       const body: SettingsUpdate = { scheduler_enabled: scheduler };
       if (model && model !== s.openrouter_model) body.openrouter_model = model;
+      if (provider !== s.llm_provider) body.llm_provider = provider;
+      if (aModel !== s.anthropic_model) body.anthropic_model = aModel;
+      if (effort !== s.anthropic_effort) body.anthropic_effort = effort;
+      const bud = parseFloat(budget.replace(",", "."));
+      if (!Number.isNaN(bud) && bud >= 0 && bud !== s.llm_monthly_budget_usd) body.llm_monthly_budget_usd = bud;
       const hr = parseFloat(hrMax);
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
       const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
       if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
-      (["openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
+      (["anthropic_api_key", "openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
         if (secrets[k]?.trim()) body[k] = secrets[k].trim();
       });
       const updated = await api.settingsUpdate(body);
       setS(updated);
+      applyLlm(updated);
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
@@ -89,14 +133,52 @@ export default function Einstellungen() {
       <CoachGoals />
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardTitle title="LLM-Coach (OpenRouter)" />
-          <div className="space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-muted">Modell</span>
-              <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className={INPUT} placeholder="z. B. deepseek/deepseek-v4-flash" />
-            </label>
-            {secret("openrouter_api_key", "OpenRouter API-Key")}
+        <Card className="md:col-span-2">
+          <CardTitle title="Coach · KI-Anbieter" sub="Anthropic (Claude) oder OpenRouter — greift sofort, ohne .env-Editieren" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <span className="mb-1 block text-[11px] text-muted">Anbieter</span>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Anbieter">
+                  {([["", "Automatisch"], ["anthropic", "Anthropic"], ["openrouter", "OpenRouter"]] as const).map(([v, l]) => (
+                    <button key={v} type="button" role="radio" aria-checked={provider === v} onClick={() => setProvider(v)}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold ${provider === v ? "border-accent bg-accent text-white" : "border-line bg-surface-alt text-ink"}`}>{l}</button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-muted">
+                  Automatisch = Anthropic, sobald ein Key gesetzt ist, sonst OpenRouter. Aktiv: <strong>{s.llm_provider_resolved === "anthropic" ? "Anthropic" : "OpenRouter"}</strong>.
+                  Bei Ausfall oder ausgeschöpftem Budget springt der Coach selbst auf OpenRouter.
+                </p>
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Anthropic-Modell</span>
+                <select value={aModel} onChange={(e) => setAModel(e.target.value)} className={INPUT}>
+                  {ANTHROPIC_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              </label>
+              <div>
+                <span className="mb-1 block text-[11px] text-muted">Effort</span>
+                <div className="flex gap-2" role="radiogroup" aria-label="Effort">
+                  {EFFORTS.map((e) => (
+                    <button key={e} type="button" role="radio" aria-checked={effort === e} onClick={() => setEffort(e)}
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold ${effort === e ? "border-accent bg-accent text-white" : "border-line bg-surface-alt text-ink"}`}>{e}</button>
+                  ))}
+                </div>
+              </div>
+              {secret("anthropic_api_key", "Anthropic API-Key")}
+            </div>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">OpenRouter-Modell</span>
+                <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className={INPUT} placeholder="z. B. deepseek/deepseek-v4-flash" />
+              </label>
+              {secret("openrouter_api_key", "OpenRouter API-Key")}
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Monatsbudget Anthropic (USD, 0 = kein Limit)</span>
+                <input type="number" inputMode="decimal" min={0} step={1} value={budget} onChange={(e) => setBudget(e.target.value)} className={INPUT} />
+              </label>
+              <BudgetBar b={s.llm_budget} />
+            </div>
           </div>
         </Card>
 
