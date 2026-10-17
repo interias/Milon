@@ -350,12 +350,19 @@ export type CoachGoal = {
 };
 export type CoachProfile = { context: string; goals: CoachGoal[] };
 export type CoachProfileUpdate = { context: string; goals: Omit<CoachGoal, "effective_status">[] };
+export type LlmBudget = {
+  month: string; budget_usd: number; spent: { anthropic: number; openrouter: number };
+  ratio: number; warn: boolean; exceeded: boolean;
+};
 export type AppSettings = {
-  openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_places: string[]; fddb_user_masked: string;
-  keys: { openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
+  openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
+  anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_places: string[]; fddb_user_masked: string;
+  keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
-  openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-opus-5-5"
     anthropic_effort: str = "medium"  # low | medium | high | xhigh | max (Thinking bleibt adaptiv an)
+    # Monatsbudget (USD) fuer Anthropic-Kosten aus coach_reports; ab 100 % weicht der Coach auf OpenRouter aus. 0 = kein Limit.
+    llm_monthly_budget_usd: float = Field(default=100.0, ge=0, allow_inf_nan=False)
     coach_context: str = ""
     timezone: str = "Europe/Berlin"
 
