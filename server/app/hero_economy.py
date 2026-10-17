@@ -59,12 +59,15 @@ def earnings(data: dict, start: date) -> list[tuple[date, int, str]]:
     for d in data["duels"]:
         if d["won"]:
             out.append((date.fromisoformat(d["date"]), EARN["duell"], "Duell"))
+    from .hero_world import RIDE_FACTOR as ride  # Erkundungs-Gold aus Radfunden zählt halb
     for r in data.get("world", {}).get("regions", []):
         if r["discovered"] and date.fromisoformat(r["discovered_on"]) >= start:
-            out.append((date.fromisoformat(r["discovered_on"]), r.get("gold", 2) * GOLD, "Erkundung"))
+            gold = int(r.get("gold", 2) * GOLD * (ride if r.get("via") == "rad" else 1))
+            out.append((date.fromisoformat(r["discovered_on"]), gold, "Erkundung zu Rad" if r.get("via") == "rad" else "Erkundung"))
     for p in data.get("world", {}).get("pois", []):
         if p["found"] and p["gold"] and date.fromisoformat(p["found_on"]) >= start:
-            out.append((date.fromisoformat(p["found_on"]), p["gold"] * GOLD, "Erkundung"))
+            gold = int(p["gold"] * GOLD * (ride if p.get("via") == "rad" else 1))
+            out.append((date.fromisoformat(p["found_on"]), gold, "Erkundung zu Rad" if p.get("via") == "rad" else "Erkundung"))
     for dg in data.get("world", {}).get("dungeons", []):
         if dg["cleared"] and date.fromisoformat(dg["cleared_on"]) >= start:
             out.append((date.fromisoformat(dg["cleared_on"]), dg["gold"] * GOLD, "Erkundung"))

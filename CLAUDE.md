@@ -443,6 +443,14 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **Rad-Kennzahlen:** `metrics/health.py::_rides()` = HC-`exercise_type 4` + Garmin-Fahrten (Fenster = Start + elapsed). HC-Fahrten, deren Zeitfenster eine Garmin-Fahrt überlappt, fallen weg (**Garmin gewinnt**) — deckt auch Garmin Connect → HC-Spiegel ab. Fehlt die Tabelle (alte DB/Tests), nur HC.
 - Tests: `server/tests/test_garmin_rides.py` (gemockter Client; Regressionstest „Lauf-Leser sehen keine Radspur“, Dedup gegen HC).
 
+## Rad-Erkundung II (2026-10-17) — Radspuren decken die Weltkarte auf (#57)
+- **`hero_world._rides()`** liest `GarminRide` (fehlende Tabelle = keine Fahrten). `_build(home, routes, rides)` deckt Läufe mit `SIGHT_M` 300 m und Fahrten mit **`RIDE_SIGHT_M` 150 m** auf (getrennte Zell-Dicts zu Fuß/zu Rad, Karte = Vereinigung); geschlossene Runden füllen wie bei Läufen. Heimat bleibt aus Lauf-Routen; der `_memo`-Schlüssel enthält den Stand der Fahrten.
+- **Was zählt zu Rad:** Gebiete entdecken, Schreine/Schätze finden, Verliese *sichtbar* machen. **Verlies-Abschnitte (und damit Verliese/heroisch) nur zu Fuß** — Fahrten gehen nicht in `routes_m` von `dungeons()`. Instanzen, Duelle, Keystones und Laufstatistiken sehen Fahrten ohnehin nie.
+- **Doppelfund-Regel** (`_first_via`): der früheste Tag zählt; am selben Tag gewinnt der Lauf. Gebiete und Orte tragen `via: "fuss" | "rad"`; `xp`/`gold` bleiben die Nennwerte.
+- **Belohnung:** `RIDE_FACTOR` 0,5 — `hero._load` bucht Rad-Funde mit halber EP und dem Log-Zusatz „(zu Rad)“ (optionales 5. Feld der `extra`-Tupel im `ledger`), `hero_economy.earnings` halbes Gold unter Quelle „Erkundung zu Rad“. Tooltips nennen „halbe Belohnung“.
+- **API/UI:** `world()["rides"]` = `[{date, points}]` in Metern relativ zur Heimat (wie `routes`). `HeroWorld.tsx` zeichnet Radspuren grün gestrichelt (`RIDE_TRACK`) neben den goldenen Laufspuren, Legende + Regel unter „Wie decke ich auf?“, „zu Rad“ bei Gebiet/Ort.
+- Tests: `server/tests/test_hero_rides.py` (150 m vs. 300 m, Schatzfund, Verlies nicht bezwungen, Heimat fest, Doppelfund-Regel, halbe EP/Gold).
+
 ## Abenteuerlauf I (2026-10-17) — Stein aktivieren, Mythisch+ je Verlies (#61)
 `server/app/hero_keystone.py`, Tabelle `hero_keystones` (Index in `db._run_migrations`). Opt-in: ohne aktiven Stein bleibt alles wie bisher (`live/state.keystone = null`).
 - **API (Live-Token):** `GET /hero/live/keystone?dungeon=` = Vorschau (Stufen, `suggested_level`, Zeitlimit je Stufe, Wochen-Affix, Affix-Liste), `POST /hero/live/keystone {session, dungeon, level, affixes[]}` (404 = unbekannt/nicht entdeckt, 422 = Stufe/Affix ungültig; setzt das Live-Ziel aufs Verlies; ein neuer Stein in derselben Session bricht den alten ab), `POST /hero/live/keystone/abort {session}`.

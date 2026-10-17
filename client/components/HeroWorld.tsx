@@ -8,6 +8,8 @@ import { dm } from "@/lib/format";
 
 const TIP_YELLOW = "#ffd100";
 const DUNGEON = "#c08cff";
+const RUN_TRACK = "#e3b64f";
+const RIDE_TRACK = "#8fd16f";  // Radspur: grün gestrichelt, klar von der goldenen Laufspur abgesetzt
 const DIRS = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"];
 const KIND_COLOR: Record<HeroPlace["kind"], string> = { schrein: "#6fd3e8", schatz: TIP_YELLOW };
 const TYPE_ICON: Record<string, string> = { wasser: "🌊", wald: "🌲", aue: "🪶", deich: "🏰", feld: "🌾", dorf: "🏘️", eigen: "🧭" };
@@ -149,7 +151,7 @@ function PlaceInfo({ p, onTarget, isTarget }: { p: HeroPlace; onTarget?: () => v
     <p className="wow-title pr-4 text-[13px]" style={{ color: MARK_COLOR[p.kind] }}>{p.name}</p>
     <p className="text-[11px] text-muted">{p.kind_label} · Stufe {p.level} · {p.region}</p>
     <p className="mt-1">Belohnung: {p.xp} EP{p.gold ? `, ${p.gold} Gold` : ""}</p>
-    {p.found_on && <p className="text-[11px] text-[#40c040]">gefunden am {dm(p.found_on)}</p>}
+    {p.found_on && <p className="text-[11px] text-[#40c040]">gefunden am {dm(p.found_on)}{p.via === "rad" ? " · zu Rad (halbe Belohnung)" : ""}</p>}
     {p.provisional && <p className="text-[11px] text-[#6fd3e8]">vorläufig gefunden (Live)</p>}
     {onTarget && <TargetButton onClick={onTarget} active={!!isTarget} />}
   </>;
@@ -384,7 +386,12 @@ export function HeroWorld({ data, live, compact, onChanged }: { data: Hero; live
             </g>}
             {w.routes.map((r) => (
               <polyline key={r.date + r.points.length} points={r.points.map(([x, y]) => `${x},${-y}`).join(" ")}
-                        fill="none" stroke="#e3b64f" strokeOpacity={tiles.length ? 0.6 : 0.75} strokeWidth={Math.max(view.s / (tiles.length ? 420 : 260), 6)} strokeLinejoin="round" strokeLinecap="round" />
+                        fill="none" stroke={RUN_TRACK} strokeOpacity={tiles.length ? 0.6 : 0.75} strokeWidth={Math.max(view.s / (tiles.length ? 420 : 260), 6)} strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+            {(w.rides ?? []).map((r) => (
+              <polyline key={"rad" + r.date + r.points.length} points={r.points.map(([x, y]) => `${x},${-y}`).join(" ")} data-testid="ride-route"
+                        fill="none" stroke={RIDE_TRACK} strokeOpacity={0.85} strokeWidth={Math.max(view.s / 600, 4)}
+                        strokeDasharray={`${view.s / 90} ${view.s / 140}`} strokeLinejoin="round" strokeLinecap="round" />
             ))}
             {lv && lv.cells.length > 0 && <g filter="url(#world-soft)" data-testid="live-cells">
               {lv.cells.map(([i, j]) => (
@@ -539,7 +546,7 @@ export function HeroWorld({ data, live, compact, onChanged }: { data: Hero; live
                         <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[#0a0807]">
                           <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.pct * 4)}%`, background: r.discovered ? "#d9c08a" : "transparent" }} />
                         </div>
-                        {r.discovered && r.discovered_on && <p className="text-[10px] text-muted">entdeckt am {dm(r.discovered_on)}</p>}
+                        {r.discovered && r.discovered_on && <p className="text-[10px] text-muted">entdeckt am {dm(r.discovered_on)}{r.via === "rad" ? " · zu Rad" : ""}</p>}
                       </li>
                     ))}
                   </ul>
@@ -550,6 +557,8 @@ export function HeroWorld({ data, live, compact, onChanged }: { data: Hero; live
         </div>
         {!compact && <>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+          <span><span style={{ color: RUN_TRACK }}>━</span> Laufspur</span>
+          <span data-testid="legend-ride"><span style={{ color: RIDE_TRACK }}>┅</span> Radspur (halbe Sicht, halbe Erkundungs-EP)</span>
           <span><span style={{ color: DUNGEON }}>━</span> Verlies-Strecke (gestrichelt = Abschnitt offen)</span>
           <span><span style={{ color: KIND_COLOR.schrein }}>◆</span> Schrein: 100 EP</span>
           <span><span style={{ color: KIND_COLOR.schatz }}>■</span> Schatz: Gold</span>
@@ -559,6 +568,7 @@ export function HeroWorld({ data, live, compact, onChanged }: { data: Hero; live
           <summary className="wow-title cursor-pointer text-[#ffd100]">Wie decke ich auf?</summary>
           <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[#d8c9a6]">
             <li><b>Nebel:</b> Du siehst rund 300 m weit – alles in diesem Umkreis um deine GPS-Spur wird aufgedeckt, also ein gut 600 m breiter Streifen. Läufst du eine geschlossene Runde, ist auch die Fläche darin aufgedeckt. Es zählen nur Läufe mit GPS (Garmin).</li>
+            <li><b>Zu Rad:</b> Radfahrten mit GPS decken mit halber Sichtweite (rund 150 m) auf und finden Gebiete, Schreine und Schätze – für halbe Erkundungs-EP und halbes Gold. Verlies-Abschnitte zählen nur zu Fuß. Wer etwas am selben Tag zu Fuß findet, bekommt die volle Belohnung.</li>
             <li><b>Gebiet:</b> entdeckt, sobald ein einziges Feld darin aufgedeckt ist.</li>
             <li><b>Schrein / Schatz:</b> gefunden, sobald er in Sichtweite kommt.</li>
             <li><b>Verlies sichtbar:</b> Die Strecke erscheint, sobald ein Stück davon in Sichtweite liegt.</li>
