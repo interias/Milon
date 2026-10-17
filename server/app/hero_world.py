@@ -654,7 +654,7 @@ def _target_point(item: dict, kind: str, pos) -> tuple[float, float]:
 def live_state(session_id: str) -> dict:
     """Kompakter Stand für Uhr/Handy — nur Meter, Grad und Namen, keine Koordinaten."""
     out = {"session": session_id, "available": False, "active": False, "points": 0, "first_ts": None, "last_ts": None,
-           "revealed": {"cells": 0, "km2": 0.0}, "finds": [], "target": None, "dungeon": None}
+           "revealed": {"cells": 0, "km2": 0.0}, "finds": [], "target": None, "dungeon": None, "keystone": None}
     if not world().get("available"):
         return out
     out["available"] = True
@@ -666,6 +666,9 @@ def live_state(session_id: str) -> dict:
         view, pos = ov["value"], _to_m(_memo["home"], pts[-1][1], pts[-1][2])
         out.update(active=True, points=len(pts), first_ts=pts[0][0], last_ts=pts[-1][0], finds=ov["finds"],
                    revealed={"cells": len(ov["cells"]), "km2": round(len(ov["cells"]) * CELL_M * CELL_M / 1e6, 2)})
+    from . import hero_keystone  # aktiver Stein (Mythisch+), vorläufig; ohne Stein bleibt None
+    home = _memo["home"]
+    out["keystone"] = hero_keystone.live(session_id, [(ts, *_to_m(home, la, lo)) for ts, la, lo in track[0][1]] if track else None)
     by_id = {p["id"]: ("poi", p) for p in view["pois"]} | {d["id"]: ("dungeon", d) for d in view["dungeons"]}
     chosen = _get_target(session_id)
     if chosen and chosen.get("id") in by_id:

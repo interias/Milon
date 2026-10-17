@@ -6,7 +6,7 @@ import hmac
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from .. import hero, hero_export, hero_world
+from .. import hero, hero_export, hero_keystone, hero_world
 from ..config import settings
 
 router = APIRouter(prefix="/hero", tags=["hero"])
@@ -59,6 +59,17 @@ class LiveTargetInput(BaseModel):
     id: str | None = Field(default=None, max_length=80)
 
 
+class KeystoneInput(BaseModel):
+    session: str = Field(pattern=SESSION_PATTERN)
+    dungeon: str = Field(min_length=1, max_length=80)  # Verlies-Schlüssel, auch mit Präfix „dungeon:“
+    level: int = Field(ge=2, le=hero_keystone.MAX_LEVEL)
+    affixes: list[str] = Field(default=[], max_length=len(hero_keystone.AFFIXES))
+
+
+class KeystoneAbortInput(BaseModel):
+    session: str = Field(pattern=SESSION_PATTERN)
+
+
 def live_token(x_hero_token: str | None = Header(default=None)) -> None:
     """Live endpoints: off (403) without HERO_LIVE_TOKEN, 401 for a missing or wrong X-Hero-Token."""
     token = settings.hero_live_token
@@ -89,6 +100,29 @@ def live_target(body: LiveTargetInput) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"session": session, "kind": body.kind, "id": body.id}
+
+
+@router.get("/live/keystone", dependencies=[Depends(live_token)])
+def keystone_preview(dungeon: str = Query(min_length=1, max_length=80)) -> dict:
+    try:
+        return hero_keystone.preview(dungeon.removeprefix("dungeon:"))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Verlies unbekannt oder noch nicht entdeckt.") from exc
+
+
+@router.post("/live/keystone", dependencies=[Depends(live_token)])
+def keystone_activate(body: KeystoneInput) -> dict:
+    try:
+        return hero_keystone.activate(body.session, body.dungeon.removeprefix("dungeon:"), body.level, body.affixes)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Verlies unbekannt oder noch nicht entdeckt.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/live/keystone/abort", dependencies=[Depends(live_token)])
+def keystone_abort(body: KeystoneAbortInput) -> dict:
+    return {"session": body.session, "aborted": hero_keystone.abort(body.session)}
 
 
 @router.get("")
