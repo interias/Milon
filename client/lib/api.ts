@@ -222,7 +222,7 @@ export type HeroDungeon = { id: string; key: string; name: string; type: string;
   cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean; own?: boolean;
   segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number; live_coverage?: number; provisional?: boolean }[] };
 export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
-  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null; provisional?: boolean };
+  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; via?: "fuss" | "rad" | null; closest_m?: number | null; provisional?: boolean };
 export type HeroLiveFind = { kind: "gebiet" | "schrein" | "schatz" | "abschnitt" | "verlies_entdeckt" | "verlies"; id: string; name: string; xp: number; provisional: true };
 export type HeroLiveTarget = { kind: "poi" | "dungeon"; id: string; name: string; chosen: boolean; label: string; level: number; bearing_deg: number | null; distance_m: number | null };
 export type HeroLiveState = {
@@ -271,8 +271,8 @@ export type Hero = {
   auction: { week: string; ends: string; listings: { idx: number; kind: string; price: number; sold: boolean; item?: HeroItem;
     bag?: { id: string; name: string; slots: number; source: string }; mount?: { key: string; name: string; glyph: string } }[] } | null;
   world: { available: false } | { available: true; cell_m: number; radius_m: number; core_m: number; cells: [number, number][];
-    routes: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
-    regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
+    routes: { date: string; points: [number, number][] }[]; rides?: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
+    regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null; via?: "fuss" | "rad" | null }[];
     pois: HeroPlace[]; dungeons: HeroDungeon[];
     explored_pct: number; km2: number; live?: HeroLiveOverlay | null };
   potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];

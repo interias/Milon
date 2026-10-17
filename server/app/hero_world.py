@@ -41,6 +41,8 @@ RINGS = [
 DISCOVER_XP = RINGS[0][3]
 # Entdeckungsradius eines Ortes je Ring (Kern = Nahland)
 SIGHT_M = 300.0  # Sichtweite: so weit um die Spur lichtet sich der Nebel
+RIDE_SIGHT_M = 150.0  # zu Rad halbe Sichtweite – man rauscht schnell vorbei
+RIDE_FACTOR = 0.5     # Erkundungs-EP und -Gold aus Radfunden zählen halb
 POI_REACH_M = [0.0, 0.0, 0.0]  # gefunden, sobald ein aufgedecktes Feld (Mitte) ≤ 150 m entfernt ist = in Sichtweite
 DUNGEON_FILE = Path(__file__).with_name("hero_dungeons.json")
 DUNGEON_TYPES = {"wasser": "Wasser", "wald": "Wald", "aue": "Aue", "deich": "Deich & Festung", "feld": "Feld", "dorf": "Dorf"}
@@ -56,9 +58,13 @@ SHRINE_XP, TREASURE_XP = 100, 25
 
 def _routes() -> list[tuple[date, list[tuple[float, float]]]]:
     from .garmin_routes import GarminRoute
+    return _tracks(GarminRoute)
+
+
+def _tracks(model) -> list[tuple[date, list[tuple[float, float]]]]:
     out = []
     with Session(engine) as session:
-        for r in session.exec(select(GarminRoute)).all():
+        for r in session.exec(select(model)).all():
             try:
                 segments = json.loads(r.segments_json)
             except ValueError:
@@ -67,6 +73,15 @@ def _routes() -> list[tuple[date, list[tuple[float, float]]]]:
             if len(pts) >= 2:
                 out.append((r.started_at.date(), pts))
     return sorted(out, key=lambda x: x[0])
+
+
+def _rides() -> list[tuple[date, list[tuple[float, float]]]]:
+    """Garmin-Radfahrten fürs Aufdecken (nur Weltkarte; nie Lauf, Heimat oder Verlies-Abdeckung)."""
+    from .garmin_routes import GarminRide
+    try:
+        return _tracks(GarminRide)
+    except OperationalError:  # alte DB ohne Tabelle
+        return []
 
 
 def _home(routes) -> tuple[float, float] | None:
@@ -257,17 +272,15 @@ LOOP_MAX_KM2 = 40.0      # Schutz gegen GPS-Ausreißer
 NEAR_M = 1500.0          # bis hierhin meldet die Karte „du warst schon auf X m dran“
 
 
-_SIGHT_K = int(SIGHT_M // CELL_M) + 1
-
-
-def _sight(x: float, y: float) -> list[tuple[int, int]]:
+def _sight(x: float, y: float, sight: float = SIGHT_M) -> list[tuple[int, int]]:
     """Zellen, deren Mitte von (x, y) aus in Sichtweite liegt (inkl. der eigenen Zelle)."""
     ci, cj = math.floor(x / CELL_M), math.floor(y / CELL_M)
     out = [(ci, cj)] if math.hypot(x, y) <= WORLD_RADIUS_M else []
-    for i in range(ci - _SIGHT_K, ci + _SIGHT_K + 1):
-        for j in range(cj - _SIGHT_K, cj + _SIGHT_K + 1):
+    k = int(sight // CELL_M) + 1
+    for i in range(ci - k, ci + k + 1):
+        for j in range(cj - k, cj + k + 1):
             cx, cy = (i + 0.5) * CELL_M, (j + 0.5) * CELL_M
-            if (i, j) != (ci, cj) and math.hypot(cx - x, cy - y) <= SIGHT_M and math.hypot(cx, cy) <= WORLD_RADIUS_M:
+            if (i, j) != (ci, cj) and math.hypot(cx - x, cy - y) <= sight and math.hypot(cx, cy) <= WORLD_RADIUS_M:
                 out.append((i, j))
     return out
 
@@ -312,16 +325,16 @@ def _closest(cells: dict, points: list[tuple[float, float]]) -> int | None:
     return None if best is None or best > NEAR_M else int(round(best, -1))
 
 
-def _reveal(meters: list[tuple[float, float]], day: str, cells: dict) -> None:
+def _reveal(meters: list[tuple[float, float]], day: str, cells: dict, sight: float = SIGHT_M) -> None:
     """Sichtweite entlang der Spur + Inneres geschlossener Runden aufdecken (Zelle → frühester Tag)."""
     if len(meters) == 1:
-        for key in _sight(*meters[0]):
+        for key in _sight(*meters[0], sight):
             cells[key] = min(cells.get(key, day), day)
     for (x1, y1), (x2, y2) in zip(meters, meters[1:]):
         steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // (CELL_M / 2)))
         for i in range(steps + 1):
             x, y = x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps
-            for key in _sight(x, y):
+            for key in _sight(x, y, sight):
                 cells[key] = min(cells.get(key, day), day)
     for key in _loop_cells(meters):  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
         cells[key] = min(cells.get(key, day), day)
@@ -335,36 +348,56 @@ def _poi_hits(cells: dict, p: dict) -> list[str]:
             if (i, j) in cells and math.hypot((i + 0.5) * CELL_M - p["x"], (j + 0.5) * CELL_M - p["y"]) <= reach + CELL_M]
 
 
-def _build(home, routes) -> tuple[dict, dict]:
-    cells: dict[tuple[int, int], str] = {}  # Zelle → Tag der Entdeckung
-    lines, routes_m = [], []
+def _first_via(foot: str | None, ride: str | None) -> tuple[str | None, str | None]:
+    """Doppelfund Lauf/Rad: der früheste Tag zählt, am selben Tag gewinnt der Lauf (volle Belohnung)."""
+    if foot and (not ride or foot <= ride):
+        return foot, "fuss"
+    return (ride, "rad") if ride else (None, None)
+
+
+def _build(home, routes, rides=()) -> tuple[dict, dict]:
+    foot: dict[tuple[int, int], str] = {}  # Zelle → Tag der Entdeckung (zu Fuß)
+    ride: dict[tuple[int, int], str] = {}  # dasselbe zu Rad (halbe Sichtweite)
+    lines, ride_lines, routes_m = [], [], []
     for day, pts in routes:
         meters = [_to_m(home, lat, lon) for lat, lon in pts]
         routes_m.append((day.isoformat(), meters))
         lines.append({"date": day.isoformat(), "points": [[round(x), round(y)] for x, y in meters[::5]]})
-        _reveal(meters, day.isoformat(), cells)
+        _reveal(meters, day.isoformat(), foot)
+    for day, pts in rides:  # Radspuren decken nur auf – nie Verlies-Abschnitte (routes_m bleibt Lauf-only)
+        meters = [_to_m(home, lat, lon) for lat, lon in pts]
+        ride_lines.append({"date": day.isoformat(), "points": [[round(x), round(y)] for x, y in meters[::5]]})
+        _reveal(meters, day.isoformat(), ride, RIDE_SIGHT_M)
+    cells = dict(foot)
+    for key, day in ride.items():
+        cells[key] = min(cells.get(key, day), day)
     total = _region_totals()
-    found: dict[str, dict] = {}
-    for (i, j), day in cells.items():
+    counts: dict[str, int] = {}
+    first: dict[str, list] = {}  # Gebiet → [erster Tag zu Fuß, erster Tag zu Rad]
+    for (i, j) in cells:
         name = region_of((i + 0.5) * CELL_M, (j + 0.5) * CELL_M)
-        if not name:
-            continue
-        f = found.setdefault(name, {"cells": 0, "first": day})
-        f["cells"] += 1
-        f["first"] = min(f["first"], day)
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    for src, cs in enumerate((foot, ride)):
+        for (i, j), day in cs.items():
+            name = region_of((i + 0.5) * CELL_M, (j + 0.5) * CELL_M)
+            if name:
+                f = first.setdefault(name, [None, None])
+                f[src] = min(f[src] or day, day)
     regions = [{"name": CORE, "ring": 0, "ring_label": RINGS[0][0], "xp": DISCOVER_XP, "gold": RINGS[0][4]}]
     regions += [{"name": name, "ring": i, "ring_label": ring[0], "xp": ring[3], "gold": ring[4]}
                 for i, ring in enumerate(RINGS) for name in ring[2]]
     for r in regions:
-        f = found.get(r["name"], {})
-        r.update(cells=f.get("cells", 0), total=total.get(r["name"], 1),
-                 pct=round(100 * f.get("cells", 0) / total.get(r["name"], 1), 1),
-                 discovered=r["name"] in found, discovered_on=f.get("first"), provisional=False)
+        on, via = _first_via(*first.get(r["name"], (None, None)))
+        r.update(cells=counts.get(r["name"], 0), total=total.get(r["name"], 1),
+                 pct=round(100 * counts.get(r["name"], 0) / total.get(r["name"], 1), 1),
+                 discovered=on is not None, discovered_on=on, via=via, provisional=False)
     places = []
     for p in pois():
-        hits = _poi_hits(cells, p)
-        places.append({**p, "reach_m": POI_REACH_M[p["ring"]], "found": bool(hits), "found_on": min(hits) if hits else None,
-                       "closest_m": 0 if hits else _closest(cells, [(p["x"], p["y"])]), "provisional": False})
+        hf, hr = _poi_hits(foot, p), _poi_hits(ride, p)
+        on, via = _first_via(min(hf) if hf else None, min(hr) if hr else None)
+        places.append({**p, "reach_m": POI_REACH_M[p["ring"]], "found": on is not None, "found_on": on, "via": via,
+                       "closest_m": 0 if on else _closest(cells, [(p["x"], p["y"])]), "provisional": False})
     defs = dungeon_defs()
     dgs = dungeons(home, routes_m, cells, defs)
     for d, dg in zip(dgs, defs):
@@ -378,7 +411,7 @@ def _build(home, routes) -> tuple[dict, dict]:
             d["segments"] = [{**s, "points": []} for s in d["segments"]]
     value = {"available": True, "cell_m": CELL_M, "radius_m": WORLD_RADIUS_M, "core_m": CORE_M,
              "rings": [{"name": n, "outer_m": o} for n, o, *_ in RINGS],
-             "cells": [[i, j] for (i, j) in cells], "routes": lines, "regions": regions, "pois": places, "dungeons": dgs,
+             "cells": [[i, j] for (i, j) in cells], "routes": lines, "rides": ride_lines, "regions": regions, "pois": places, "dungeons": dgs,
              "explored_pct": round(100 * len(cells) / max(1, sum(total.values())), 3),
              "km2": round(len(cells) * CELL_M * CELL_M / 1e6, 2), "live": None}
     return value, cells
@@ -408,10 +441,12 @@ def world() -> dict:
     if home is None:
         return {"available": False}
     own_key = tuple((r.id, r.kind) for r in hero_import._rows(engine))
-    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes), own_key)
+    rides = _rides()
+    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes), own_key,
+           tuple((d, len(p), p[0], p[-1]) for d, p in rides))
     if _memo.get("key") != key:
         own_tracks, superseded = _own_tracks() if own_key else ([], [])
-        value, cells = _build(home, sorted(routes + own_tracks, key=lambda x: x[0]))
+        value, cells = _build(home, sorted(routes + own_tracks, key=lambda x: x[0]), rides)
         value["own_superseded"] = superseded
         _memo.update(key=key, value=value, home=home, base_cells=cells, cellset=set(cells), tilesets={},
                      live_key=(), live_value=value, tracks=[])

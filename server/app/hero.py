@@ -459,8 +459,8 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
         return {"entries": [], "pool": 0, "totals": {}, "daily": {}}
     first = min(days)
     extra_by_day: dict[date, list] = {}
-    for d, xp, name, kind in extra or []:
-        extra_by_day.setdefault(d, []).append((xp, name, kind))
+    for d, xp, name, kind, *note in extra or []:  # optional 5. Feld: Zusatz im Log, z. B. „zu Rad“
+        extra_by_day.setdefault(d, []).append((xp, name, kind, note[0] if note else None))
     ach_by_day: dict[date, list] = {}
     for d, pts, name in ach:
         ach_by_day.setdefault(min(d, today) if d else first, []).append((pts, name))
@@ -514,10 +514,10 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
             entries.append({"date": d, "kind": "erfolg", "xp": float(pts), "bonus": 0.0, "ref": None,
                             "label": f"Erfolg „{name}“", "name": name})
             day_xp["erfolge"] += pts
-        for xp, name, kind in extra_by_day.get(d, []):
+        for xp, name, kind, note in extra_by_day.get(d, []):
             key, prefix = EXTRA_KEY[kind]
             entries.append({"date": d, "kind": kind, "xp": float(xp), "bonus": 0.0, "ref": None,
-                            "label": f"{prefix} „{name}“", "name": name})
+                            "label": f"{prefix} „{name}“" + (f" ({note})" if note else ""), "name": name})
             day_xp[key] += xp
         if d in sick or not trained:
             pool = min(mods.rest_cap(d), pool + REST_PER_DAY)
@@ -1457,10 +1457,13 @@ def _load(today: date) -> dict:
     extra += [(date.fromisoformat(d["date"]), d["xp"], f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}.", "duell")
               for d in duels if d["won"]]
     world = _safe(hero_world.world, {"available": False})
-    extra += [(date.fromisoformat(r["discovered_on"]), r["xp"], r["name"], "erkundung")
-              for r in world.get("regions", []) if r["discovered"]]
-    extra += [(date.fromisoformat(p["found_on"]), p["xp"], p["name"], p["kind"])
-              for p in world.get("pois", []) if p["found"]]
+    for f, kind in [(r, "erkundung") for r in world.get("regions", []) if r["discovered"]] + \
+                   [(p, p["kind"]) for p in world.get("pois", []) if p["found"]]:
+        on = f["discovered_on"] if kind == "erkundung" else f["found_on"]
+        if f.get("via") == "rad":  # zu Rad gefunden: halbe Erkundungs-EP, Quelle im Log
+            extra.append((date.fromisoformat(on), f["xp"] * hero_world.RIDE_FACTOR, f["name"], kind, "zu Rad"))
+        else:
+            extra.append((date.fromisoformat(on), f["xp"], f["name"], kind))
     for dg in world.get("dungeons", []):
         extra += [(date.fromisoformat(sg["cleared_on"]), sg["xp"], f"{sg['boss']} ({dg['name']})", "abschnitt")
                   for sg in dg["segments"] if sg["cleared"]]
@@ -1483,13 +1486,16 @@ def _load(today: date) -> dict:
     for e in events:
         tips[("event", e["name"])] = ["Saison-Event", e["rule"], f"Belohnung: {e['xp']} EP + {e['item']}"]
     for r in world.get("regions", []):
-        tips[("erkundung", r["name"])] = ["Gebiet der Weltkarte", f"{r['pct']:g} % erkundet ({r['cells']} von {r['total']} Feldern)".replace(".", ",")]
+        tips[("erkundung", r["name"])] = ["Gebiet der Weltkarte", f"{r['pct']:g} % erkundet ({r['cells']} von {r['total']} Feldern)".replace(".", ",")] \
+            + (["Zu Rad entdeckt: halbe Belohnung"] if r.get("via") == "rad" else [])
     for p in world.get("pois", []):
         rows = [f"{p['kind_label']} · Stufe {p['level']} · {p['region']}", f"{p['km']:g} km von der Heimat".replace(".", ",")]
         if p["loot"]:
             rows.append(f"Belohnung: {p['xp']} EP, {p['gold']} Gold + {RARITY_LABEL[p['loot']].lower()} Beute")
         else:
             rows.append(f"Belohnung: {p['xp']} EP" + (f", {p['gold']} Gold" if p["gold"] else ""))
+        if p.get("via") == "rad":
+            rows.append("Zu Rad gefunden: halbe Belohnung")
         tips[(p["kind"], p["name"])] = rows
     for dg in world.get("dungeons", []):
         head = f"{'Heroisches ' if dg['heroic'] else ''}Verlies · {dg['type_label']} · Stufe {dg['level']}"
