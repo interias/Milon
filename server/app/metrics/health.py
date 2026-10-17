@@ -1,7 +1,9 @@
 """Allgemeine Gesundheits-/Aktivitätsmetriken: Schritte (Health Connect) + Radfahren.
 
 exercise_type 4 = Radfahren (android.health.connect ExerciseSessionType BIKING; verifiziert
-über App-Attribution Samsung Health + Distanz-/Speed-Profil). Reine Funktionen über die DB —
+über App-Attribution Samsung Health + Distanz-/Speed-Profil) plus Garmin-Radfahrten mit GPS
+(Tabelle garmin_rides; überlappt eine HC-Fahrt zeitlich eine Garmin-Fahrt, gewinnt Garmin).
+Reine Funktionen über die DB —
 speisen wie alle Metriken REST + Coach + MCP."""
 from __future__ import annotations
 
@@ -9,6 +11,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from sqlalchemy import inspect
 
 from ..config import settings, watch_source_for
 from ..db import engine
@@ -89,15 +92,41 @@ def steps_summary() -> dict:
 
 
 # ---------------- Radfahren ----------------
+def _garmin_rides() -> pd.DataFrame:
+    """Garmin cycling tracks as ride rows; the elapsed window matches HC's started/ended semantics."""
+    with engine.connect() as con:
+        if not inspect(con).has_table("garmin_rides"):
+            return pd.DataFrame(columns=["started_at", "ended_at", "distance_km"])
+        df = pd.read_sql("SELECT started_at, COALESCE(elapsed_duration_seconds, duration_seconds) AS seconds, "
+                         "distance_km FROM garmin_rides", con, parse_dates=["started_at"])
+    df = df.dropna(subset=["started_at", "seconds"])
+    df["ended_at"] = df["started_at"] + pd.to_timedelta(df["seconds"], unit="s")
+    return df[["started_at", "ended_at", "distance_km"]]
+
+
+def _merge_rides(hc: pd.DataFrame, garmin: pd.DataFrame) -> pd.DataFrame:
+    """HC rides overlapping any Garmin ride window are the same trip mirrored: Garmin wins."""
+    if garmin.empty:
+        return hc
+    if not hc.empty:
+        starts, ends = garmin["started_at"].to_numpy(), garmin["ended_at"].to_numpy()
+        hc_ends = hc["ended_at"].fillna(hc["started_at"])
+        overlap = [bool(((starts < end) & (ends > start)).any())
+                   for start, end in zip(hc["started_at"].to_numpy(), hc_ends.to_numpy())]
+        hc = hc[[not hit for hit in overlap]]
+    return pd.concat([frame for frame in (hc, garmin) if not frame.empty], ignore_index=True)
+
+
 def _rides() -> pd.DataFrame:
-    df = _read(
+    hc = _read(
         "SELECT started_at, ended_at, distance_km FROM exercise_sessions "
         f"WHERE exercise_type = {BIKE}",
         parse_dates=["started_at", "ended_at"],
     )
+    df = _merge_rides(hc.dropna(subset=["started_at"]), _garmin_rides())
     if df.empty:
         return df
-    df = df.dropna(subset=["started_at"]).copy()
+    df = df.copy()
     df["dur_min"] = (df["ended_at"] - df["started_at"]).dt.total_seconds() / 60
     df["distance_km"] = df["distance_km"].fillna(0.0)
     # plausible Fahrten (GPS-Rauschen / Geister-Sessions aussortieren)

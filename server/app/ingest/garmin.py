@@ -1,4 +1,4 @@
-"""Synchronize Garmin routes, complete running records and daily watch metrics."""
+"""Synchronize Garmin routes, cycling tracks, complete running records and daily watch metrics."""
 from __future__ import annotations
 
 import base64
@@ -22,6 +22,8 @@ TOKEN_KEYS = ("di_token", "di_refresh_token", "di_client_id")
 PAGE_SIZE = 50
 HISTORY_LIMIT = 1000
 RECENT_LIMIT = 30
+# Garmin's "cycling" parent type includes indoor/virtual rides whose tracks are not real places.
+_NO_GPS_RIDE_MARKERS = ("indoor", "virtual")
 _import_lock = threading.Lock()
 
 
@@ -123,6 +125,19 @@ def _known_route_ids() -> set[str]:
         return set(session.exec(select(garmin_routes.GarminRoute.activity_id)).all())
 
 
+def _known_ride_ids() -> set[str]:
+    from .. import garmin_routes
+
+    with Session(garmin_routes.engine) as session:
+        return set(session.exec(select(garmin_routes.GarminRide.activity_id)).all())
+
+
+def _ride_type(activity: dict) -> str | None:
+    kind = activity.get("activityType")
+    key = kind.get("typeKey") if isinstance(kind, dict) else None
+    return key if isinstance(key, str) and key.strip() else None
+
+
 def _number(value) -> float | None:
     if value is None:
         return None
@@ -209,11 +224,63 @@ def _pull_routes(api, full: bool, collected: list[dict] | None = None) -> dict:
     return result
 
 
+def _pull_rides(api, full: bool) -> dict:
+    """Cycling tracks go to their own table; they never feed running records, weather or metrics.
+
+    Optional like weather: failures stay in result["rides"] and never fail the running sync."""
+    from .. import garmin_routes
+
+    known = _known_ride_ids()
+    runs = _known_route_ids()
+    limit = HISTORY_LIMIT if full or not known else RECENT_LIMIT
+    result = {"mode": "full" if full else "incremental" if known else "initial",
+              "imported": 0, "skipped": 0, "no_route": 0, "checked": 0, "errors": 0}
+    seen: set[str] = set()
+    offset = 0
+    while offset < limit:
+        page_size = min(PAGE_SIZE, limit - offset)
+        try:
+            activities = api.get_activities(offset, page_size, activitytype="cycling")
+            if not isinstance(activities, list):
+                raise ValueError
+        except Exception:
+            result["errors"] += 1
+            return result
+        for activity in activities[:page_size]:
+            result["checked"] += 1
+            try:
+                summary = _summary(activity)
+                activity_id = summary["activity_id"]
+                if activity_id in seen or activity_id in runs or (activity_id in known and not full):
+                    result["skipped"] += 1
+                    continue
+                seen.add(activity_id)
+                ride_type = _ride_type(activity)
+                if (activity.get("hasPolyline") is False
+                        or (ride_type and any(marker in ride_type for marker in _NO_GPS_RIDE_MARKERS))):
+                    result["no_route"] += 1
+                    continue
+                raw = api.download_activity(activity_id, dl_fmt=api.ActivityDownloadFormat.GPX)
+                if raw == b"":
+                    result["no_route"] += 1
+                    continue
+                segments = garmin_routes.parse_gpx(raw)
+                garmin_routes.save_ride({**summary, "activity_type": ride_type}, segments)
+                result["imported"] += 1
+            except Exception:
+                result["errors"] += 1
+        offset += page_size
+        if len(activities) < page_size:
+            break
+    return result
+
+
 def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
     from .. import garmin_activity, garmin_daily, garmin_weather, garmin_load
 
     outcomes = {}
     for name, pull in (
+        ("rides", lambda: _pull_rides(api, full)),
         ("activities", lambda: garmin_activity.sync_activities(api, activities, full=full)),
         ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
         ("weather", lambda: garmin_weather.sync_weather(api, activities, full=full)),
