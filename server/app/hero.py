@@ -27,7 +27,7 @@ import pandas as pd
 from typing import Optional
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_economy, hero_events, hero_extras, hero_quests, hero_social, hero_world
+from . import hero_bosses, hero_economy, hero_events, hero_events_live, hero_extras, hero_quests, hero_social, hero_world
 from .checkins import local_today
 from .db import engine
 
@@ -374,10 +374,11 @@ def matches_spec(spec: str | None, run, week_index: int) -> bool:
             "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung"]
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung", "events"]
 EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
              "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:"), "erkundung": ("erkundung", "Gebiet entdeckt:"),
-             "verlies": ("erkundung", "Verlies bezwungen:"), "abschnitt": ("erkundung", "Abschnitt bezwungen:"), "schrein": ("erkundung", "Schrein entdeckt:"), "schatz": ("erkundung", "Schatz gefunden:")}
+             "verlies": ("erkundung", "Verlies bezwungen:"), "abschnitt": ("erkundung", "Abschnitt bezwungen:"), "schrein": ("erkundung", "Schrein entdeckt:"), "schatz": ("erkundung", "Schatz gefunden:"),
+             "spontan": ("events", "Ereignis bestanden:")}
 
 
 class Mods:
@@ -1294,6 +1295,17 @@ def map_loot(world: dict, start: date) -> list[dict]:
     return out
 
 
+def live_event_loot(events: list[dict], entries: list[dict]) -> list[dict]:
+    """Beute aus spontanen Ereignissen des Abenteuerlaufs (erst nach Garmin-Bestätigung)."""
+    out = []
+    for e in events:
+        d = date.fromisoformat(e["date"])
+        item = make_item(_rng("liveevent", e["id"]), e["loot"], datetime.fromtimestamp(e["reached_ms"] / 1000), None,
+                         _level_at(entries, d), "events", f"Ereignis „{e['name']}“ (Stein +{e['level']}) bestanden")
+        out.append({**item, "id": f"liveevent:{e['id']}"})
+    return out
+
+
 def trainer(data: dict, overview_parts: dict, today: date, pool: float, cap: float) -> dict:
     runs = data["runs"]
     yesterday = today - timedelta(days=1)
@@ -1499,6 +1511,8 @@ def _load(today: date) -> dict:
             extra.append((date.fromisoformat(dg["cleared_on"]), dg["xp"] * (1.5 if dg["heroic"] else 1), dg["name"], "verlies"))
     dungeons = _safe(lambda: hero_bosses.dungeons(runs, start), [])
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
+    live_events = [e for e in _safe(hero_events_live.confirmed, []) if date.fromisoformat(e["date"]) >= start]
+    extra += [(date.fromisoformat(e["date"]), e["xp"], e["name"], "spontan") for e in live_events]
     book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
     rides = [(d, km) for d, km in _safe(_ride_days, []) if d >= start]
     mount_hist = _mount_history(start)
@@ -1538,6 +1552,9 @@ def _load(today: date) -> dict:
         for sg in dg["segments"]:
             tips[("abschnitt", f"{sg['boss']} ({dg['name']})")] = [f"Abschnittsboss · {dg['name']}", f"Stufe {dg['level']} · {sg['xp']} EP",
                                                                    f"Abgedeckt: {round(sg['coverage'] * 100)} % (ab 80 % bezwungen)"]
+    for e in live_events:
+        tips[("spontan", e["name"])] = [f"Spontanes Ereignis · Stein +{e['level']}", "Von der Garmin-Spur bestätigt",
+                                        f"Belohnung: {e['xp']} EP + {RARITY_LABEL[e['loot']].lower()} Beute"]
     for d in duels:
         label = f"Doppelgänger vom {d['twin_date'][8:10]}.{d['twin_date'][5:7]}."
         tips[("duell", label)] = ["Duell gegen dein früheres Ich",
@@ -1550,6 +1567,7 @@ def _load(today: date) -> dict:
     loot += _safe(lambda: boss_loot(bosses, dungeons, book["entries"]), [])
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
     loot += _safe(lambda: map_loot(world, start), [])
+    loot += _safe(lambda: live_event_loot(live_events, book["entries"]), [])
     return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
             "rides": rides, "mount_hist": mount_hist, "mount_feed": mount_feed, "fed": fed,
@@ -1586,7 +1604,7 @@ def overview(today: date | None = None) -> dict:
     log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"]), "tip": data["tips"].get((e["kind"], e["name"]))}
-                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung", "verlies", "abschnitt", "schrein", "schatz")]
+                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung", "verlies", "abschnitt", "schrein", "schatz", "spontan")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]

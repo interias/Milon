@@ -6,7 +6,7 @@ import hmac
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from .. import hero, hero_export, hero_import, hero_keystone, hero_world
+from .. import hero, hero_events_live, hero_export, hero_import, hero_keystone, hero_world
 from ..config import settings
 
 router = APIRouter(prefix="/hero", tags=["hero"])
@@ -123,6 +123,11 @@ def keystone_activate(body: KeystoneInput) -> dict:
 @router.post("/live/keystone/abort", dependencies=[Depends(live_token)])
 def keystone_abort(body: KeystoneAbortInput) -> dict:
     return {"session": body.session, "aborted": hero_keystone.abort(body.session)}
+
+
+@router.post("/live/event/decline", dependencies=[Depends(live_token)])
+def event_decline(body: KeystoneAbortInput) -> dict:
+    return {"session": body.session, "declined": hero_events_live.decline(body.session)}
 
 
 @router.get("")
