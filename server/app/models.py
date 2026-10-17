@@ -201,6 +201,9 @@ class CoachReport(SQLModel, table=True):
     completion_tokens: Optional[int] = None
     cost_usd: Optional[float] = None
     visuals: Optional[str] = None
+    provider: Optional[str] = None  # 'anthropic' | 'openrouter' (tatsaechlich genutzt)
+    fallback_reason: Optional[str] = None  # gesetzt = Rueckfall auf OpenRouter (auth/billing/rate_limit/...)
+    cache_read_tokens: Optional[int] = None  # Prompt-Caching (Anthropic)
 
 
 class ProgressEntry(SQLModel, table=True):

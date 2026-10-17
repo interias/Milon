@@ -374,17 +374,28 @@ export type CoachGoal = {
 };
 export type CoachProfile = { context: string; goals: CoachGoal[] };
 export type CoachProfileUpdate = { context: string; goals: Omit<CoachGoal, "effective_status">[] };
+export type LlmBudget = {
+  month: string; budget_usd: number; spent: { anthropic: number; openrouter: number };
+  ratio: number; warn: boolean; exceeded: boolean;
+};
 export type AppSettings = {
-  openrouter_model: string; timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_places: string[]; fddb_user_masked: string;
-  keys: { openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
+  openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
+  anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_places: string[]; fddb_user_masked: string;
+  keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
-  openrouter_model?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
 export type CoachImage = { url: string; cost_usd: number | null; model: string };
 export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null; visuals?: CoachVisual[] };
+export type Briefing = { id: number; kind: "briefing"; content: string; created_at: string; model: string | null; provider: string | null; fallback_reason: string | null; cost_usd: number | null };
+export type BriefingToday = { date: string; briefing: Briefing | null };
+export type WeeklyAutoReport = Omit<Briefing, "kind"> & { kind: "weekly-auto" };
+export type WeeklyAutoCurrent = { week_from: string; week_to: string; report: WeeklyAutoReport | null };
 export type CoachStats = {
   model: string; reports_total: number; tokens_total: number;
   cost_total_usd: number; cost_known: boolean; reports_7d: number; cost_7d_usd: number; tokens_7d: number;
@@ -538,6 +549,8 @@ export const api = {
   coachAsk: (message: string, history?: { role: string; content: string }[]) =>
     post<Report>("/coach/ask", { message, history }),
   coachStats: () => get<CoachStats>("/coach/stats"),
+  coachBriefingToday: () => get<BriefingToday>("/coach/briefing/today"),
+  coachWeeklyAuto: () => get<WeeklyAutoCurrent>("/coach/weekly-auto/current"),
   generateCoachImage: (prompt: string) => post<CoachImage>("/coach/images", { prompt }),
   // Ingest / Sync
   ingestStatus: () => get<IngestStatus>("/ingest/status"),

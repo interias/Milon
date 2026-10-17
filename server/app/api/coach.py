@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlmodel import Session
 
-from ..coach import client, prompts, snapshot, tools, visuals
+from ..coach import briefing, client, prompts, snapshot, tools, visuals, weekly_auto
 from ..db import engine
 from ..models import CoachReport
 
@@ -43,24 +43,20 @@ def _generate(kind: str, user_msg: str | None = None, history: list[dict] | None
 
     charts = visuals.build_visuals(kind, user_msg or "")
     with Session(engine) as s:
-        from ..config import settings
         report = CoachReport(
             created_at=datetime.now(),
             kind=kind,
             content=content,
             prompt=json.dumps(messages, ensure_ascii=False),  # Prompt fuer spaetere Analyse
-            model=settings.openrouter_model,
-            prompt_tokens=usage.get("prompt_tokens"),
-            completion_tokens=usage.get("completion_tokens"),
-            cost_usd=usage.get("cost"),
+            **client.report_fields(usage),
             visuals=json.dumps(charts, ensure_ascii=False),
         )
         s.add(report)
         s.commit()
         s.refresh(report)
         return {"id": report.id, "kind": kind, "content": content,
-                "model": report.model, "created_at": report.created_at.isoformat(),
-                "cost_usd": report.cost_usd, "visuals": charts}
+                "model": report.model, "provider": report.provider, "fallback_reason": report.fallback_reason,
+                "created_at": report.created_at.isoformat(), "cost_usd": report.cost_usd, "visuals": charts}
 
 
 @router.post("/daily")
@@ -94,13 +90,9 @@ def ask(body: ChatIn) -> dict:
         raise HTTPException(status_code=502, detail=f"Coach/Tools fehlgeschlagen: {e}")
     charts = visuals.build_visuals("chat-tools", body.message, used)
     with Session(engine) as s:
-        from ..config import settings
         rep = CoachReport(
             created_at=datetime.now(), kind="chat-tools", content=content,
-            prompt=json.dumps(full, ensure_ascii=False, default=str), model=settings.openrouter_model,
-            prompt_tokens=usage.get("prompt_tokens"),
-            completion_tokens=usage.get("completion_tokens"),
-            cost_usd=usage.get("cost"),
+            prompt=json.dumps(full, ensure_ascii=False, default=str), **client.report_fields(usage),
             visuals=json.dumps(charts, ensure_ascii=False),
         )
         s.add(rep)
@@ -108,7 +100,8 @@ def ask(body: ChatIn) -> dict:
         s.refresh(rep)
         return {"id": rep.id, "kind": rep.kind, "content": content,
                 "tools_used": [u["name"] for u in used],
-                "model": rep.model, "created_at": rep.created_at.isoformat(),
+                "model": rep.model, "provider": rep.provider, "fallback_reason": rep.fallback_reason,
+                "created_at": rep.created_at.isoformat(),
                 "cost_usd": rep.cost_usd, "visuals": charts}
 
 
@@ -151,8 +144,7 @@ def report_detail(report_id: int) -> dict:
 
 @router.get("/stats")
 def stats() -> dict:
-    """Kosten/Token-Statistik (OpenRouter) ueber alle Coach-Reports."""
-    from ..config import settings
+    """Kosten/Token-Statistik ueber alle Coach-Reports (Anthropic + OpenRouter)."""
     with Session(engine) as s:
         rows = s.execute(select(CoachReport)).scalars().all()
     cutoff = datetime.now() - timedelta(days=7)
@@ -165,7 +157,7 @@ def stats() -> dict:
         return sum((r.prompt_tokens or 0) + (r.completion_tokens or 0) for r in rs)
 
     return {
-        "model": settings.openrouter_model,
+        "model": client.current_model(),
         "reports_total": len(rows),
         "tokens_total": _tok(rows),
         "cost_total_usd": _cost(rows),
@@ -174,6 +166,20 @@ def stats() -> dict:
         "cost_7d_usd": _cost(last7),
         "tokens_7d": _tok(last7),
     }
+
+
+@router.get("/briefing/today")
+def briefing_today() -> dict:
+    """Heutiges Morgenbriefing (entsteht automatisch, siehe coach/briefing); `briefing` = None, solange keins da ist."""
+    day = briefing._now().date()
+    report = briefing.report_for(day)
+    return {"date": day.isoformat(), "briefing": briefing.as_dict(report) if report else None}
+
+
+@router.get("/weekly-auto/current")
+def weekly_auto_current() -> dict:
+    """Automatischer Wochenbericht der zuletzt beendeten Woche (siehe coach/weekly_auto); `report` = None, solange keiner da ist."""
+    return weekly_auto.current()
 
 
 @router.get("/snapshot")

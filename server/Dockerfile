@@ -24,6 +24,7 @@ RUN pip install \
       "pydantic-settings>=2.5" \
       "httpx>=0.27,<1" \
       "openai>=2.43" \
+      "anthropic>=1.15" \
       "tzdata>=2025.1" \
       "apscheduler>=3.10" \
       "pytz>=2024.1" \

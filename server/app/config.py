@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(DATA_DIR / 'tracker.db').as_posix()}"
     openrouter_api_key: str = ""
     openrouter_model: str = "openai/gpt-6-luna"
+    # Coach-LLM: Claude (offizielles anthropic-SDK) als Standard, OpenRouter als Rückfall.
+    # LLM_PROVIDER leer = anthropic, sobald ANTHROPIC_API_KEY gesetzt ist, sonst openrouter.
+    llm_provider: str = ""
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-opus-5-5"
+    anthropic_effort: str = "medium"  # low | medium | high | xhigh | max (Thinking bleibt adaptiv an)
+    # Monatsbudget (USD) fuer Anthropic-Kosten aus coach_reports; ab 100 % weicht der Coach auf OpenRouter aus. 0 = kein Limit.
+    llm_monthly_budget_usd: float = Field(default=100.0, ge=0, allow_inf_nan=False)
     coach_context: str = ""
     timezone: str = "Europe/Berlin"
 
@@ -97,6 +105,13 @@ class Settings(BaseSettings):
     @classmethod
     def blank_coordinate(cls, value):
         return None if isinstance(value, str) and not value.strip() else value
+
+    def resolved_llm_provider(self) -> str:
+        """Gewählter Coach-Anbieter: explizites LLM_PROVIDER, sonst anthropic bei gesetztem Key."""
+        provider = self.llm_provider.strip().lower()
+        if provider in ("anthropic", "openrouter"):
+            return provider
+        return "anthropic" if self.anthropic_api_key else "openrouter"
 
     def resolved_database_url(self) -> str:
         """Bindet eine relative sqlite-URL (sqlite:///./...) an die Repo-Root,
