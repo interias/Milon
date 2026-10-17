@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { Hero, HeroDungeon, HeroPlace } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, type Hero, type HeroDungeon, type HeroPlace, type HeroTile } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { dm } from "@/lib/format";
 
@@ -11,7 +11,9 @@ const DIRS = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"];
 const KIND_COLOR: Record<HeroPlace["kind"], string> = { schrein: "#6fd3e8", schatz: TIP_YELLOW };
 const TYPE_ICON: Record<string, string> = { wasser: "🌊", wald: "🌲", aue: "🪶", deich: "🏰", feld: "🌾", dorf: "🏘️" };
 const TYPE_ORDER = ["wasser", "wald", "aue", "deich", "feld", "dorf"];
-type ViewMode = "erkundet" | "nah" | "welt" | "fokus";
+type ViewMode = "erkundet" | "nah" | "welt" | "fokus" | "frei";
+// Kartenkacheln im Pergament-Ton der Seite
+const TILE_FILTER = "sepia(.65) saturate(.8) brightness(.6) contrast(1.12)";
 type Box = { x: number; y: number; s: number };
 
 const num = (v: number) => String(v).replace(".", ",");
@@ -81,7 +83,7 @@ export function HeroWorld({ data }: { data: Hero }) {
   const dungeons = useMemo(() => (w?.available ? w.dungeons ?? [] : []), [w]);
   const targets = useMemo(() => dungeons.filter((d) => !d.cleared).sort((a, b) => a.km - b.km).slice(0, 3), [dungeons]);
   const focus = dungeons.find((d) => d.key === picked) ?? null;
-  const view = useMemo<Box | null>(() => {
+  const preset = useMemo<Box | null>(() => {
     if (!w?.available) return null;
     if (mode === "welt") return { x: -w.radius_m * 1.03, y: -w.radius_m * 1.03, s: 2.06 * w.radius_m };
     if (mode === "nah") { const r = (w.rings?.[0]?.outer_m ?? 6000) * 1.05; return { x: -r, y: -r, s: 2 * r }; }
@@ -94,6 +96,90 @@ export function HeroWorld({ data }: { data: Hero }) {
     const ys = [0, ...w.cells.map(([, j]) => -j * w.cell_m), ...targets.map((t) => -t.y)];
     return boxOf(xs, ys, 1200, 4000);
   }, [w, mode, targets, focus]);
+  // Frei verschiebbare Ansicht: Voreinstellungen setzen sie, Ziehen/Zoomen ändert sie.
+  const [view, setView] = useState<Box | null>(null);
+  useEffect(() => { if (preset && mode !== "frei") setView(preset); }, [preset, mode]);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const viewRef = useRef<Box | null>(null);
+  viewRef.current = view;
+  const dragged = useRef(false);
+  const maxS = (w?.available ? w.radius_m : 30_000) * 2.2;
+  const zoomAt = (factor: number, cx?: number, cy?: number) => setView((v) => {
+    if (!v) return v;
+    const s = Math.min(maxS, Math.max(400, v.s * factor)), k = s / v.s;
+    const px = cx ?? v.x + v.s / 2, py = cy ?? v.y + v.s / 2;
+    return { x: px - (px - v.x) * k, y: py - (py - v.y) * k, s };
+  });
+  const toMap = (clientX: number, clientY: number) => {
+    const r = svgRef.current!.getBoundingClientRect(), v = viewRef.current!;
+    return [v.x + (clientX - r.left) / r.width * v.s, v.y + (clientY - r.top) / r.height * v.s];
+  };
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const [cx, cy] = toMap(e.clientX, e.clientY);
+      zoomAt(Math.exp(e.deltaY * 0.0015), cx, cy);
+      setMode("frei");
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });  // eslint-disable-line react-hooks/exhaustive-deps
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    const pts = new Map<number, [number, number]>([[e.pointerId, [e.clientX, e.clientY]]]);
+    const start: [number, number] = [e.clientX, e.clientY];
+    dragged.current = false;
+    const move = (ev: PointerEvent) => {
+      const prev = pts.get(ev.pointerId);
+      if (!prev && pts.size >= 2) return;
+      pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
+      const r = svgRef.current!.getBoundingClientRect(), v = viewRef.current!;
+      if (pts.size === 1 && prev) {
+        if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 5) dragged.current = true;
+        if (!dragged.current) return;
+        const k = v.s / r.width;
+        setView({ ...v, x: v.x - (ev.clientX - prev[0]) * k, y: v.y - (ev.clientY - prev[1]) * k });
+        setMode("frei");
+      } else if (pts.size === 2 && prev) {
+        const [a, b] = [...pts.values()];
+        const other = a === pts.get(ev.pointerId) ? b : a;
+        const before = Math.hypot(prev[0] - other[0], prev[1] - other[1]);
+        const after = Math.hypot(ev.clientX - other[0], ev.clientY - other[1]);
+        if (before > 0 && after > 0) {
+          dragged.current = true;
+          const [cx, cy] = toMap((ev.clientX + other[0]) / 2, (ev.clientY + other[1]) / 2);
+          zoomAt(before / after, cx, cy);
+          setMode("frei");
+        }
+      }
+    };
+    const down = (ev: PointerEvent) => pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
+    const up = (ev: PointerEvent) => {
+      pts.delete(ev.pointerId);
+      if (pts.size === 0) {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerdown", down);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerdown", down);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  // Kartenkacheln (Wege, Straßen, Wasser) nur im aufgedeckten Bereich, nachgeladen je Ausschnitt.
+  const [tiles, setTiles] = useState<HeroTile[]>([]);
+  useEffect(() => {
+    if (!view || !w?.available) return;
+    const t = setTimeout(() => {
+      const px = (svgRef.current?.clientWidth ?? 800) * Math.min(2, window.devicePixelRatio || 1);
+      api.heroWorldTiles(view.x, -(view.y + view.s), view.x + view.s, -view.y, px)
+        .then((r) => setTiles(r.tiles)).catch(() => setTiles([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [view, w?.available]);
   if (!w?.available || !view) {
     return <Card><CardTitle title="Weltkarte" sub="Erscheint, sobald GPS-Routen deiner Läufe vorliegen (Garmin)." /></Card>;
   }
@@ -118,15 +204,28 @@ export function HeroWorld({ data }: { data: Hero }) {
           <CardTitle title="Weltkarte" sub={`Deine GPS-Routen lichten den Nebel · ${discoveredCount} von ${w.regions.length} Gebieten · ${cleared} von ${dungeons.length} Verliesen · ${num(w.km2)} km² erkundet`} />
           <div className="flex shrink-0 overflow-hidden rounded border border-[#4b3a22] text-[11px]">
             {([["erkundet", "Erkundet"], ["nah", "Nahland"], ["welt", "30 km"]] as [ViewMode, string][]).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setMode(k)}
+              <button key={k} type="button" onClick={() => { setMode(k); if (k === mode && preset) setView(preset); }}
                       className={`px-2 py-1 ${mode === k ? "bg-[#2a2013] text-[#ffd100]" : "text-muted hover:text-[#ffd100]"}`}>{l}</button>
             ))}
           </div>
         </div>
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_260px]">
-          <svg viewBox={`${view.x} ${view.y} ${view.s} ${view.s}`} className="aspect-square w-full rounded-md border border-[#3a2d1a]" role="img"
-               aria-label={`Weltkarte: ${discoveredCount} von ${w.regions.length} Gebieten entdeckt`}>
+          <div className="relative">
+          <svg ref={svgRef} viewBox={`${view.x} ${view.y} ${view.s} ${view.s}`} role="img"
+               className="aspect-square w-full cursor-grab touch-none select-none rounded-md border border-[#3a2d1a] active:cursor-grabbing"
+               aria-label={`Weltkarte: ${discoveredCount} von ${w.regions.length} Gebieten entdeckt`}
+               onPointerDown={onPointerDown}
+               onClickCapture={(e) => { if (dragged.current) { e.stopPropagation(); dragged.current = false; } }}
+               onDoubleClick={(e) => { const [cx, cy] = toMap(e.clientX, e.clientY); zoomAt(0.5, cx, cy); setMode("frei"); }}>
             <defs>
+              <mask id="world-reveal" maskUnits="userSpaceOnUse" x={view.x} y={view.y} width={view.s} height={view.s}>
+                <g filter="url(#world-soft)">
+                  {w.cells.map(([i, j]) => (
+                    <rect key={`${i}:${j}`} x={i * w.cell_m - w.cell_m * 0.25} y={-(j + 1) * w.cell_m - w.cell_m * 0.25}
+                          width={w.cell_m * 1.5} height={w.cell_m * 1.5} fill="#fff" />
+                  ))}
+                </g>
+              </mask>
               <radialGradient id="world-fog" cx="50%" cy="50%" r="70%">
                 <stop offset="0" stopColor="#1b1610" /><stop offset="1" stopColor="#070605" />
               </radialGradient>
@@ -145,12 +244,17 @@ export function HeroWorld({ data }: { data: Hero }) {
             <g filter="url(#world-soft)">
               {w.cells.map(([i, j]) => (
                 <rect key={`${i}:${j}`} x={i * w.cell_m - w.cell_m * 0.15} y={-(j + 1) * w.cell_m - w.cell_m * 0.15}
-                      width={w.cell_m * 1.3} height={w.cell_m * 1.3} fill="#d9c08a" opacity=".55" />
+                      width={w.cell_m * 1.3} height={w.cell_m * 1.3} fill="#d9c08a" opacity={tiles.length ? 0.18 : 0.55} />
               ))}
             </g>
+            {tiles.length > 0 && <g mask="url(#world-reveal)" style={{ filter: TILE_FILTER }}>
+              {tiles.map((t) => (
+                <image key={t.key} href={api.heroTileUrl(t.key)} x={t.x} y={t.y} width={t.w + 0.5} height={t.h + 0.5} preserveAspectRatio="none" />
+              ))}
+            </g>}
             {w.routes.map((r) => (
               <polyline key={r.date + r.points.length} points={r.points.map(([x, y]) => `${x},${-y}`).join(" ")}
-                        fill="none" stroke="#e3b64f" strokeOpacity=".75" strokeWidth={Math.max(view.s / 260, 25)} strokeLinejoin="round" strokeLinecap="round" />
+                        fill="none" stroke="#e3b64f" strokeOpacity={tiles.length ? 0.6 : 0.75} strokeWidth={Math.max(view.s / (tiles.length ? 420 : 260), 6)} strokeLinejoin="round" strokeLinecap="round" />
             ))}
             {rings.map((ring, ri) => {
               const inner = ri ? rings[ri - 1].outer_m : w.core_m;
@@ -177,6 +281,14 @@ export function HeroWorld({ data }: { data: Hero }) {
               <text x="0" y={view.s / 28} textAnchor="middle" fontSize={font * 0.8} fill="#efe3c8" stroke="#000" strokeWidth={font / 7} style={{ paintOrder: "stroke" }}>Zitadelle · Heimat</text>
             </g>
           </svg>
+          <div className="absolute right-2 top-2 flex flex-col overflow-hidden rounded border border-[#4b3a22] bg-black/70 text-[15px] leading-none">
+            <button type="button" aria-label="Hineinzoomen" onClick={() => { zoomAt(0.6); setMode("frei"); }} className="px-2.5 py-1.5 text-[#efe3c8] hover:text-[#ffd100]">+</button>
+            <button type="button" aria-label="Herauszoomen" onClick={() => { zoomAt(1 / 0.6); setMode("frei"); }} className="border-t border-[#4b3a22] px-2.5 py-1.5 text-[#efe3c8] hover:text-[#ffd100]">−</button>
+            <button type="button" aria-label="Zur Heimat" title="Zur Heimat" onClick={() => { setPicked(null); setMode("erkundet"); if (mode === "erkundet" && preset) setView(preset); }}
+                    className="border-t border-[#4b3a22] px-2.5 py-1.5 text-[12px] text-[#efe3c8] hover:text-[#ffd100]">⌂</button>
+          </div>
+          <p className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-muted">Ziehen · Mausrad oder zwei Finger zoomen · Doppelklick</p>
+          </div>
           <div className="space-y-3 text-[12px]">
             {focus && <section className="rounded border border-[#4b3a22] bg-black/40 p-2">
               <div className="flex items-baseline justify-between gap-2">
@@ -260,7 +372,19 @@ export function HeroWorld({ data }: { data: Hero }) {
           <span><span style={{ color: KIND_COLOR.schatz }}>■</span> Schatz: Gold</span>
           <span>Stufe: <span style={{ color: "#40c040" }}>leicht</span> · <span style={{ color: "#ffff00" }}>ebenbürtig</span> · <span style={{ color: "#ff3b3b" }}>gefährlich</span></span>
         </div>
-        <p className="mt-1 text-[10px] text-muted">Ein Abschnitt gilt als bezwungen, wenn ein Lauf ihn zu 80 % abdeckt (50 m Toleranz) · Strecken erscheinen, sobald der Nebel in ihrer Nähe fällt · Wege © OpenStreetMap-Mitwirkende, geroutet mit BRouter · keine absoluten Koordinaten.</p>
+        <details className="mt-2 rounded border border-[#3a2d1a] bg-black/30 px-3 py-2 text-[12px]">
+          <summary className="wow-title cursor-pointer text-[#ffd100]">Wie decke ich auf?</summary>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[#d8c9a6]">
+            <li><b>Nebel:</b> Die Karte ist in 150-m-Felder geteilt. Jedes Feld, durch das deine GPS-Spur läuft, wird aufgedeckt – du legst also einen rund 150 m breiten Streifen frei. Es zählen nur Läufe mit GPS (Garmin).</li>
+            <li><b>Gebiet:</b> entdeckt, sobald ein einziges Feld darin aufgedeckt ist.</li>
+            <li><b>Schrein / Schatz:</b> gefunden, wenn deine Spur auf etwa 250 m herankommt (Grenzland 400 m, Fernland 600 m).</li>
+            <li><b>Verlies sichtbar:</b> Die Strecke erscheint, sobald aufgedeckte Felder etwa 300 m an sie heranreichen – oder du ein Stück davon läufst.</li>
+            <li><b>Abschnitt bezwungen:</b> Ein einzelner Lauf muss 80 % des Abschnitts abdecken; als abgedeckt gilt ein Streckenpunkt, wenn deine Spur höchstens 50 m entfernt war. Die Richtung ist egal.</li>
+            <li><b>Verlies bezwungen:</b> alle Abschnitte, gern über mehrere Läufe verteilt. Alle in <i>einem</i> Lauf = heroisch.</li>
+            <li><b>Wege & Straßen</b> der Karte erscheinen nur in aufgedeckten Feldern.</li>
+          </ul>
+        </details>
+        <p className="mt-1 text-[10px] text-muted">Ein Abschnitt gilt als bezwungen, wenn ein Lauf ihn zu 80 % abdeckt (50 m Toleranz) · Strecken erscheinen, sobald der Nebel in ihrer Nähe fällt · Karte und Wege © OpenStreetMap-Mitwirkende, Verliese geroutet mit BRouter · keine absoluten Koordinaten.</p>
       </Card>
       <HeroExpeditions dungeons={dungeons} heroLevel={heroLevel} onPick={pick} />
     </div>

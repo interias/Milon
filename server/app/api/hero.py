@@ -1,10 +1,10 @@
 """Heldenreise (Gamification): Cockpit lesen, Wochentruhe wählen."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from .. import hero
+from .. import hero, hero_world
 
 router = APIRouter(prefix="/hero", tags=["hero"])
 
@@ -38,6 +38,22 @@ class UnequipInput(BaseModel):
 @router.get("")
 def get_hero() -> dict:
     return hero.overview()
+
+
+@router.get("/world/tiles")
+def world_tiles(x0: float, y0: float, x1: float, y1: float, px: int = Query(1000, ge=100, le=8000)) -> dict:
+    return hero_world.tiles(x0, y0, x1, y1, px)
+
+
+@router.get("/world/tile/{key}")
+def world_tile(key: str) -> Response:
+    try:
+        data = hero_world.tile_png(key)
+    except OSError as e:
+        raise HTTPException(502, f"Kachel nicht ladbar: {e}") from e
+    if data is None:
+        raise HTTPException(404, "Kachel nicht im aufgedeckten Bereich")
+    return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
 
 
 @router.post("/vault/claim")

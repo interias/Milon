@@ -198,6 +198,7 @@ export type HeroDaily = { date: string; key: string; title: string; goal: string
 export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
 export type HeroBag = { id: string; name: string; slots: number; date: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
+export type HeroTile = { key: string; x: number; y: number; w: number; h: number };
 export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
   km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
   cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string;
@@ -478,6 +479,9 @@ export const api = {
   heroSell: (itemId: string) => post<{ gold: number }>("/hero/sell", { item_id: itemId }),
   heroBuy: (kind: "listing" | "potion", ref: string) => post<{ kind: string; price: number }>("/hero/buy", { kind, ref }),
   heroDrink: (key: string) => post<{ key: string }>("/hero/drink", { key }),
+  heroWorldTiles: (x0: number, y0: number, x1: number, y1: number, px: number) =>
+    get<{ z: number | null; tiles: HeroTile[] }>(`/hero/world/tiles?x0=${Math.round(x0)}&y0=${Math.round(y0)}&x1=${Math.round(x1)}&y1=${Math.round(y1)}&px=${Math.round(px)}`),
+  heroTileUrl: (key: string) => `${BASE}/hero/world/tile/${key}`,
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),

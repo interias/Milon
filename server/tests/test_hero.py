@@ -514,3 +514,29 @@ def test_route_dungeon_segments_and_heroic(monkeypatch):
     monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 7), half)])
     d = next(x for x in hero_world.world()["dungeons"] if x["key"] == "auesee")
     assert d["discovered"] and not d["cleared"] and not d["heroic"] and any(s["cleared"] for s in d["segments"])
+
+
+def test_world_tiles_only_in_explored_area(monkeypatch, tmp_path):
+    from app import hero_world
+    home = (51.66, 6.62)
+    east = [(home[0], home[1] + i * 0.0005) for i in range(40)]
+    hero_world._memo.clear()
+    monkeypatch.setattr(hero_world, "_routes", lambda: [(date(2026, 10, 1), east)])
+    monkeypatch.setattr(hero_world, "TILE_DIR", tmp_path)
+    hero_world.world()
+    r = hero_world.tiles(-500, -500, 2000, 500, 1000)
+    assert r["z"] and r["tiles"] and all(t["key"].startswith(f"{r['z']}_") for t in r["tiles"])
+    assert all(abs(t["x"]) < 5000 and abs(t["y"]) < 5000 for t in r["tiles"])  # nur Meter relativ zur Heimat
+    assert hero_world.tiles(-9000, 8000, -8000, 9000, 1000)["tiles"] == []  # Nebel: keine Kacheln
+    calls = []
+
+    class Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"\x89PNGfake"
+    monkeypatch.setattr(hero_world.urllib.request, "urlopen", lambda req, timeout: calls.append(req.full_url) or Resp())
+    key = r["tiles"][0]["key"]
+    assert hero_world.tile_png(key) == b"\x89PNGfake" and hero_world.tile_png(key) == b"\x89PNGfake"
+    assert len(calls) == 1 and calls[0].startswith("https://tile.openstreetmap.org/")  # zweiter Abruf aus dem Cache
+    z = int(key.split("_")[0])
+    assert hero_world.tile_png(f"{z}_500_500") is None and hero_world.tile_png("x") is None
