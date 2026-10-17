@@ -36,6 +36,24 @@ class GarminRoute(SQLModel, table=True):
     synced_at: datetime
 
 
+class GarminRide(SQLModel, table=True):
+    """Cycling GPS tracks live apart from runs: every GarminRoute reader stays run-only."""
+    __tablename__ = "garmin_rides"
+
+    activity_id: str = Field(primary_key=True)
+    activity_type: str | None = None
+    title: str
+    started_at: datetime = Field(index=True)
+    started_at_utc: str | None = None
+    distance_km: float | None = None
+    duration_seconds: float | None = None
+    elapsed_duration_seconds: float | None = None
+    elevation_gain_m: float | None = None
+    point_count: int
+    segments_json: str
+    synced_at: datetime
+
+
 class _NoDoctype(ET.TreeBuilder):
     def doctype(self, name, pubid, system):
         raise ValueError("GPX-Dateien mit DTD sind nicht erlaubt.")
@@ -165,12 +183,11 @@ def _validated_segments(segments: list) -> list[list[dict]]:
     return cleaned
 
 
-def save_route(summary: dict, segments: list) -> dict:
-    """Upsert a route by Garmin ID without creating or changing exercise sessions."""
+def _route_values(summary: dict, segments: list, default_title: str) -> dict:
     activity_id = summary.get("activity_id")
     if not isinstance(activity_id, str) or not activity_id.strip() or len(activity_id) > 128:
         raise ValueError("Eine gültige Garmin-Aktivitäts-ID ist erforderlich.")
-    title = summary.get("title") or "Lauf"
+    title = summary.get("title") or default_title
     if not isinstance(title, str):
         raise ValueError("Ungültiger Aktivitätstitel.")
     started_at = _datetime(summary.get("started_at"), "started_at")
@@ -190,14 +207,38 @@ def save_route(summary: dict, segments: list) -> dict:
               "synced_at": datetime.now(timezone.utc).replace(tzinfo=None)}
     for field in ("distance_km", "duration_seconds", "elapsed_duration_seconds", "elevation_gain_m"):
         values[field] = _number(summary.get(field), field, nonnegative=True)
-    statement = insert(GarminRoute).values(**values)
+    return values
+
+
+def _upsert(session: Session, model, values: dict) -> None:
+    statement = insert(model).values(**values)
     statement = statement.on_conflict_do_update(
         index_elements=["activity_id"],
         set_={key: getattr(statement.excluded, key) for key in values if key != "activity_id"})
+    session.execute(statement)
+    session.commit()
+
+
+def save_route(summary: dict, segments: list) -> dict:
+    """Upsert a route by Garmin ID without creating or changing exercise sessions."""
+    values = _route_values(summary, segments, "Lauf")
     with Session(engine) as session:
-        session.execute(statement)
-        session.commit()
+        _upsert(session, GarminRoute, values)
         return _summary(session.get(GarminRoute, values["activity_id"]), session)
+
+
+def save_ride(summary: dict, segments: list) -> dict:
+    """Upsert a cycling track into its own table; runs, sessions and run metrics stay untouched."""
+    values = _route_values(summary, segments, "Radfahrt")
+    activity_type = summary.get("activity_type")
+    if activity_type is not None and (not isinstance(activity_type, str) or len(activity_type) > 64):
+        raise ValueError("Ungültiger Aktivitätstyp.")
+    values["activity_type"] = activity_type
+    with Session(engine) as session:
+        _upsert(session, GarminRide, values)
+    return {"activity_id": values["activity_id"], "activity_type": activity_type,
+            "started_at": values["started_at"].isoformat(), "distance_km": values["distance_km"],
+            "point_count": values["point_count"]}
 
 
 def _matched_external_id(route: GarminRoute, session: Session) -> str | None:
