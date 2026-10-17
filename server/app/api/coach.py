@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlmodel import Session
 
-from ..coach import client, prompts, snapshot, tools, visuals
+from ..coach import briefing, client, prompts, snapshot, tools, visuals
 from ..db import engine
 from ..models import CoachReport
 
@@ -166,6 +166,14 @@ def stats() -> dict:
         "cost_7d_usd": _cost(last7),
         "tokens_7d": _tok(last7),
     }
+
+
+@router.get("/briefing/today")
+def briefing_today() -> dict:
+    """Heutiges Morgenbriefing (entsteht automatisch, siehe coach/briefing); `briefing` = None, solange keins da ist."""
+    day = briefing._now().date()
+    report = briefing.report_for(day)
+    return {"date": day.isoformat(), "briefing": briefing.as_dict(report) if report else None}
 
 
 @router.get("/snapshot")

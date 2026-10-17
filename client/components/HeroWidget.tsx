@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Hero } from "@/lib/api";
+import { api, type Briefing, type Hero } from "@/lib/api";
+import { briefingHeadline } from "@/components/BriefingCard";
 import { de0 } from "@/lib/format";
 
 // Kompakter Einheitenrahmen für die Übersicht: Stufe, EP, Tagesaufgabe, Truhe, Event — Link zur Heldenreise.
 export function HeroWidget() {
   const [hero, setHero] = useState<Hero | null>(null);
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
   useEffect(() => { api.hero().then(setHero).catch(() => {}); }, []);
+  useEffect(() => { api.coachBriefingToday().then((d) => setBriefing(d.briefing)).catch(() => {}); }, []);
   if (!hero) return null;
   const h = hero.hero, cur = hero.vault.current, d = hero.daily?.today, ev = hero.event;
   const max = Math.max(...cur.slots.map((s) => s.threshold));
@@ -43,6 +46,9 @@ export function HeroWidget() {
           ))}
         </div>
       </div>
+      {briefing && <p className="mt-2 truncate border-t pt-2 text-[11px]" style={{ borderColor: "#3a2d1a", color: "#cfc3a8" }}>
+        <b style={{ color: "#ffd100" }}>Morgenbriefing:</b> {briefingHeadline(briefing.content)}
+      </p>}
     </Link>
   );
 }

@@ -9,6 +9,7 @@ import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { CheckIn, CHECKINS_CHANGED } from "@/components/CheckIn";
 import { HeroWidget } from "@/components/HeroWidget";
 import { WeatherCard } from "@/components/WeatherCard";
+import { BriefingCard } from "@/components/BriefingCard";
 import { WeeklyReview } from "@/components/WeeklyReview";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
@@ -139,7 +140,7 @@ export default function Overview() {
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
     <div className="grid gap-4 xl:grid-cols-3">
-      <div className="min-w-0 xl:col-span-2"><WeatherCard /></div>
+      <div className="min-w-0 xl:col-span-2"><WeatherCard /><BriefingCard /></div>
       <div className="grid min-w-0 gap-4 md:grid-cols-3 xl:flex xl:flex-col">
         <KpiTile title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper"
           value={b?.weight_avg7 != null ? de(b.weight_avg7, 1) : null} unit="kg"
