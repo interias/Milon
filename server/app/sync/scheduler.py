@@ -1,6 +1,8 @@
 """Phase-2-Automatik: geplante Quell-Syncs via APScheduler.
 - Hevy: API-Polling (alle 6 h)
 - FDDB: taeglich (Auto-Login -> CSV-Export)
+- Morgenbriefing des Coaches: nach dem Garmin-Sync + Pruefung alle 5 min (einmal je Tag, siehe coach/briefing)
+- Wochenbericht des Coaches: ab So 23:30, Pruefung alle 30 min, Nachholen bis zum naechsten So (siehe coach/weekly_auto)
 - Health Connect: taeglicher Drive-Pull (05:00, wenn GOOGLE_API_KEY + HC_DRIVE_FOLDER_ID gesetzt)
   PLUS Ordner-Scan auf data/incoming/ (alle 10 min) -> importiert auch manuell abgelegte Dateien.
 Jeder Lauf schreibt Status/Detail nach sync_state.
@@ -8,6 +10,7 @@ Jeder Lauf schreibt Status/Detail nach sync_state.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -71,6 +74,26 @@ def sync_garmin() -> None:
         record_sync("garmin", "ok", json.dumps(garmin.import_garmin()))
     except Exception as e:  # Garmin importer exposes only sanitized failures.
         record_sync("garmin", "error", str(e))
+        return
+    sync_briefing()  # liegt die Hauptnacht jetzt vor, entsteht das Briefing sofort
+
+
+def sync_briefing() -> None:
+    """Morgenbriefing, sobald faellig (idempotent je Tag); Fehler nur loggen, naechster Lauf versucht es erneut."""
+    from ..coach import briefing
+    try:
+        briefing.maybe_run()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Morgenbriefing fehlgeschlagen", exc_info=True)
+
+
+def sync_weekly_report() -> None:
+    """Wochenbericht ab Sonntag 23:30, sonst Nachholen bis zum naechsten Sonntag (idempotent je ISO-Woche)."""
+    from ..coach import weekly_auto
+    try:
+        weekly_auto.maybe_run()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Wochenbericht fehlgeschlagen", exc_info=True)
 
 
 def sync_hc_if_new() -> None:
@@ -110,6 +133,8 @@ def start_scheduler() -> None:
     sch = BackgroundScheduler(timezone=tz) if tz else BackgroundScheduler()
     sch.add_job(sync_hevy, "interval", hours=6, id="hevy", replace_existing=True)
     sch.add_job(sync_garmin, "interval", minutes=15, id="garmin", replace_existing=True)
+    sch.add_job(sync_briefing, "interval", minutes=5, id="briefing", replace_existing=True)
+    sch.add_job(sync_weekly_report, "interval", minutes=30, id="weekly_report", replace_existing=True)
     sch.add_job(sync_fddb, "cron", hour=4, minute=30, id="fddb", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())

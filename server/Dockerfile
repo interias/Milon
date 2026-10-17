@@ -6,7 +6,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1     TZ=Europe/Berlin
+# TZ: naive datetime.now() (coach_reports, budget month) must be local wall time; the slim image ships /usr/share/zoneinfo.
 
 WORKDIR /app/server
 
@@ -24,6 +25,7 @@ RUN pip install \
       "pydantic-settings>=2.5" \
       "httpx>=0.27,<1" \
       "openai>=2.43" \
+      "anthropic>=1.15" \
       "tzdata>=2025.1" \
       "apscheduler>=3.10" \
       "pytz>=2024.1" \
