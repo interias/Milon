@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, dungeonFileUrl, type Hero, type HeroDungeon, type HeroPlace, type HeroTile } from "@/lib/api";
+import { api, dungeonFileUrl, type Hero, type HeroDungeon, type HeroOwnRoute, type HeroPlace, type HeroTile } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { dm } from "@/lib/format";
 
 const TIP_YELLOW = "#ffd100";
 const DUNGEON = "#c08cff";
+const RUN_TRACK = "#e3b64f";
+const RIDE_TRACK = "#8fd16f";  // Radspur: grün gestrichelt, klar von der goldenen Laufspur abgesetzt
 const DIRS = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"];
 const KIND_COLOR: Record<HeroPlace["kind"], string> = { schrein: "#6fd3e8", schatz: TIP_YELLOW };
-const TYPE_ICON: Record<string, string> = { wasser: "🌊", wald: "🌲", aue: "🪶", deich: "🏰", feld: "🌾", dorf: "🏘️" };
-const TYPE_ORDER = ["wasser", "wald", "aue", "deich", "feld", "dorf"];
+const TYPE_ICON: Record<string, string> = { wasser: "🌊", wald: "🌲", aue: "🪶", deich: "🏰", feld: "🌾", dorf: "🏘️", eigen: "🧭" };
+const TYPE_ORDER = ["wasser", "wald", "aue", "deich", "feld", "dorf", "eigen"];
 type ViewMode = "erkundet" | "nah" | "welt" | "fokus" | "frei" | "folgen";
 // Kartenkacheln im Pergament-Ton der Seite
 const TILE_FILTER = "sepia(.65) saturate(.8) brightness(.6) contrast(1.12)";
@@ -149,7 +151,7 @@ function PlaceInfo({ p, onTarget, isTarget }: { p: HeroPlace; onTarget?: () => v
     <p className="wow-title pr-4 text-[13px]" style={{ color: MARK_COLOR[p.kind] }}>{p.name}</p>
     <p className="text-[11px] text-muted">{p.kind_label} · Stufe {p.level} · {p.region}</p>
     <p className="mt-1">Belohnung: {p.xp} EP{p.gold ? `, ${p.gold} Gold` : ""}</p>
-    {p.found_on && <p className="text-[11px] text-[#40c040]">gefunden am {dm(p.found_on)}</p>}
+    {p.found_on && <p className="text-[11px] text-[#40c040]">gefunden am {dm(p.found_on)}{p.via === "rad" ? " · zu Rad (halbe Belohnung)" : ""}</p>}
     {p.provisional && <p className="text-[11px] text-[#6fd3e8]">vorläufig gefunden (Live)</p>}
     {onTarget && <TargetButton onClick={onTarget} active={!!isTarget} />}
   </>;
@@ -175,7 +177,7 @@ function DungeonInfo({ d, heroLevel, onDetails, onTarget, isTarget }: { d: HeroD
 }
 
 // --- Weltkarte: echte GPS-Routen decken den Nebel auf; Verliese sind echte Strecken -----------------
-export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap; compact?: boolean }) {
+export function HeroWorld({ data, live, compact, onChanged }: { data: Hero; live?: LiveMap; compact?: boolean; onChanged?: () => void | Promise<void> }) {
   const w = data.world;
   const [mode, setMode] = useState<ViewMode>(live ? "folgen" : "erkundet");
   const livePos = live?.pos ?? null;
@@ -384,7 +386,12 @@ export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap;
             </g>}
             {w.routes.map((r) => (
               <polyline key={r.date + r.points.length} points={r.points.map(([x, y]) => `${x},${-y}`).join(" ")}
-                        fill="none" stroke="#e3b64f" strokeOpacity={tiles.length ? 0.6 : 0.75} strokeWidth={Math.max(view.s / (tiles.length ? 420 : 260), 6)} strokeLinejoin="round" strokeLinecap="round" />
+                        fill="none" stroke={RUN_TRACK} strokeOpacity={tiles.length ? 0.6 : 0.75} strokeWidth={Math.max(view.s / (tiles.length ? 420 : 260), 6)} strokeLinejoin="round" strokeLinecap="round" />
+            ))}
+            {(w.rides ?? []).map((r) => (
+              <polyline key={"rad" + r.date + r.points.length} points={r.points.map(([x, y]) => `${x},${-y}`).join(" ")} data-testid="ride-route"
+                        fill="none" stroke={RIDE_TRACK} strokeOpacity={0.85} strokeWidth={Math.max(view.s / 600, 4)}
+                        strokeDasharray={`${view.s / 90} ${view.s / 140}`} strokeLinejoin="round" strokeLinecap="round" />
             ))}
             {lv && lv.cells.length > 0 && <g filter="url(#world-soft)" data-testid="live-cells">
               {lv.cells.map(([i, j]) => (
@@ -539,7 +546,7 @@ export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap;
                         <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[#0a0807]">
                           <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.pct * 4)}%`, background: r.discovered ? "#d9c08a" : "transparent" }} />
                         </div>
-                        {r.discovered && r.discovered_on && <p className="text-[10px] text-muted">entdeckt am {dm(r.discovered_on)}</p>}
+                        {r.discovered && r.discovered_on && <p className="text-[10px] text-muted">entdeckt am {dm(r.discovered_on)}{r.via === "rad" ? " · zu Rad" : ""}</p>}
                       </li>
                     ))}
                   </ul>
@@ -550,6 +557,8 @@ export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap;
         </div>
         {!compact && <>
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+          <span><span style={{ color: RUN_TRACK }}>━</span> Laufspur</span>
+          <span data-testid="legend-ride"><span style={{ color: RIDE_TRACK }}>┅</span> Radspur (halbe Sicht, halbe Erkundungs-EP)</span>
           <span><span style={{ color: DUNGEON }}>━</span> Verlies-Strecke (gestrichelt = Abschnitt offen)</span>
           <span><span style={{ color: KIND_COLOR.schrein }}>◆</span> Schrein: 100 EP</span>
           <span><span style={{ color: KIND_COLOR.schatz }}>■</span> Schatz: Gold</span>
@@ -559,6 +568,7 @@ export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap;
           <summary className="wow-title cursor-pointer text-[#ffd100]">Wie decke ich auf?</summary>
           <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[#d8c9a6]">
             <li><b>Nebel:</b> Du siehst rund 300 m weit – alles in diesem Umkreis um deine GPS-Spur wird aufgedeckt, also ein gut 600 m breiter Streifen. Läufst du eine geschlossene Runde, ist auch die Fläche darin aufgedeckt. Es zählen nur Läufe mit GPS (Garmin).</li>
+            <li><b>Zu Rad:</b> Radfahrten mit GPS decken mit halber Sichtweite (rund 150 m) auf und finden Gebiete, Schreine und Schätze – für halbe Erkundungs-EP und halbes Gold. Verlies-Abschnitte zählen nur zu Fuß. Wer etwas am selben Tag zu Fuß findet, bekommt die volle Belohnung.</li>
             <li><b>Gebiet:</b> entdeckt, sobald ein einziges Feld darin aufgedeckt ist.</li>
             <li><b>Schrein / Schatz:</b> gefunden, sobald er in Sichtweite kommt.</li>
             <li><b>Verlies sichtbar:</b> Die Strecke erscheint, sobald ein Stück davon in Sichtweite liegt.</li>
@@ -571,6 +581,7 @@ export function HeroWorld({ data, live, compact }: { data: Hero; live?: LiveMap;
         </>}
       </Card>
       <HeroExpeditions dungeons={dungeons} heroLevel={heroLevel} onPick={pick} />
+      {!compact && <HeroOwnRoutes onChanged={onChanged} onPick={pick} />}
     </div>
   );
 }
@@ -630,6 +641,92 @@ function HeroExpeditions({ dungeons, heroLevel, onPick }: { dungeons: HeroDungeo
         })}
       </div>
       <p className="mt-2 text-[10px] text-muted">Klick zeigt das Verlies auf der Karte · Stufe = Entfernung von der Heimat + Streckenlänge · Titel: Verliesgänger, Seenwächter, Hüter der Wälder, Dorfchronist, Deichgraf, Auenläufer, Feldherr, Heroischer Pfadfinder.</p>
+    </Card>
+  );
+}
+
+// --- Eigene Strecken: GPX als privates Verlies oder als gelaufene Spur ----------------------------
+function HeroOwnRoutes({ onChanged, onPick }: { onChanged?: () => void | Promise<void>; onPick: (key: string) => void }) {
+  const [list, setList] = useState<HeroOwnRoute[] | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const refresh = () => api.heroOwnRoutes().then(setList).catch(() => setList([]));
+  useEffect(() => { refresh(); }, []);
+
+  async function upload(mode: "dungeon" | "track") {
+    if (!file) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.heroOwnImport(file, mode);
+      setMsg({ ok: true, text: r.kind === "dungeon"
+        ? `Verlies „${r.name}“ angelegt · ${num(r.length_km)} km · ${r.segments} Abschnitte · Stufe ${r.level}`
+        : `${r.name} importiert · ${num(r.length_km)} km${r.superseded ? " · zur selben Zeit gibt es einen Garmin-Lauf, der zählt" : ""}` });
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      await refresh();
+      await onChanged?.();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    try {
+      await api.heroOwnDelete(id);
+      setConfirm(null);
+      await refresh();
+      await onChanged?.();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const btn = "rounded border border-[#4b3a22] px-2 py-1 text-[11px] text-[#ffd100] hover:bg-[#2a2013] disabled:opacity-40";
+  return (
+    <Card>
+      <CardTitle title="Eigene Strecken" sub="GPX-Datei (Track oder Route) als eigenes Verlies oder als gelaufene Spur · privat, nur auf deiner Karte" />
+      <div className="flex flex-wrap items-center gap-2 text-[12px]">
+        <input ref={inputRef} type="file" accept=".gpx,application/gpx+xml" disabled={busy} aria-label="GPX-Datei wählen"
+               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setMsg(null); }}
+               className="min-w-0 max-w-full text-base text-muted file:mr-2 file:rounded file:border file:border-[#4b3a22] file:bg-black/30 file:px-2 file:py-1 file:text-[#ffd100] sm:text-[12px]" />
+        <button type="button" className={btn} disabled={!file || busy} onClick={() => upload("dungeon")}>Als eigenes Verlies</button>
+        <button type="button" className={btn} disabled={!file || busy} onClick={() => upload("track")}>Als gelaufene Spur</button>
+      </div>
+      <p data-testid="komoot-hint" className="mt-2 text-[11px] text-muted">Komoot: Tour in Komoot als GPX exportieren und hier hochladen.</p>
+      {msg && <p className="mt-2 text-[12px]" style={{ color: msg.ok ? "#40c040" : "#ff6b6b" }}>{msg.text}</p>}
+      {list && list.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-[12px]">
+          {list.map((o) => (
+            <li key={o.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-[#3a2d1a] bg-black/30 px-2 py-1.5">
+              <span className="min-w-0 truncate">
+                <span className="mr-1 rounded border border-[#4b3a22] px-1 text-[10px] text-[#cbb98f]">eigen</span>
+                {o.kind === "dungeon" && o.key
+                  ? <button type="button" onClick={() => onPick(o.key!)} className="font-semibold hover:underline" style={{ color: DUNGEON }}>{TYPE_ICON.eigen} {o.name}</button>
+                  : <span className="font-semibold text-[#efe3c8]">{o.name}</span>}
+                <span className="text-[10px] text-muted"> · {num(o.length_km)} km
+                  {o.kind === "dungeon" ? ` · Stufe ${o.level} · ${o.segments} Abschnitte · ${o.cleared ? "bezwungen" : o.discovered ? "entdeckt" : "im Nebel"}`
+                    : o.superseded ? " · Garmin-Lauf zur selben Zeit zählt" : " · deckt den Nebel auf"}</span>
+              </span>
+              {confirm === o.id
+                ? <span className="flex shrink-0 gap-1.5">
+                    <button type="button" className={btn} disabled={busy} onClick={() => remove(o.id)}>Sicher? Löschen</button>
+                    <button type="button" className="text-[11px] text-muted hover:text-[#ffd100]" onClick={() => setConfirm(null)}>abbrechen</button>
+                  </span>
+                : <button type="button" className="shrink-0 text-[11px] text-muted hover:text-[#ff6b6b]" onClick={() => setConfirm(o.id)}>löschen</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[10px] text-muted">Verlies: 2–4 Abschnitte nach Länge, Stufe aus Entfernung und Länge, Abschnitte zählen erst durch Läufe ab dem Importtag. Spur: nur mit Zeitstempeln, deckt den Nebel auf wie ein Garmin-Lauf (ein Garmin-Lauf zur selben Zeit hat Vorrang), zählt aber nicht als Lauf. Mindestens 2 km, alle Punkte innerhalb der Weltkarte, höchstens 10 MiB. Löschen entfernt auch Fortschritt und Beute des Verlieses.</p>
     </Card>
   );
 }

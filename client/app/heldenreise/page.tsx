@@ -6,7 +6,7 @@ import { api, type Achievements, type Hero, type HeroItem, type Weather } from "
 import { play } from "@/lib/hero-sound";
 import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
-import { HeroDuel, HeroMounts, HeroSagaCard } from "@/components/HeroDuels";
+import { HeroDuel, HeroMounts, HeroMythic, HeroSagaCard } from "@/components/HeroDuels";
 import { HeroAuction, HeroPotions } from "@/components/HeroTrade";
 import { HeroWorld } from "@/components/HeroWorld";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
@@ -170,7 +170,7 @@ export default function Heldenreise() {
                     <div id="ab-instanzen"><HeroDungeons data={hero} /></div>
                   </div>
                   <div id="ab-duell" className="scroll-mt-32"><HeroDuel data={hero} /></div>
-                  <div id="ab-karte" className="scroll-mt-32"><HeroWorld data={hero} /></div>
+                  <div id="ab-karte" className="scroll-mt-32"><HeroWorld data={hero} onChanged={load} /></div>
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
                 {tab === "handel" && <>
@@ -190,6 +190,7 @@ export default function Heldenreise() {
                 </>}
                 {tab === "sammlung" && <>
                   <HeroMounts data={hero} onChoose={async (key) => { await api.heroMount(key); play("equip"); await load(); }} />
+                  <HeroMythic data={hero} />
                   {ach ? <><AchievementsSummary data={ach} showLevel={false} /><AchievementsGrid data={ach} collapsible /></> : <Loading />}
                 </>}
                 {tab === "log" && <HeroLog data={hero} listClass="max-h-[70vh]" />}

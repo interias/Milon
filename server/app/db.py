@@ -25,6 +25,9 @@ def init_db() -> None:
     from . import garmin_weather, run_context, run_reference, coach_actions  # noqa: F401
     from . import garmin_load  # noqa: F401 -- optional Garmin running tolerance
     from . import hero  # noqa: F401 -- gamification state (start day, vault claims)
+    from . import hero_keystone  # noqa: F401 -- Mythisch+ keystones per dungeon
+    from . import hero_events_live  # noqa: F401 -- spontaneous events during a keystone run
+    from . import hero_import  # noqa: F401 -- own GPX dungeons and walked tracks
 
     SQLModel.metadata.create_all(engine)
     _run_migrations()
@@ -74,6 +77,9 @@ def _run_migrations() -> None:
         if cols("hero_live_points"):
             con.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_hero_live_points_session_ts "
                                 "ON hero_live_points (session, ts)")
+        if cols("hero_keystones"):
+            con.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_hero_keystones_session_status "
+                                "ON hero_keystones (session, status)")
         checkin_cols = cols("checkins")
         if checkin_cols and "sick" not in checkin_cols:
             con.exec_driver_sql("ALTER TABLE checkins ADD COLUMN sick BOOLEAN")

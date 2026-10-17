@@ -207,22 +207,48 @@ export type HeroItem = {
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
   week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
+  stone_level?: number | null;
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
 export type HeroDaily = { date: string; key: string; title: string; goal: string; done: boolean; sick: boolean };
 export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
 export type HeroBag = { id: string; name: string; slots: number; date: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
+// Eigene, per GPX importierte Strecke (privat): Verlies oder gelaufene Spur – ohne Koordinaten.
+export type HeroOwnRoute = { id: string; kind: "dungeon" | "track"; name: string; own: true; length_km: number; created_on: string;
+  day?: string; superseded?: boolean; key?: string; level?: number; region?: string | null; segments?: number; discovered?: boolean; cleared?: boolean };
 export type HeroTile = { key: string; x: number; y: number; w: number; h: number };
 export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
   km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
-  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean;
+  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean; own?: boolean;
   segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number; live_coverage?: number; provisional?: boolean }[] };
 export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
-  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null; provisional?: boolean };
+  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; via?: "fuss" | "rad" | null; closest_m?: number | null; provisional?: boolean };
 export type HeroLiveFind = { kind: "gebiet" | "schrein" | "schatz" | "abschnitt" | "verlies_entdeckt" | "verlies"; id: string; name: string; xp: number; provisional: true };
 export type HeroLiveTarget = { kind: "poi" | "dungeon"; id: string; name: string; chosen: boolean; label: string; level: number; bearing_deg: number | null; distance_m: number | null };
+export type HeroKeystoneAffix = { key: string; name: string; desc: string; kind?: "gewaehlt" | "woche" | "wetter" };
+export type HeroLiveKeystone = {
+  id: number; dungeon: string; name: string; level: number; affixes: HeroKeystoneAffix[]; time_limit_s: number;
+  clock_started: boolean; remaining_s: number | null; segments: { boss: string; coverage: number; cleared: boolean }[];
+  segments_cleared: number; segments_total: number; provisional: boolean;
+};
+export type HeroKeystonePreview = {
+  dungeon: string; name: string; length_km: number; key_level: number; max_level: number; levels: number[];
+  suggested_level: { level: number; source: string; reason: string }; easy_pace: { pace: number | null; runs: number; source: string };
+  time_limits: Record<string, number>; week_affix: HeroKeystoneAffix; affixes: HeroKeystoneAffix[];
+};
+export type HeroLiveEvent = {
+  id: number; kind: "schatz" | "begleiter" | "wegelagerer" | "totem"; name: string; text: string; level: number;
+  status: "active" | "reached" | "missed" | "declined" | "confirmed" | "rejected" | "expired"; provisional: boolean;
+  bearing_deg: number | null; distance_m: number | null; remaining_s: number | null; radius_m?: number; progress?: number;
+  reward: { xp: number; loot: string | null } | null;
+};
+export type HeroMythic = {
+  dungeons: { dungeon: string; name: string; own: boolean; best_level: number; timed_runs: number; best_date: string | null }[];
+  total: number; best_level: number; dungeons_timed: number; timed_runs: number;
+};
 export type HeroLiveState = {
+  keystone?: HeroLiveKeystone | null; event?: HeroLiveEvent | null;
   session: string; available: boolean; active: boolean; points: number; first_ts: number | null; last_ts: number | null;
   revealed: { cells: number; km2: number }; finds: HeroLiveFind[]; target: HeroLiveTarget | null;
   dungeon: { id: string; name: string; discovered: boolean; cleared: boolean; provisional: boolean; provisional_cleared: boolean;
@@ -240,12 +266,12 @@ export type Hero = {
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events", number>;
   duels: { won: number; total: number;
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
       rows?: { key: string; name: string; now: number | null; then: number | null; better: boolean | null }[] }[] };
-  mounts: { key: string; name: string; kind: string; need: number; glyph: string; value: number; unlocked: boolean; unlocked_on: string | null; chosen: boolean; unit: string }[];
+  mounts: { key: string; name: string; kind: string; need: number; glyph: string; value: number; unlocked: boolean; unlocked_on: string | null; chosen: boolean; unit: string; ride_km?: number; level?: number }[];
   daily: { streak: number; today: HeroDaily | null; last7: HeroDaily[] } | null;
   event: { month: string; name: string; token: string; item: string; effect: string; tokens: number; goal: number; done: boolean; done_on: string | null; xp: number; rule: string } | null;
   trainer: { name: string; role: string; quote: string };
@@ -260,6 +286,7 @@ export type Hero = {
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
   progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; xp: number; level: number }[];
+  mythic?: HeroMythic | null;
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
@@ -268,8 +295,8 @@ export type Hero = {
   auction: { week: string; ends: string; listings: { idx: number; kind: string; price: number; sold: boolean; item?: HeroItem;
     bag?: { id: string; name: string; slots: number; source: string }; mount?: { key: string; name: string; glyph: string } }[] } | null;
   world: { available: false } | { available: true; cell_m: number; radius_m: number; core_m: number; cells: [number, number][];
-    routes: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
-    regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
+    routes: { date: string; points: [number, number][] }[]; rides?: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
+    regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null; via?: "fuss" | "rad" | null }[];
     pois: HeroPlace[]; dungeons: HeroDungeon[];
     explored_pct: number; km2: number; live?: HeroLiveOverlay | null };
   potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];
@@ -278,7 +305,7 @@ export type Hero = {
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz"; text: string; rarity?: Rarity; name?: string; level?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz" | "fahrt"; text: string; rarity?: Rarity; name?: string; level?: number; km?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {
@@ -522,7 +549,33 @@ export const api = {
     live<HeroLiveState>(token, "GET", `/hero/live/state?session=${encodeURIComponent(session)}`),
   heroLiveTarget: (token: string, session: string, target: { kind: "poi" | "dungeon"; id: string } | null) =>
     live<{ session: string }>(token, "POST", "/hero/live/target", { session, ...(target ?? {}) }),
+  heroKeystonePreview: (token: string, dungeon: string) =>
+    live<HeroKeystonePreview>(token, "GET", `/hero/live/keystone?dungeon=${encodeURIComponent(dungeon)}`),
+  heroKeystoneActivate: (token: string, session: string, dungeon: string, level: number, affixes: string[]) =>
+    live<{ session: string; dungeon: string; level: number; time_limit_s: number }>(token, "POST", "/hero/live/keystone", { session, dungeon, level, affixes }),
+  heroKeystoneAbort: (token: string, session: string) =>
+    live<{ session: string; aborted: boolean }>(token, "POST", "/hero/live/keystone/abort", { session }),
+  heroEventDecline: (token: string, session: string) =>
+    live<{ session: string; declined: boolean }>(token, "POST", "/hero/live/event/decline", { session }),
   heroTileUrl: (key: string) => `${BASE}/hero/world/tile/${key}`,
+  heroOwnRoutes: () => get<HeroOwnRoute[]>("/hero/world/own"),
+  // Fehler tragen die Meldung des Servers (z. B. „Die Strecke ist zu kurz …“).
+  heroOwnImport: async (file: File, mode: "dungeon" | "track"): Promise<HeroOwnRoute> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("mode", mode);
+    const r = await fetch(`${BASE}/hero/world/own`, { method: "POST", body: form });
+    if (!r.ok) {
+      const detail = await r.json().then((j) => j?.detail).catch(() => null);
+      throw new Error(typeof detail === "string" ? detail : `Import fehlgeschlagen (${r.status})`);
+    }
+    return r.json() as Promise<HeroOwnRoute>;
+  },
+  heroOwnDelete: async (id: string) => {
+    const r = await fetch(`${BASE}/hero/world/own/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`/hero/world/own/${id} → ${r.status}`);
+    return r.json();
+  },
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),

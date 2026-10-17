@@ -81,7 +81,7 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
   }
   return (
     <Card>
-      <CardTitle title={`Reittiere · ${owned}/${data.mounts.length}`} sub="Freigeschaltet über deine Gesamt-km bzw. Arbeitssätze · eines reitet neben deiner Figur" />
+      <CardTitle title={`Reittiere · ${owned}/${data.mounts.length}`} sub="Freigeschaltet über deine Gesamt-km, Arbeitssätze bzw. Rad-km · deine Rad-km füttern das gewählte Reittier (Stufe) · eines reitet neben deiner Figur" />
       <div className="grid grid-cols-2 gap-2 @3xl:grid-cols-3">
         {shown.map((m) => (
           <button key={m.key} type="button" disabled={!m.unlocked || busy} onClick={() => pick(m.chosen ? null : m.key)}
@@ -92,7 +92,12 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-semibold sm:text-[13px]" style={{ color: m.unlocked ? TIP_YELLOW : "#9d9d9d" }}>{m.name}</span>
               {m.unlocked
-                ? <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
+                ? <>
+                    <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
+                    {m.chosen || (m.ride_km ?? 0) > 0
+                      ? <span className="block truncate text-[11px] text-muted">Stufe {m.level ?? 1} · {String(m.ride_km ?? 0).replace(".", ",")} km zu Rad</span>
+                      : null}
+                  </>
                 : <>
                     <span className="block text-[11px] text-muted">{de0(m.value)}/{de0(m.need)} {m.unit}</span>
                     <span className="mt-1 block h-1 overflow-hidden rounded-full bg-[#0a0807]"><span className="block h-full rounded-full bg-[#b36cf0]" style={{ width: `${(m.value / m.need) * 100}%` }} /></span>
@@ -146,6 +151,28 @@ export function HeroSagaCard() {
           </p>
         </div>
       ) : <p className="text-xs text-muted">Noch keine Saga – lass den Chronisten deine Woche erzählen.</p>}
+    </Card>
+  );
+}
+
+// --- Mythisch-Wertung: beste in der Zeit geschaffte Steinstufe je Verlies ----------------------
+export function HeroMythic({ data }: { data: Hero }) {
+  const m = data.mythic;
+  if (!m || !m.dungeons.length) return null;
+  return (
+    <Card>
+      <div data-testid="mythic">
+        <CardTitle title={`Mythisch-Wertung · ${m.total}`} sub="Beste Stufe, die du je Verlies mit einem Stein in der Zeit geschafft hast · die Summe ist deine Gesamtwertung · eigene Strecken stehen mit, zählen aber nicht für Erfolge und Titel" />
+        <ul className="space-y-1 text-[13px]">
+          {m.dungeons.map((d) => (
+            <li key={d.dungeon} data-testid="mythic-row" className="flex items-baseline justify-between gap-2">
+              <span className="min-w-0 truncate">{d.name}{d.own && <span className="text-[11px] text-muted"> · eigene</span>}</span>
+              <span className="shrink-0 tabular-nums"><b style={{ color: TIP_YELLOW }}>+{d.best_level}</b> <span className="text-[11px] text-muted">{d.timed_runs}× in der Zeit</span></span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] text-muted" data-testid="mythic-total">Gesamtwertung {m.total} · höchster Stein +{m.best_level} · {m.dungeons_timed} {m.dungeons_timed === 1 ? "Verlies" : "Verliese"}</p>
+      </div>
     </Card>
   );
 }

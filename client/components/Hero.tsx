@@ -565,7 +565,7 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}</p>
+      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}{cur.stone_level ? ` · höchster Stein +${cur.stone_level} bestimmt Slot 1` : ""}</p>
       {(data.vault.veteran || data.vault.claimable.length > 0) && (
         <div className="mt-4 space-y-3">
           {data.vault.veteran && <VaultChoice vault={data.vault.veteran} title="Veteranentruhe · für deine bisherige Reise" onClaim={onClaim} />}
@@ -760,6 +760,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
+    case "fahrt": return <span style={{ color: "#d9c08a" }}>{name("#ff8000")} trabte {String(e.km ?? "").replace(".", ",")} km</span>;
     case "tasche": return <span style={{ color: "#00aa00" }}>Ihr erhaltet eine Tasche: {name("#ffffff")}.</span>;
     case "erkundung": return <span style={{ color: "#d9c08a" }}>Neues Gebiet entdeckt: {name("#d9c08a")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "verlies": return <span style={{ color: "#c08cff" }}>Verlies bezwungen: {name("#c08cff")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
