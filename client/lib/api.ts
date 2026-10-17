@@ -213,10 +213,13 @@ export type HeroDaily = { date: string; key: string; title: string; goal: string
 export type HeroSaga = { created_at: string; week: string | null; content: string; cost_usd: number | null };
 export type HeroBag = { id: string; name: string; slots: number; date: string; source: string };
 export type HeroAttribute = { key: string; label: string; source: string; score: number | null; value: string; delta: number | null };
+// Eigene, per GPX importierte Strecke (privat): Verlies oder gelaufene Spur – ohne Koordinaten.
+export type HeroOwnRoute = { id: string; kind: "dungeon" | "track"; name: string; own: true; length_km: number; created_on: string;
+  day?: string; superseded?: boolean; key?: string; level?: number; region?: string | null; segments?: number; discovered?: boolean; cleared?: boolean };
 export type HeroTile = { key: string; x: number; y: number; w: number; h: number };
 export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
   km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
-  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean;
+  cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean; own?: boolean;
   segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number; live_coverage?: number; provisional?: boolean }[] };
 export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
   x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null; provisional?: boolean };
@@ -523,6 +526,24 @@ export const api = {
   heroLiveTarget: (token: string, session: string, target: { kind: "poi" | "dungeon"; id: string } | null) =>
     live<{ session: string }>(token, "POST", "/hero/live/target", { session, ...(target ?? {}) }),
   heroTileUrl: (key: string) => `${BASE}/hero/world/tile/${key}`,
+  heroOwnRoutes: () => get<HeroOwnRoute[]>("/hero/world/own"),
+  // Fehler tragen die Meldung des Servers (z. B. „Die Strecke ist zu kurz …“).
+  heroOwnImport: async (file: File, mode: "dungeon" | "track"): Promise<HeroOwnRoute> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("mode", mode);
+    const r = await fetch(`${BASE}/hero/world/own`, { method: "POST", body: form });
+    if (!r.ok) {
+      const detail = await r.json().then((j) => j?.detail).catch(() => null);
+      throw new Error(typeof detail === "string" ? detail : `Import fehlgeschlagen (${r.status})`);
+    }
+    return r.json() as Promise<HeroOwnRoute>;
+  },
+  heroOwnDelete: async (id: string) => {
+    const r = await fetch(`${BASE}/hero/world/own/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`/hero/world/own/${id} → ${r.status}`);
+    return r.json();
+  },
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
   heroDisenchant: (itemId: string) => post<{ dust: number }>("/hero/disenchant", { item_id: itemId }),

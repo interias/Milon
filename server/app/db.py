@@ -26,6 +26,7 @@ def init_db() -> None:
     from . import garmin_load  # noqa: F401 -- optional Garmin running tolerance
     from . import hero  # noqa: F401 -- gamification state (start day, vault claims)
     from . import hero_keystone  # noqa: F401 -- Mythisch+ keystones per dungeon
+    from . import hero_import  # noqa: F401 -- own GPX dungeons and walked tracks
 
     SQLModel.metadata.create_all(engine)
     _run_migrations()

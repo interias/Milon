@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
+from . import hero_import
 from .config import settings
 from .db import engine
 
@@ -109,6 +110,11 @@ def poi_level(dist_m: float) -> int:
     return max(10, min(80, round(8 + 2.2 * dist_m / 1000)))
 
 
+def dungeon_level(dist_m: float, length_m: float) -> int:
+    """Verlies-Stufe: Entfernung (`poi_level`) + Länge/2 km (max. +8)."""
+    return min(80, poi_level(dist_m) + min(8, round(length_m / 2000)))
+
+
 def dungeon_loot(level: int, heroic: bool = False) -> str:
     tiers = ["blau", "lila", "orange"]
     idx = 0 if level < 25 else 1 if level < 45 else 2
@@ -116,11 +122,16 @@ def dungeon_loot(level: int, heroic: bool = False) -> str:
 
 
 @lru_cache(maxsize=1)
-def dungeon_defs() -> list[dict]:
+def _static_dungeon_defs() -> list[dict]:
     try:
         return json.loads(DUNGEON_FILE.read_text(encoding="utf-8"))["dungeons"]
     except (OSError, ValueError, KeyError):
         return []
+
+
+def dungeon_defs() -> list[dict]:
+    """Die OSM-Verliese plus eigene, per GPX importierte (`own: true`, privat)."""
+    return _static_dungeon_defs() + hero_import.own_dungeon_defs(engine)
 
 
 def _route_hash(meters: list[tuple[float, float]]) -> dict[tuple[int, int], list[tuple[float, float]]]:
@@ -144,19 +155,22 @@ def _coverage(points: list[tuple[float, float]], grid) -> float:
     return hit / max(1, len(points))
 
 
-def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells: dict) -> list[dict]:
-    """Strecken-Verliese: Entdeckung über erkundete Zellen, Abschnitte über Abdeckung je Lauf."""
+def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells: dict, defs: list[dict] | None = None) -> list[dict]:
+    """Strecken-Verliese: Entdeckung über erkundete Zellen, Abschnitte über Abdeckung je Lauf.
+
+    Eigene Verliese (`since`) zählen nur Läufe ab ihrem Importtag – sonst brächte der Import einer
+    schon gelaufenen Strecke rückwirkend EP und Beute."""
     grids = []
     for day, meters in routes_m:
         xs, ys = [p[0] for p in meters], [p[1] for p in meters]
         grids.append((day, (min(xs) - COVER_M, min(ys) - COVER_M, max(xs) + COVER_M, max(ys) + COVER_M), _route_hash(meters)))
     out = []
-    for dg in dungeon_defs():
+    for dg in (dungeon_defs() if defs is None else defs):
         segs = [[_to_m(home, la, lo) for la, lo in seg["points"]] for seg in dg["segments"]]
         allp = [p for seg in segs for p in seg]
         cx, cy = sum(p[0] for p in allp) / len(allp), sum(p[1] for p in allp) / len(allp)
         dist = math.hypot(cx, cy)
-        level = min(80, poi_level(dist) + min(8, round(dg["length_m"] / 2000)))
+        level = dungeon_level(dist, dg["length_m"])
         k = int(SEEN_M // CELL_M)
         seen = [cells[(i, j)] for x, y in allp[::3] for i in range(math.floor(x / CELL_M) - k, math.floor(x / CELL_M) + k + 1)
                 for j in range(math.floor(y / CELL_M) - k, math.floor(y / CELL_M) + k + 1) if (i, j) in cells]
@@ -165,6 +179,8 @@ def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells:
             sx, sy = [p[0] for p in pts], [p[1] for p in pts]
             best, won = 0.0, None
             for ri, (day, (x0, y0, x1, y1), grid) in enumerate(grids):
+                if dg.get("since") and day < dg["since"]:
+                    continue
                 if max(sx) < x0 or min(sx) > x1 or max(sy) < y0 or min(sy) > y1:
                     continue
                 cov = _coverage(pts, grid)
@@ -178,7 +194,8 @@ def dungeons(home, routes_m: list[tuple[str, list[tuple[float, float]]]], cells:
         cleared = all(s["cleared"] for s in seg_out)
         heroic_days = sorted(day for day, idx in per_route.values() if len(idx) == len(seg_out))
         out.append({"id": f"dungeon:{dg['key']}", "key": dg["key"], "name": dg["name"], "type": dg["type"],
-                    "type_label": DUNGEON_TYPES.get(dg["type"], dg["type"]), "desc": dg["desc"],
+                    "type_label": DUNGEON_TYPES.get(dg["type"]) or (hero_import.OWN_TYPE_LABEL if dg.get("own") else dg["type"]),
+                    "desc": dg["desc"], "own": bool(dg.get("own")),
                     "x": round(cx), "y": round(cy), "km": round(dist / 1000, 1), "length_km": round(dg["length_m"] / 1000, 1),
                     "region": region_of(cx, cy), "level": level, "xp": 10 * level, "gold": 2 + level // 10,
                     "discovered": bool(seen) or any(s["coverage"] > 0 for s in seg_out),
@@ -348,8 +365,9 @@ def _build(home, routes) -> tuple[dict, dict]:
         hits = _poi_hits(cells, p)
         places.append({**p, "reach_m": POI_REACH_M[p["ring"]], "found": bool(hits), "found_on": min(hits) if hits else None,
                        "closest_m": 0 if hits else _closest(cells, [(p["x"], p["y"])]), "provisional": False})
-    dgs = dungeons(home, routes_m, cells)
-    for d, dg in zip(dgs, dungeon_defs()):
+    defs = dungeon_defs()
+    dgs = dungeons(home, routes_m, cells, defs)
+    for d, dg in zip(dgs, defs):
         if d["discovered"]:
             d["closest_m"] = 0
         else:
@@ -366,14 +384,35 @@ def _build(home, routes) -> tuple[dict, dict]:
     return value, cells
 
 
+def _own_tracks() -> tuple[list[tuple[date, list[tuple[float, float]]]], list[str]]:
+    """Importierte gelaufene Spuren fürs Aufdecken; überschneidet sich eine zeitlich mit einer
+    Garmin-Route, gewinnt Garmin (Spur-ID landet in der zweiten Liste)."""
+    tracks = hero_import.own_tracks(engine)
+    if not tracks:
+        return [], []
+    from .garmin_routes import GarminRoute
+    with Session(engine) as session:
+        spans = [s for s in (_route_span(r) for r in session.exec(select(GarminRoute)).all()) if s]
+    keep, superseded = [], []
+    for t in tracks:
+        if any(a <= t["end_ms"] and t["start_ms"] <= b for a, b in spans):
+            superseded.append(t["id"])
+        else:
+            keep.append((date.fromisoformat(t["day"]), t["points"]))
+    return keep, superseded
+
+
 def world() -> dict:
     routes = _routes()
-    home = _home(routes)
+    home = _home(routes)  # Heimat nur aus Garmin-Läufen; eigene Spuren verschieben sie nie
     if home is None:
         return {"available": False}
-    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes))
+    own_key = tuple((r.id, r.kind) for r in hero_import._rows(engine))
+    key = (home, tuple((d, len(p), p[0], p[-1]) for d, p in routes), own_key)
     if _memo.get("key") != key:
-        value, cells = _build(home, routes)
+        own_tracks, superseded = _own_tracks() if own_key else ([], [])
+        value, cells = _build(home, sorted(routes + own_tracks, key=lambda x: x[0]))
+        value["own_superseded"] = superseded
         _memo.update(key=key, value=value, home=home, base_cells=cells, cellset=set(cells), tilesets={},
                      live_key=(), live_value=value, tracks=[])
     tracks = _live_tracks()

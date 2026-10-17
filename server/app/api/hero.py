@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from .. import hero, hero_export, hero_keystone, hero_world
+from .. import hero, hero_export, hero_import, hero_keystone, hero_world
 from ..config import settings
 
 router = APIRouter(prefix="/hero", tags=["hero"])
@@ -166,6 +166,30 @@ def dungeon_gpx(key: str) -> Response:
 @router.get("/world/dungeon/{key}.fit")
 def dungeon_fit(key: str) -> Response:
     return _dungeon_file(key, "fit")
+
+
+@router.get("/world/own")
+def own_routes() -> list[dict]:
+    return hero_import.list_own()
+
+
+@router.post("/world/own")
+def own_import(file: UploadFile = File(...), mode: str = Form(...)) -> dict:
+    """GPX hochladen: `mode=dungeon` (eigenes Verlies) oder `mode=track` (gelaufene Spur)."""
+    content = file.file.read(hero_import.MAX_GPX_BYTES + 1)
+    try:
+        return hero_import.import_gpx(content, mode)
+    except hero_import.Duplicate as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.delete("/world/own/{rid}")
+def own_delete(rid: str) -> dict:
+    if not hero_import.delete_own(rid):
+        raise HTTPException(404, "Eigene Strecke unbekannt")
+    return {"deleted": rid}
 
 
 @router.post("/vault/claim")
