@@ -74,15 +74,41 @@ MOUNTS = [
     ("phoenix", "Phönix des Niederrheins", "km", 3000, "🔥"),
     ("kriegsbaer", "Kriegsbär", "saetze", 2000, "🐻"),
     ("mammut", "Eisenmammut", "saetze", 5000, "🦣"),
+    # Rad-Reittiere: schalten sich über Rad-km (GPS-Fahrten aus Garmin) frei
+    ("deichgaul", "Deichgaul", "rad", 100, "🏇"),
+    ("auenhengst", "Auenhengst", "rad", 500, "🐎"),
 ]
 
+MOUNT_KM_PER_LEVEL = 25  # Reittier-Stufe: 1 + gefütterte Rad-km / 25, höchstens 10
+MOUNT_MAX_LEVEL = 10
+_UNITS = {"km": "km", "saetze": "Arbeitssätze", "rad": "Rad-km"}
 
-def mounts(runs: pd.DataFrame, workouts: pd.DataFrame, chosen: str | None) -> list[dict]:
-    """Reittiere mit Freischaltdatum (Tag, an dem die Summe die Schwelle überschritt)."""
+
+def mount_level(km: float) -> int:
+    return min(MOUNT_MAX_LEVEL, 1 + int(km // MOUNT_KM_PER_LEVEL))
+
+
+def ride_feed(rides: list[tuple[date, float]], owner) -> list[dict]:
+    """Rad-Fahrten, je dem zur Fahrtzeit gewählten Reittier (`owner(day)` -> Schlüssel oder None) zugeordnet."""
+    out = []
+    for d, km in sorted(rides, key=lambda r: r[0]):
+        key = owner(d)
+        if key and km > 0:
+            out.append({"date": d.isoformat(), "km": round(float(km), 1), "mount": key})
+    return out
+
+
+def mounts(runs: pd.DataFrame, workouts: pd.DataFrame, chosen: str | None,
+           rides: list[tuple[date, float]] | None = None, fed: dict[str, float] | None = None) -> list[dict]:
+    """Reittiere mit Freischaltdatum (Tag, an dem die Summe die Schwelle überschritt).
+
+    `rides` = Rad-km je Tag seit Starttag (schaltet Rad-Reittiere frei), `fed` = gefütterte km je Reittier (Stufe)."""
     series = {
         "km": runs.sort_values("started_at")[["day", "distance_km"]].values.tolist() if not runs.empty else [],
         "saetze": workouts.sort_values("started_at")[["day", "sets"]].values.tolist() if not workouts.empty else [],
+        "rad": sorted(rides or [], key=lambda r: r[0]),
     }
+    fed = fed or {}
     out = []
     for key, name, kind, need, glyph in MOUNTS:
         total, unlocked = 0.0, None
@@ -90,8 +116,9 @@ def mounts(runs: pd.DataFrame, workouts: pd.DataFrame, chosen: str | None) -> li
             total += float(v or 0)
             if unlocked is None and total >= need:
                 unlocked = d
+        ride_km = round(fed.get(key, 0.0), 1)
         out.append({"key": key, "name": name, "kind": kind, "need": need, "glyph": glyph,
                     "value": round(min(total, need)), "unlocked": unlocked is not None,
                     "unlocked_on": unlocked.isoformat() if unlocked else None, "chosen": key == chosen and unlocked is not None,
-                    "unit": "km" if kind == "km" else "Arbeitssätze"})
+                    "unit": _UNITS[kind], "ride_km": ride_km, "level": mount_level(ride_km)})
     return out

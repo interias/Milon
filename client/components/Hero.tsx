@@ -760,6 +760,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
+    case "fahrt": return <span style={{ color: "#d9c08a" }}>{name("#ff8000")} trabte {String(e.km ?? "").replace(".", ",")} km</span>;
     case "tasche": return <span style={{ color: "#00aa00" }}>Ihr erhaltet eine Tasche: {name("#ffffff")}.</span>;
     case "erkundung": return <span style={{ color: "#d9c08a" }}>Neues Gebiet entdeckt: {name("#d9c08a")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "verlies": return <span style={{ color: "#c08cff" }}>Verlies bezwungen: {name("#c08cff")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
