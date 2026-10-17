@@ -491,3 +491,8 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **Option B:** Eigene Verliese (`own`) zählen nicht für Erfolge und Titel (`welt_verlies*`/`welt_heroisch*`/`welt_stufe50`/`welt_abschnitt`, `map_*`-Titel, Stein-Titel/-Erfolge); EP, Beute und Stein-Läufe bleiben.
 - **Titel/Erfolge:** Steinläufer (+5), Schlüsselmeister (+10), Schlüsselbewahrer (5 Verliese mit Stein in der Zeit); Weltkarte: `welt_stein_5/10/20`, `welt_stein_verlies_5`.
 - **Expeditionsmodus** (`/heldenreise/expedition`, `components/ExpeditionStone.tsx`): Stein aktivieren (Verlies, Stufe, Affixe), Restzeit, Event-Box. Events erscheinen erst nach Auslösung (Spoiler-Regel).
+
+## Komoot (#60) — Befund
+- `garminconnect` 0.3.17 hat keine Kurs-Methoden; die Endpunkte `/web-gateway/course/owner/` und `/course-service/course` sind über `connectapi` erreichbar, liefern beim Konto aber 0 Kurse. Ob die Geometrie (GPX/FIT) ladbar ist, ist damit nicht belegt.
+- Weg bleibt: Tour in Komoot als GPX exportieren und über „Eigene Strecken“ importieren (Hinweis im Import-Dialog). Milon spricht nie mit Komoot.
+- Der Garmin-Kurs-Import wird erst gebaut, wenn ein echter Kurs zum Prüfen vorliegt.
