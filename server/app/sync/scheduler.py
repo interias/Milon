@@ -2,6 +2,7 @@
 - Hevy: API-Polling (alle 6 h)
 - FDDB: taeglich (Auto-Login -> CSV-Export)
 - Morgenbriefing des Coaches: nach dem Garmin-Sync + Pruefung alle 5 min (einmal je Tag, siehe coach/briefing)
+- Wochenbericht des Coaches: ab So 23:30, Pruefung alle 30 min, Nachholen bis zum naechsten So (siehe coach/weekly_auto)
 - Health Connect: taeglicher Drive-Pull (05:00, wenn GOOGLE_API_KEY + HC_DRIVE_FOLDER_ID gesetzt)
   PLUS Ordner-Scan auf data/incoming/ (alle 10 min) -> importiert auch manuell abgelegte Dateien.
 Jeder Lauf schreibt Status/Detail nach sync_state.
@@ -86,6 +87,15 @@ def sync_briefing() -> None:
         logging.getLogger(__name__).warning("Morgenbriefing fehlgeschlagen", exc_info=True)
 
 
+def sync_weekly_report() -> None:
+    """Wochenbericht ab Sonntag 23:30, sonst Nachholen bis zum naechsten Sonntag (idempotent je ISO-Woche)."""
+    from ..coach import weekly_auto
+    try:
+        weekly_auto.maybe_run()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Wochenbericht fehlgeschlagen", exc_info=True)
+
+
 def sync_hc_if_new() -> None:
     """Importiert die HC-DB nur, wenn sich die Datei seit dem letzten Import geaendert hat."""
     if not HC_DB.exists():
@@ -124,6 +134,7 @@ def start_scheduler() -> None:
     sch.add_job(sync_hevy, "interval", hours=6, id="hevy", replace_existing=True)
     sch.add_job(sync_garmin, "interval", minutes=15, id="garmin", replace_existing=True)
     sch.add_job(sync_briefing, "interval", minutes=5, id="briefing", replace_existing=True)
+    sch.add_job(sync_weekly_report, "interval", minutes=30, id="weekly_report", replace_existing=True)
     sch.add_job(sync_fddb, "cron", hour=4, minute=30, id="fddb", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())
