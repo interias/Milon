@@ -33,6 +33,19 @@ async function put<T>(path: string, body?: unknown): Promise<T> {
 export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename}`;
 // Strecken-Download eines entdeckten Verlieses (GPX-Track bzw. FIT-Course), über den /api-Proxy.
 export const dungeonFileUrl = (key: string, ext: "gpx" | "fit") => `${BASE}/hero/world/dungeon/${encodeURIComponent(key)}.${ext}`;
+// Live-Endpunkte der Expedition: Token im Header X-Hero-Token (nur auf dem Gerät, nie im Code).
+export class LiveError extends Error {
+  constructor(public status: number, path: string) { super(`${path} → ${status}`); }
+}
+async function live<T>(token: string, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method, cache: "no-store",
+    headers: { "X-Hero-Token": token, ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) throw new LiveError(r.status, path);
+  return r.json() as Promise<T>;
+}
 export const coachImageUrl = (path: string) => `${BASE}${path}`;
 
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
@@ -204,9 +217,18 @@ export type HeroTile = { key: string; x: number; y: number; w: number; h: number
 export type HeroDungeon = { id: string; key: string; name: string; type: string; type_label: string; desc: string; x: number; y: number;
   km: number; length_km: number; region: string | null; level: number; xp: number; gold: number; discovered: boolean; discovered_on: string | null;
   cleared: boolean; cleared_on: string | null; heroic: boolean; heroic_on: string | null; loot: string; closest_m?: number | null; provisional?: boolean;
-  segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number }[] };
+  segments: { boss: string; points: [number, number][]; coverage: number; cleared: boolean; cleared_on: string | null; xp: number; live_coverage?: number; provisional?: boolean }[] };
 export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: string; name: string; region: string; ring: number;
-  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null };
+  x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; closest_m?: number | null; provisional?: boolean };
+export type HeroLiveFind = { kind: "gebiet" | "schrein" | "schatz" | "abschnitt" | "verlies_entdeckt" | "verlies"; id: string; name: string; xp: number; provisional: true };
+export type HeroLiveTarget = { kind: "poi" | "dungeon"; id: string; name: string; chosen: boolean; label: string; level: number; bearing_deg: number | null; distance_m: number | null };
+export type HeroLiveState = {
+  session: string; available: boolean; active: boolean; points: number; first_ts: number | null; last_ts: number | null;
+  revealed: { cells: number; km2: number }; finds: HeroLiveFind[]; target: HeroLiveTarget | null;
+  dungeon: { id: string; name: string; discovered: boolean; cleared: boolean; provisional: boolean; provisional_cleared: boolean;
+    segments: { boss: string; coverage: number; cleared: boolean; provisional: boolean }[] } | null;
+};
+export type HeroLiveOverlay = { sessions: string[]; cells: [number, number][]; routes: { session: string; date: string; points: [number, number][] }[]; km2: number };
 
 export type Hero = {
   today: string; start: string;
@@ -249,7 +271,7 @@ export type Hero = {
     routes: { date: string; points: [number, number][] }[]; rings: { name: string; outer_m: number }[];
     regions: { name: string; ring: number; ring_label: string; xp: number; gold: number; cells: number; total: number; pct: number; discovered: boolean; discovered_on: string | null }[];
     pois: HeroPlace[]; dungeons: HeroDungeon[];
-    explored_pct: number; km2: number };
+    explored_pct: number; km2: number; live?: HeroLiveOverlay | null };
   potions: { key: string; name: string; effect: string; price: number; glyph: string; count: number; active_today: boolean }[];
   bags: { capacity: number; backpack: number; max_bags: number; used: HeroBag[]; spare: HeroBag[] };
   sets: { name: string; suffix: string; owned: number; equipped: number; color: string; bonus: string | null }[];
@@ -483,6 +505,12 @@ export const api = {
   heroDrink: (key: string) => post<{ key: string }>("/hero/drink", { key }),
   heroWorldTiles: (x0: number, y0: number, x1: number, y1: number, px: number) =>
     get<{ z: number | null; tiles: HeroTile[] }>(`/hero/world/tiles?x0=${Math.round(x0)}&y0=${Math.round(y0)}&x1=${Math.round(x1)}&y1=${Math.round(y1)}&px=${Math.round(px)}`),
+  heroLivePost: (token: string, session: string, points: { ts: number; lat: number; lon: number; acc: number }[]) =>
+    live<{ session: string; accepted: number; rejected: number }>(token, "POST", "/hero/live", { session, points }),
+  heroLiveState: (token: string, session: string) =>
+    live<HeroLiveState>(token, "GET", `/hero/live/state?session=${encodeURIComponent(session)}`),
+  heroLiveTarget: (token: string, session: string, target: { kind: "poi" | "dungeon"; id: string } | null) =>
+    live<{ session: string }>(token, "POST", "/hero/live/target", { session, ...(target ?? {}) }),
   heroTileUrl: (key: string) => `${BASE}/hero/world/tile/${key}`,
   heroSaga: () => get<{ saga: HeroSaga | null; week: string }>("/hero/saga"),
   heroWriteSaga: () => post<{ saga: HeroSaga }>("/hero/saga"),
