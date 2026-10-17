@@ -2,7 +2,7 @@
 const KEY = "milon.hero.sound";
 let ctx: AudioContext | null = null;
 
-export type HeroSound = "levelup" | "loot" | "equip" | "chest" | "click" | "quest";
+export type HeroSound = "levelup" | "loot" | "equip" | "chest" | "click" | "quest" | "find";
 const RARITY_STEP: Record<string, number> = { grau: 0, weiss: 1, gruen: 2, blau: 3, lila: 4, orange: 5, rot: 6 };
 
 export function soundOn(): boolean {
@@ -26,6 +26,15 @@ function tone(freq: number, at: number, dur: number, type: OscillatorType = "tri
   osc.connect(g).connect(ctx.destination);
   osc.start(ctx.currentTime + at);
   osc.stop(ctx.currentTime + at + dur + 0.05);
+}
+
+// Needs a user gesture once (Chrome autoplay policy), so the expedition start button calls this.
+export function unlockAudio(): void {
+  if (typeof window === "undefined" || !soundOn()) return;
+  try {
+    ctx ??= new AudioContext();
+    if (ctx.state === "suspended") void ctx.resume();
+  } catch { /* ohne Audio bleibt es still */ }
 }
 
 export function play(kind: HeroSound, rarity?: string): void {
@@ -57,6 +66,10 @@ export function play(kind: HeroSound, rarity?: string): void {
     case "quest":
       tone(784, 0, 0.2, "triangle", 0.08);
       tone(1175, 0.12, 0.35, "triangle", 0.08);
+      break;
+    case "find": // Fund unterwegs: kurzes Fanfaren-Motiv
+      [659, 784, 988].forEach((f, i) => tone(f, i * 0.09, 0.3, "triangle", 0.1));
+      tone(1319, 0.3, 0.5, "sine", 0.06);
       break;
     case "click":
       tone(1400, 0, 0.04, "square", 0.02);
