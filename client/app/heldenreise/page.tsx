@@ -170,7 +170,7 @@ export default function Heldenreise() {
                     <div id="ab-instanzen"><HeroDungeons data={hero} /></div>
                   </div>
                   <div id="ab-duell" className="scroll-mt-32"><HeroDuel data={hero} /></div>
-                  <div id="ab-karte" className="scroll-mt-32"><HeroWorld data={hero} /></div>
+                  <div id="ab-karte" className="scroll-mt-32"><HeroWorld data={hero} onChanged={load} /></div>
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
                 {tab === "handel" && <>
