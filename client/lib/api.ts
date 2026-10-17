@@ -370,6 +370,8 @@ export type CoachImage = { url: string; cost_usd: number | null; model: string }
 export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null; visuals?: CoachVisual[] };
 export type Briefing = { id: number; kind: "briefing"; content: string; created_at: string; model: string | null; provider: string | null; fallback_reason: string | null; cost_usd: number | null };
 export type BriefingToday = { date: string; briefing: Briefing | null };
+export type WeeklyAutoReport = Omit<Briefing, "kind"> & { kind: "weekly-auto" };
+export type WeeklyAutoCurrent = { week_from: string; week_to: string; report: WeeklyAutoReport | null };
 export type CoachStats = {
   model: string; reports_total: number; tokens_total: number;
   cost_total_usd: number; cost_known: boolean; reports_7d: number; cost_7d_usd: number; tokens_7d: number;
@@ -518,6 +520,7 @@ export const api = {
     post<Report>("/coach/ask", { message, history }),
   coachStats: () => get<CoachStats>("/coach/stats"),
   coachBriefingToday: () => get<BriefingToday>("/coach/briefing/today"),
+  coachWeeklyAuto: () => get<WeeklyAutoCurrent>("/coach/weekly-auto/current"),
   generateCoachImage: (prompt: string) => post<CoachImage>("/coach/images", { prompt }),
   // Ingest / Sync
   ingestStatus: () => get<IngestStatus>("/ingest/status"),
