@@ -154,3 +154,25 @@ export function HeroSagaCard() {
     </Card>
   );
 }
+
+// --- Mythisch-Wertung: beste in der Zeit geschaffte Steinstufe je Verlies ----------------------
+export function HeroMythic({ data }: { data: Hero }) {
+  const m = data.mythic;
+  if (!m || !m.dungeons.length) return null;
+  return (
+    <Card>
+      <div data-testid="mythic">
+        <CardTitle title={`Mythisch-Wertung · ${m.total}`} sub="Beste Stufe, die du je Verlies mit einem Stein in der Zeit geschafft hast · die Summe ist deine Gesamtwertung · eigene Strecken stehen mit, zählen aber nicht für Erfolge und Titel" />
+        <ul className="space-y-1 text-[13px]">
+          {m.dungeons.map((d) => (
+            <li key={d.dungeon} data-testid="mythic-row" className="flex items-baseline justify-between gap-2">
+              <span className="min-w-0 truncate">{d.name}{d.own && <span className="text-[11px] text-muted"> · eigene</span>}</span>
+              <span className="shrink-0 tabular-nums"><b style={{ color: TIP_YELLOW }}>+{d.best_level}</b> <span className="text-[11px] text-muted">{d.timed_runs}× in der Zeit</span></span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] text-muted" data-testid="mythic-total">Gesamtwertung {m.total} · höchster Stein +{m.best_level} · {m.dungeons_timed} {m.dungeons_timed === 1 ? "Verlies" : "Verliese"}</p>
+      </div>
+    </Card>
+  );
+}

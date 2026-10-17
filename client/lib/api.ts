@@ -207,6 +207,7 @@ export type HeroItem = {
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
   week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
+  stone_level?: number | null;
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
 export type HeroDaily = { date: string; key: string; title: string; goal: string; done: boolean; sick: boolean };
@@ -225,7 +226,29 @@ export type HeroPlace = { id: string; kind: "schrein" | "schatz"; kind_label: st
   x: number; y: number; km: number; level: number; xp: number; gold: number; loot: string | null; reach_m: number; found: boolean; found_on: string | null; via?: "fuss" | "rad" | null; closest_m?: number | null; provisional?: boolean };
 export type HeroLiveFind = { kind: "gebiet" | "schrein" | "schatz" | "abschnitt" | "verlies_entdeckt" | "verlies"; id: string; name: string; xp: number; provisional: true };
 export type HeroLiveTarget = { kind: "poi" | "dungeon"; id: string; name: string; chosen: boolean; label: string; level: number; bearing_deg: number | null; distance_m: number | null };
+export type HeroKeystoneAffix = { key: string; name: string; desc: string; kind?: "gewaehlt" | "woche" | "wetter" };
+export type HeroLiveKeystone = {
+  id: number; dungeon: string; name: string; level: number; affixes: HeroKeystoneAffix[]; time_limit_s: number;
+  clock_started: boolean; remaining_s: number | null; segments: { boss: string; coverage: number; cleared: boolean }[];
+  segments_cleared: number; segments_total: number; provisional: boolean;
+};
+export type HeroKeystonePreview = {
+  dungeon: string; name: string; length_km: number; key_level: number; max_level: number; levels: number[];
+  suggested_level: { level: number; source: string; reason: string }; easy_pace: { pace: number | null; runs: number; source: string };
+  time_limits: Record<string, number>; week_affix: HeroKeystoneAffix; affixes: HeroKeystoneAffix[];
+};
+export type HeroLiveEvent = {
+  id: number; kind: "schatz" | "begleiter" | "wegelagerer" | "totem"; name: string; text: string; level: number;
+  status: "active" | "reached" | "missed" | "declined" | "confirmed" | "rejected" | "expired"; provisional: boolean;
+  bearing_deg: number | null; distance_m: number | null; remaining_s: number | null; radius_m?: number; progress?: number;
+  reward: { xp: number; loot: string | null } | null;
+};
+export type HeroMythic = {
+  dungeons: { dungeon: string; name: string; own: boolean; best_level: number; timed_runs: number; best_date: string | null }[];
+  total: number; best_level: number; dungeons_timed: number; timed_runs: number;
+};
 export type HeroLiveState = {
+  keystone?: HeroLiveKeystone | null; event?: HeroLiveEvent | null;
   session: string; available: boolean; active: boolean; points: number; first_ts: number | null; last_ts: number | null;
   revealed: { cells: number; km2: number }; finds: HeroLiveFind[]; target: HeroLiveTarget | null;
   dungeon: { id: string; name: string; discovered: boolean; cleared: boolean; provisional: boolean; provisional_cleared: boolean;
@@ -243,7 +266,7 @@ export type Hero = {
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events", number>;
   duels: { won: number; total: number;
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
@@ -263,6 +286,7 @@ export type Hero = {
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
   progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; xp: number; level: number }[];
+  mythic?: HeroMythic | null;
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
   equipment: Record<string, HeroItem>;
@@ -525,6 +549,14 @@ export const api = {
     live<HeroLiveState>(token, "GET", `/hero/live/state?session=${encodeURIComponent(session)}`),
   heroLiveTarget: (token: string, session: string, target: { kind: "poi" | "dungeon"; id: string } | null) =>
     live<{ session: string }>(token, "POST", "/hero/live/target", { session, ...(target ?? {}) }),
+  heroKeystonePreview: (token: string, dungeon: string) =>
+    live<HeroKeystonePreview>(token, "GET", `/hero/live/keystone?dungeon=${encodeURIComponent(dungeon)}`),
+  heroKeystoneActivate: (token: string, session: string, dungeon: string, level: number, affixes: string[]) =>
+    live<{ session: string; dungeon: string; level: number; time_limit_s: number }>(token, "POST", "/hero/live/keystone", { session, dungeon, level, affixes }),
+  heroKeystoneAbort: (token: string, session: string) =>
+    live<{ session: string; aborted: boolean }>(token, "POST", "/hero/live/keystone/abort", { session }),
+  heroEventDecline: (token: string, session: string) =>
+    live<{ session: string; declined: boolean }>(token, "POST", "/hero/live/event/decline", { session }),
   heroTileUrl: (key: string) => `${BASE}/hero/world/tile/${key}`,
   heroOwnRoutes: () => get<HeroOwnRoute[]>("/hero/world/own"),
   // Fehler tragen die Meldung des Servers (z. B. „Die Strecke ist zu kurz …“).

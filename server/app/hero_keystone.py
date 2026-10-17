@@ -436,3 +436,40 @@ def results(dungeon_key: str | None = None) -> list[dict]:
              "affixes": json.loads(k.affixes_json), "week_affix": k.week_affix, "weather_affixes": json.loads(k.weather_json),
              "time_limit_s": k.time_limit_s, "activated_ms": k.activated_ms, "resolved_ms": k.resolved_ms,
              "result": json.loads(k.result_json)} for k in sorted(rows, key=lambda r: -r.activated_ms)]
+
+
+# --- Mythisch-Wertung (#63) -----------------------------------------------------------------------
+RATED = ("timed", "fast")                  # „in der Zeit geschafft“
+
+
+def _local_day(ms: int) -> date:
+    return datetime.fromtimestamp(ms / 1000, ZoneInfo(settings.timezone)).date()
+
+
+def rating(done: list[dict] | None = None) -> dict:
+    """Beste in der Zeit geschaffte Stufe je Verlies plus Gesamtwertung.
+
+    Eigene Verliese (`own`) stehen in der Liste, zählen aber nicht in die Gesamtwertung (Erfolge/Titel, Option B)."""
+    done = results() if done is None else done
+    defs = {d["key"]: d for d in hero_world.dungeon_defs()}
+    best: dict[str, dict] = {}
+    for r in done:
+        if r["status"] not in RATED:
+            continue
+        b = best.setdefault(r["dungeon"], {"best_level": 0, "timed_runs": 0, "best_date": None})
+        b["timed_runs"] += 1
+        if r["level"] > b["best_level"]:
+            b["best_level"], b["best_date"] = r["level"], _local_day(r["activated_ms"]).isoformat()
+    rows = [{"dungeon": k, "name": defs.get(k, {}).get("name", k), "own": bool(defs.get(k, {}).get("own")), **v}
+            for k, v in best.items()]
+    rows.sort(key=lambda x: (-x["best_level"], x["name"]))
+    counted = [x for x in rows if not x["own"]]
+    return {"dungeons": rows, "total": sum(x["best_level"] for x in counted),
+            "best_level": max((x["best_level"] for x in counted), default=0),
+            "dungeons_timed": len(counted), "timed_runs": sum(x["timed_runs"] for x in counted)}
+
+
+def week_best(done: list[dict], week: date) -> int:
+    """Höchster in der Zeit geschaffter Stein einer ISO-Woche (Montag `week`); 0 = keiner (Truhe unverändert)."""
+    end = week + timedelta(days=6)
+    return max((r["level"] for r in done if r["status"] in RATED and week <= _local_day(r["activated_ms"]) <= end), default=0)

@@ -484,3 +484,10 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **Cache:** der `_memo`-Schlüssel von `world()` enthält `(id, kind)` aller eigenen Strecken → Import/Löschen baut neu.
 - **API:** `GET /hero/world/own` (Liste ohne Koordinaten), `POST /hero/world/own` (multipart `file`, `mode`), `DELETE /hero/world/own/{id}` (404 unbekannt; Löschen nimmt Fortschritt und Beute des Verlieses mit). UI: Karte „Eigene Strecken“ unter dem Expeditionsbuch (`HeroOwnRoutes` in `HeroWorld.tsx`, Löschen zweistufig), eigene Verliese im Expeditionsbuch unter 🧭. Nie in `report/`.
 - **Tests:** `tests/test_hero_import.py`, nur synthetische Strecken um eine Fantasie-Heimat (keine echte Strecke als Fixture).
+
+## Mythisch-Wertung (Epic #65, Paket #63)
+- **Wochentruhe:** `hero.vault_week(..., stones)` — der höchste in der Zeit geschaffte Stein (Status `timed`/`fast`, `hero_keystone.week_best`) der ISO-Woche bestimmt die Mindest-Qualität von Slot 1 (`hero.STONE_RARITY`: ab +2 Ungewöhnlich, +5 Selten, +8 Episch, +12 Legendär, Deckel Legendär) und gibt diesem Slot +Stufe Gegenstandsstufe (Slots 2/3 unverändert). Slots öffnen weiter über die Lauf-Schwellen. Ohne Steine ist die Truhe unverändert (Opt-in); `vault.*.stone_level` zeigt den Einfluss.
+- **Wertung:** `hero_keystone.rating()` = beste in der Zeit geschaffte Stufe je Verlies + Gesamtwertung (Summe); `GET /hero` → `mythic`, UI-Karte im Tab Sammlung. Eigene Verliese stehen in der Liste (`own`), zählen aber nicht in die Gesamtwertung.
+- **Option B:** Eigene Verliese (`own`) zählen nicht für Erfolge und Titel (`welt_verlies*`/`welt_heroisch*`/`welt_stufe50`/`welt_abschnitt`, `map_*`-Titel, Stein-Titel/-Erfolge); EP, Beute und Stein-Läufe bleiben.
+- **Titel/Erfolge:** Steinläufer (+5), Schlüsselmeister (+10), Schlüsselbewahrer (5 Verliese mit Stein in der Zeit); Weltkarte: `welt_stein_5/10/20`, `welt_stein_verlies_5`.
+- **Expeditionsmodus** (`/heldenreise/expedition`, `components/ExpeditionStone.tsx`): Stein aktivieren (Verlies, Stufe, Affixe), Restzeit, Event-Box. Events erscheinen erst nach Auslösung (Spoiler-Regel).

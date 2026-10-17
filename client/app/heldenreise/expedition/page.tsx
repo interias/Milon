@@ -7,6 +7,7 @@ import { api, LiveError, type Hero, type HeroLiveFind, type HeroLiveState } from
 import { play, setSoundOn, soundOn, unlockAudio } from "@/lib/hero-sound";
 import { HeroWorld, type LiveMap } from "@/components/HeroWorld";
 import { ApiError, Card, CardTitle, Loading } from "@/components/ui";
+import { ExpeditionStone } from "@/components/ExpeditionStone";
 
 const cinzel = Cinzel({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-cinzel" });
 
@@ -356,6 +357,8 @@ export default function Expedition() {
               </div>
             )}
           </Card>
+
+          <ExpeditionStone token={token} session={viewSession ?? null} hero={hero} state={st} onChanged={refresh} onAuthError={authFail} />
 
           {heroErr ? <ApiError error={heroErr} /> : !hero ? <Loading /> : <HeroWorld data={hero} live={live} compact />}
 

@@ -777,6 +777,10 @@ def _specs():
         ("welt_wasser", "Seenrunde", "Alle Wasser-Verliese bezwingen", 150, "🌊", lambda w: _wk_dungeons(w, None, kind="wasser")),
         ("welt_wald", "Waldgeist", "Alle Wald-Verliese bezwingen", 150, "🌲", lambda w: _wk_dungeons(w, None, kind="wald")),
         ("welt_dorf", "Dorfchronist", "Alle Dorf-Verliese bezwingen", 250, "🏘️", lambda w: _wk_dungeons(w, None, kind="dorf")),
+        ("welt_stein_5", "Steinläufer", "Einen Stein der Stufe +5 in der Zeit schaffen", 40, "🪨", lambda w: _wk_stone(5)),
+        ("welt_stein_10", "Schlüsselmeister", "Einen Stein der Stufe +10 in der Zeit schaffen", 100, "🗝️", lambda w: _wk_stone(10)),
+        ("welt_stein_20", "Meister der Zeit", "Einen Stein der Stufe +20 in der Zeit schaffen", 250, "⏳", lambda w: _wk_stone(20)),
+        ("welt_stein_verlies_5", "Schlüsselbewahrer", "In 5 verschiedenen Verliesen einen Stein in der Zeit schaffen", 80, "🔑", lambda w: _wk_stone_dungeons(5)),
         ("welt_stufe50", "Fernland-Bezwinger", "Ein Verlies ab Stufe 50 bezwingen", 120, "🐉", lambda w: _wk_dungeons(w, 1, min_level=50)),
     ]
     for iid, name, desc, pts, icon, fn in W:
@@ -1416,11 +1420,42 @@ def _wk_pois(w, kind, target):
 
 
 def _wk_segments(w, target):
-    return _wk_reach([s["cleared_on"] for d in w.get("dungeons", []) for s in d["segments"] if s["cleared"]], target, "Abschnitte")
+    return _wk_reach([s["cleared_on"] for d in w.get("dungeons", []) if not d.get("own") for s in d["segments"] if s["cleared"]], target, "Abschnitte")
+
+
+def _stones():
+    """In der Zeit geschaffte Steine ohne eigene Verliese (Option B), älteste zuerst."""
+    from .. import hero_keystone, hero_world
+    own = {d["key"] for d in hero_world.dungeon_defs() if d.get("own")}
+    done = [r for r in hero_keystone.results() if r["status"] in hero_keystone.RATED and r["dungeon"] not in own]
+    return sorted(done, key=lambda r: r["activated_ms"]), hero_keystone._local_day
+
+
+def _wk_stone(level):
+    try:
+        done, day = _stones()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Steine für Erfolge nicht verfügbar: %s", e)
+        done, day = [], None
+    hit = [r for r in done if r["level"] >= level]
+    best = max((r["level"] for r in done), default=0)
+    return R(bool(hit), day(hit[0]["activated_ms"]).isoformat() if hit else None, min(1.0, best / level), f"best +{best} / +{level}")
+
+
+def _wk_stone_dungeons(target):
+    try:
+        done, day = _stones()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Steine für Erfolge nicht verfügbar: %s", e)
+        done, day = [], None
+    first: dict[str, str] = {}
+    for r in done:
+        first.setdefault(r["dungeon"], day(r["activated_ms"]).isoformat())
+    return _wk_reach(list(first.values()), target, "Verliese mit Stein")
 
 
 def _wk_dungeons(w, target, heroic=False, kind=None, min_level=0):
-    dgs = [d for d in w.get("dungeons", []) if (kind is None or d["type"] == kind) and d["level"] >= min_level]
+    dgs = [d for d in w.get("dungeons", []) if not d.get("own") and (kind is None or d["type"] == kind) and d["level"] >= min_level]
     if target is None:
         target = max(1, len(dgs))
     key = "heroic_on" if heroic else "cleared_on"

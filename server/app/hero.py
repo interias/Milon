@@ -27,7 +27,7 @@ import pandas as pd
 from typing import Optional
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_economy, hero_events, hero_events_live, hero_extras, hero_quests, hero_social, hero_world
+from . import hero_bosses, hero_economy, hero_events, hero_events_live, hero_extras, hero_keystone, hero_quests, hero_social, hero_world
 from .checkins import local_today
 from .db import engine
 
@@ -819,8 +819,15 @@ def _claims() -> dict[str, HeroClaim]:
         return {c.week: c for c in session.exec(select(HeroClaim)).all()}
 
 
+STONE_RARITY = [(12, "orange"), (8, "lila"), (5, "blau"), (2, "gruen")]   # Steinstufe → Mindestqualität der Truhe
+
+
+def stone_rarity(level: int) -> str | None:
+    return next((r for lv, r in STONE_RARITY if level >= lv), None)
+
+
 def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date], entries, today: date,
-               mods: Mods | None = None) -> dict:
+               mods: Mods | None = None, stones: list[dict] | None = None) -> dict:
     end = week + timedelta(days=6)
     n = int(((runs["day"] >= week) & (runs["day"] <= end)).sum()) if not runs.empty else 0
     sick_n = sum(1 for i in range(7) if week + timedelta(days=i) in sick)
@@ -828,6 +835,9 @@ def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date
     thresholds = [max(1, t - relief) for t in VAULT_THRESHOLDS]
     week_items = [it for it in items if it["source"] == "beute" and week.isoformat() <= it["date"] <= end.isoformat()]
     base = max((RARITIES.index(it["rarity"]) for it in week_items), default=RARITIES.index("weiss"))
+    # Mythisch: der höchste in der Zeit geschaffte Stein der Woche bestimmt die Qualität von Slot 1 (ohne Steine unverändert).
+    stone = hero_keystone.week_best(stones, week) if stones else 0
+    stone_base = max(base, RARITIES.index(stone_rarity(stone) or "grau")) if stone else base
     base = min(base, RARITIES.index("orange"))
     level = _level_at(entries, min(end, today))
     slots = []
@@ -835,13 +845,13 @@ def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date
         # Mehr Läufe = mehr Auswahl (wie die Great Vault), Qualität = beste Leistung der Woche.
         rng = _rng("vault", week.isoformat(), i)
         bump = 1 if rng.random() < (mods or Mods()).vault_bonus(min(end, today)) else 0
-        rarity = RARITIES[min(RARITIES.index("orange"), base + bump)]
+        rarity = RARITIES[min(RARITIES.index("orange"), (stone_base if i == 0 else base) + bump)]
         item = make_item(rng, rarity, datetime.combine(end, datetime.min.time()).replace(hour=8), None, level,
                          "truhe", f"Wochentruhe · Slot {i + 1}")
-        item["ilvl"] += 3 * i
+        item["ilvl"] += 3 * i + (stone if i == 0 else 0)
         slots.append({"slot": i, "threshold": t, "unlocked": n >= t, "item": {**item, "id": f"truhe:{week}:{i}"}})
     return {"week": week.isoformat(), "runs": n, "sick_days": sick_n, "slots": slots,
-            "complete": end < today}
+            "complete": end < today, "stone_level": stone or None}
 
 
 def veteran_chest(level: int, today: date) -> dict:
@@ -853,16 +863,17 @@ def veteran_chest(level: int, today: date) -> dict:
     return {"week": "veteran", "runs": 0, "sick_days": 0, "slots": slots, "complete": True}
 
 
-def vault(runs, items, sick, entries, start: date, today: date, level: int, mods: Mods | None = None) -> dict:
+def vault(runs, items, sick, entries, start: date, today: date, level: int, mods: Mods | None = None,
+          stones: list[dict] | None = None) -> dict:
     claims = _claims()
     def with_claim(v):
         c = claims.get(v["week"])
         return {**v, "claimed_slot": c.slot if c else None}
-    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today, mods))
+    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today, mods, stones))
     claimable = []
     w = _monday(start)
     while w < _monday(today):
-        v = with_claim(vault_week(w, runs, items, sick, entries, today, mods))
+        v = with_claim(vault_week(w, runs, items, sick, entries, today, mods, stones))
         if v["claimed_slot"] is None and any(s["unlocked"] for s in v["slots"]):
             claimable.append(v)
         w += timedelta(days=7)
@@ -883,7 +894,8 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
         monday = date.fromisoformat(week)
         if monday.weekday() != 0 or monday < _monday(data["start"]) or monday >= _monday(today):
             raise ValueError("Diese Woche ist noch nicht abgeschlossen oder liegt vor dem Start.")
-        chest = vault_week(monday, data["runs"], data["drops"], data["sick"], data["entries"], today, data["mods"])
+        chest = vault_week(monday, data["runs"], data["drops"], data["sick"], data["entries"], today, data["mods"],
+                           data.get("stones"))
     picked = next((s for s in chest["slots"] if s["slot"] == slot), None)
     if picked is None or not picked["unlocked"]:
         raise ValueError("Slot nicht freigeschaltet.")
@@ -1168,7 +1180,10 @@ def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> 
         "sleep_nights": sum(1 for m in data["sleep"].values() if m >= 420),
     }
     stats["regions"] = sum(1 for r in data.get("world", {}).get("regions", []) if r["discovered"])
-    dgs = data.get("world", {}).get("dungeons", [])
+    dgs = [d for d in data.get("world", {}).get("dungeons", []) if not d.get("own")]   # Option B: eigene zählen nicht
+    mythic = _safe(lambda: hero_keystone.rating(data.get("stones")), None) or {}
+    stats["key_best"], stats["key_total"] = mythic.get("best_level", 0), mythic.get("total", 0)
+    stats["key_dungeons"] = mythic.get("dungeons_timed", 0)
     stats["map_dungeons"] = sum(1 for d in dgs if d["cleared"])
     stats["map_heroic"] = sum(1 for d in dgs if d["heroic"])
     for kind in hero_world.DUNGEON_TYPES:
@@ -1572,7 +1587,8 @@ def _load(today: date) -> dict:
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
             "rides": rides, "mount_hist": mount_hist, "mount_feed": mount_feed, "fed": fed,
             "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips, "world": world,
-            "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total}
+            "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total,
+            "stones": _safe(hero_keystone.results, [])}
 
 
 def overview(today: date | None = None) -> dict:
@@ -1657,7 +1673,9 @@ def overview(today: date | None = None) -> dict:
         "companion": companion(cls["class"], data, today),
         "specs": [{"key": k, **v, "focus": FOCUS_TEXT[k], "score": cls["spec_scores"].get(k)} for k, v in SPECS.items()],
         "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
-        "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"]),
+        "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"],
+                       data.get("stones")),
+        "mythic": _safe(lambda: hero_keystone.rating(data.get("stones")), None),
         "talents": talents_view(data["mods"], lv["level"], today),
         "quests": data["quest_weeks"][-1] if data["quest_weeks"] else None,
         "bosses": [b for b in data["bosses"] if b["month"] == today.replace(day=1).isoformat()],
