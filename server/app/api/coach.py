@@ -125,6 +125,7 @@ def reports(limit: int = 10) -> list[dict]:
         return [
             {"id": r.id, "kind": r.kind, "content": r.content, "model": r.model,
              "created_at": r.created_at.isoformat(), "cost_usd": r.cost_usd,
+             "provider": r.provider, "fallback_reason": r.fallback_reason,
              "visuals": visuals.parse_visuals(r.visuals)}
             for r in rows
         ]
@@ -139,6 +140,7 @@ def report_detail(report_id: int) -> dict:
             raise HTTPException(status_code=404, detail="Report nicht gefunden")
         return {"id": r.id, "kind": r.kind, "content": r.content, "prompt": r.prompt,
                 "model": r.model, "created_at": r.created_at.isoformat(), "cost_usd": r.cost_usd,
+                "provider": r.provider, "fallback_reason": r.fallback_reason,
                 "visuals": visuals.parse_visuals(r.visuals)}
 
 

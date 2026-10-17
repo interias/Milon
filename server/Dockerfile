@@ -6,7 +6,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1     TZ=Europe/Berlin
+# TZ: naive datetime.now() (coach_reports, budget month) must be local wall time; the slim image ships /usr/share/zoneinfo.
 
 WORKDIR /app/server
 

@@ -117,7 +117,7 @@ export default function Coach() {
       <CardTitle title={current ? reportLabel(current.kind) : "Antwort"} />
       {current ? <>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted">Gespeichert am {new Date(current.created_at).toLocaleString("de-DE")}</p>
+          <p className="text-xs text-muted">Gespeichert am {new Date(current.created_at).toLocaleString("de-DE")}{current.fallback_reason && <> · über OpenRouter (Rückfall: {current.fallback_reason})</>}</p>
           {!!current.visuals?.length && <button type="button" onClick={() => setPanel("visuals")} className="rounded border border-line px-3 py-2 text-xs">Grafische Ansicht</button>}
         </div>
         <Markdown>{current.content}</Markdown>
