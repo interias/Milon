@@ -391,7 +391,7 @@ export type SettingsUpdate = {
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
 export type CoachImage = { url: string; cost_usd: number | null; model: string };
-export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null; visuals?: CoachVisual[] };
+export type Report = { id: number; kind: string; content: string; model: string; created_at: string; tools_used?: string[]; cost_usd?: number | null; provider?: string | null; fallback_reason?: string | null; visuals?: CoachVisual[] };
 export type Briefing = { id: number; kind: "briefing"; content: string; created_at: string; model: string | null; provider: string | null; fallback_reason: string | null; cost_usd: number | null };
 export type BriefingToday = { date: string; briefing: Briefing | null };
 export type WeeklyAutoReport = Omit<Briefing, "kind"> & { kind: "weekly-auto" };
