@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from ..metrics import achievements, activity, body, health, nutrition, run_analysis, run_fitness_service, running, strength
+from ..metrics import achievements, activity, body, cycling, health, nutrition, run_analysis, run_fitness_service, running, strength
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -151,6 +151,55 @@ def health_cycling(weeks: int = 12) -> list[dict]:
 @router.get("/health/cycling-recent")
 def health_cycling_recent(limit: int = 8) -> list[dict]:
     return health.cycling_recent(limit)
+
+
+# --- Rad (Indoor/Zwift) ---
+@router.get("/cycling/summary")
+def cycling_summary() -> dict:
+    return cycling.summary()
+
+
+@router.get("/cycling/power-curve")
+def cycling_power_curve() -> dict:
+    return cycling.power_curve()
+
+
+@router.get("/cycling/eftp")
+def cycling_eftp(weeks: int = 26) -> dict:
+    return cycling.eftp(weeks)
+
+
+@router.get("/cycling/hr-at-power")
+def cycling_hr_at_power(ref_power: int | None = None) -> dict:
+    return cycling.hr_at_power(ref_power)
+
+
+@router.get("/cycling/efficiency")
+def cycling_efficiency() -> dict:
+    return cycling.efficiency()
+
+
+@router.get("/cycling/zones")
+def cycling_zones(weeks: int = 12) -> dict:
+    return cycling.zones(weeks)
+
+
+@router.get("/cycling/rides")
+def cycling_rides(limit: int = 20) -> list[dict]:
+    return cycling.rides(limit)
+
+
+@router.get("/cycling/ride/{activity_id}")
+def cycling_ride(activity_id: str) -> dict:
+    detail = cycling.ride_detail(activity_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Fahrt nicht gefunden.")
+    return detail
+
+
+@router.get("/cycling/worlds")
+def cycling_worlds() -> dict:
+    return cycling.worlds()
 
 
 @router.get("/health/resting-hr")

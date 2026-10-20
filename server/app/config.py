@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     # den Daten ableiten (robustes 95.-Perzentil der max_hr, Boden 180).
     run_hr_max: float = 180.0
 
+    # Rad-FTP (Watt) für Leistungszonen/IF/TSS. 0 = automatisch: eFTP aus den Indoor-Fahrten
+    # (95 % der besten 20 min der letzten 90 T bzw. Fit über die Leistungskurve), sonst Garmin-FTP.
+    bike_ftp: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+
     # Wetter auf der Übersicht (Open-Meteo). Orte werden in den Einstellungen per Name geocodiert;
     # erster Ort = Standard. WEATHER_PLACE/LAT/LON = Altformat (ein Ort), wird beim Speichern abgelöst.
     weather_places: list[dict] = Field(default_factory=list)
