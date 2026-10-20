@@ -125,6 +125,16 @@ def get_run_records() -> dict:
 
 
 @mcp.tool()
+def get_cycling_power() -> dict:
+    """Indoor-Rad (Zwift/Rolle): eFTP + W/kg, ausgedünnte Leistungskurve, Puls bei Referenzleistung und
+    Effizienz NP/HF mit Signifikanz-Urteil, letzte Fahrten, Form (TSB, pulsbasiert über Lauf + Rad).
+    Urteil nur bei significant=true als echten Trend deuten. Watt-TSS nie mit Lauflast verrechnen;
+    Form-TRIMP (HFmax-Setting) ist nicht direkt mit dem TRIMP aus get_run_fitness_trends vergleichbar."""
+    from ..coach import rad
+    return rad.power_overview()
+
+
+@mcp.tool()
 def get_run_fitness_trends() -> dict:
     """Lauf-Fitness-Entwicklung mit Signifikanz-Urteil (95%-CI, Lauf-Level-Regression):
     pace_at_hr (Pace bei Referenzpuls), easy_hr (Ø-HF im Locker-Korridor), trimp

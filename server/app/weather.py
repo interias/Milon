@@ -159,6 +159,10 @@ def clothing(temp: float, wet: bool, wind_kmh: float | None) -> dict:
     return {"level": level, "text": text, "extras": extras, "felt": round(felt, 1), "adjust": adjust}
 
 
+# WMO-Codes mit Schnee oder gefrierendem Niederschlag = Glättegefahr (nur Hinweis für die Zwift-Regel).
+_ICY_CODES = {56, 57, 66, 67, 71, 73, 75, 77, 85, 86}
+
+
 def _window(by_hour: dict[datetime, dict], start: datetime) -> dict | None:
     """Wetter eines 60-min-Laufs ab `start`, gewichtet nach Minuten je Stundenwert."""
     end = start + timedelta(minutes=RUN_MINUTES)
@@ -178,10 +182,11 @@ def _window(by_hour: dict[datetime, dict], start: datetime) -> dict | None:
     wind = max(h.get("wind_kmh") or 0 for _, h in parts)
     score = abs(temp - IDEAL_C) + rain_prob / 10 + min(rain_mm, 3) * 3 + max(0.0, wind - 15) / 5
     wet = rain_prob >= 50 or rain_mm >= 0.3
+    icy = any(h.get("code") in _ICY_CODES for _, h in parts)
     return {
         "start": start.strftime("%Y-%m-%dT%H:%M"), "end": end.strftime("%Y-%m-%dT%H:%M"),
         "temp": round(temp, 1), "rain_prob": rain_prob, "wind_kmh": round(wind), "wet": wet,
-        "score": round(score, 1), "rating": "ideal" if score <= 3 else "gut" if score <= 8 else "mäßig",
+        "icy": icy, "score": round(score, 1), "rating": "ideal" if score <= 3 else "gut" if score <= 8 else "mäßig",
         "clothing": clothing(temp, wet, wind),
     }
 

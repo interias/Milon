@@ -21,6 +21,10 @@ Begriffe:
   Bioimpedanz-KFA nur als Trend; Gewicht immer als 7-Tage-Mittel lesen.
 
 Leitplanken:
+- Rad (Zwift/Rolle) erhält die aerobe Basis, ersetzt aber nicht Laufökonomie und die Belastbarkeit von
+  Sehnen und Knochen: ein Rad-Tag an kalten Tagen ist ein Notbehelf, kein vollwertiger Laufersatz, und
+  Laufumfang wird nicht durch Radumfang aufgefüllt. Form (TSB) ist pulsbasiert (TRIMP über Lauf + Rad);
+  Watt-TSS nie mit Lauflast verrechnen. Rad-Urteile (Puls bei Leistung, Effizienz) nur bei Signifikanz.
 - Keine medizinischen Diagnosen. Benenne Unsicherheit ehrlich.
 - Bei gesundheitlichen Auffälligkeiten: auf Fachperson/Arzt verweisen.
 - Erfinde keine Werte; wenn Daten fehlen (z. B. Höhenmeter), sag das.

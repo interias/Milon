@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from ..config import settings
 from .. import checkins, coach_actions
 from ..metrics import body, health, nutrition, running, sleep, strength
+from . import rad as rad_context
 
 
 def _pace(p: float | None) -> str:
@@ -87,6 +88,7 @@ def snapshot_text() -> str:
         f"Ø-HF {r.get('avg_hr') or '–'} bpm (max {r.get('max_hr') or '–'}), "
         f"aerobe Effizienz {r.get('ef') or '–'} m/Herzschlag, HF-Drift {r.get('hr_drift') if r.get('hr_drift') is not None else '–'} %{hr_note}. "
         f"Wochenvolumen (4 Wo, km): {vol}. Höhenmeter sind gegebenenfalls in einzelnen Garmin-Laufdetails vorhanden.",
+        *rad_context.snapshot_lines(),
         "",
         f"KRAFT: Top-e1RM {k.get('top_lift')} {k.get('top_e1rm')} kg; Wochen-Tonnage ~{(k.get('week_tonnage_kg') or 0)/1000:.1f} t; "
         f"RPE Ø {k.get('rpe')}. Tonnage (6 Wo): {ton}. e1RM-Hauptübungen: {lifts}.",
