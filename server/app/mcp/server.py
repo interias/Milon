@@ -184,7 +184,7 @@ def get_e1rm_trend(exercise: str, weeks: int = 26) -> list:
 
 @mcp.tool()
 def get_recent_activity(limit: int = 10) -> list:
-    """Letzte Aktivitäten: Läufe + Kraft-Workouts, neueste zuerst."""
+    """Letzte Aktivitäten: Läufe, Kraft-Workouts und Radfahrten (Indoor/Zwift + GPS), neueste zuerst."""
     return activity.recent(limit)
 
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 import pandas as pd
 
 # Bekannte Zwift-Welten (kanonische Schreibweise); „alle Welten“ = diese Liste.
+# Bologna fehlt bewusst: nur bei Zeitfahr-Events fahrbar, „Traumwandler“ soll ohne Event erreichbar sein
+# (Abgleich 2026-10-20: Zwift hat 12 Welten, die übrigen 11 stehen hier).
 KNOWN_WORLDS = ["Watopia", "London", "New York", "Innsbruck", "Richmond", "Yorkshire", "France", "Paris",
                 "Makuri Islands", "Scotland", "Crit City"]
 _ALIASES = {"new york city": "New York", "nyc": "New York", "makuri": "Makuri Islands", "makuri island": "Makuri Islands",

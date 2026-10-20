@@ -65,6 +65,7 @@ export function AreaTrend({
   format = (n) => de(n, 1),
   className = "text-accent",
   smooth = false,
+  floor,
 }: {
   values: (number | null)[];
   labels?: string[];
@@ -73,6 +74,7 @@ export function AreaTrend({
   format?: Fmt;
   className?: string;
   smooth?: boolean; // monotone kubische Kurve statt gerader Segmente
+  floor?: number; // Y-Achse nie unter diesen Wert (z. B. 0 für Watt/Puls)
 }) {
   const pts0 = values
     .map((v, i) => ({ i, v }))
@@ -80,7 +82,8 @@ export function AreaTrend({
   if (pts0.length < 2) {
     return <div style={{ height }} className="grid place-items-center text-xs text-muted">keine Daten</div>;
   }
-  const [lo, hi] = domain(pts0.map((p) => p.v));
+  const [lo0, hi] = domain(pts0.map((p) => p.v));
+  const lo = floor != null ? Math.max(floor, lo0) : lo0;
   const range = hi - lo || 1;
   const W = 100, H = 100, n = values.length;
   const X = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * W);
@@ -253,6 +256,7 @@ export function MultiTrend({
   unit,
   format = (n) => de(n, 1),
   equalWeight = false,
+  zeroLine = false,
 }: {
   series: { values: (number | null)[]; label: string; color: string; smooth?: boolean;
             opacity?: number; width?: number; hideLabel?: boolean }[];
@@ -261,6 +265,7 @@ export function MultiTrend({
   unit?: string;
   format?: Fmt;
   equalWeight?: boolean; // alle Linien gleich stark (statt letzte Serie hervorzuheben)
+  zeroLine?: boolean; // gestrichelte Nulllinie, wenn 0 im Wertebereich liegt
 }) {
   const allY = series.flatMap((s) => s.values.filter((v): v is number => v != null));
   if (allY.length < 2) {
@@ -294,6 +299,9 @@ export function MultiTrend({
             {[0, 0.5, 1].map((g) => (
               <line key={g} x1="0" x2={W} y1={g * H} y2={g * H} stroke="var(--color-line)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
             ))}
+            {zeroLine && lo < 0 && hi > 0 && (
+              <line x1="0" x2={W} y1={Y(0)} y2={Y(0)} stroke="var(--color-muted)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            )}
             {series.map((s, si) => (
               <path key={si} d={path(s.values, s.smooth)} fill="none" stroke={s.color}
                     strokeWidth={s.width ?? (equalWeight ? 1.7 : si === series.length - 1 ? 2.2 : 1.3)}

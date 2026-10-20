@@ -788,7 +788,7 @@ export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClas
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Rad", x.rad ?? 0], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung], ["Gipfel", x.gipfel ?? 0]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Rad", x.rad ?? 0], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung], ["Ereignisse", x.events ?? 0], ["Gipfel", x.gipfel ?? 0]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />

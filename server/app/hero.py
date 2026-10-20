@@ -1034,7 +1034,7 @@ def veteran_chest(level: int, today: date) -> dict:
     for i, rarity in enumerate(["blau", "lila", "orange"]):
         item = make_item(_rng("veteran", i), rarity, when, None, level, "veteran", "Veteranentruhe für deine bisherige Reise")
         slots.append({"slot": i, "threshold": 0, "unlocked": True, "item": {**item, "id": f"veteran:{i}"}})
-    return {"week": "veteran", "runs": 0, "sick_days": 0, "slots": slots, "complete": True}
+    return {"week": "veteran", "runs": 0, "rides": 0, "sick_days": 0, "slots": slots, "complete": True}
 
 
 def vault(runs, items, sick, entries, start: date, today: date, level: int, mods: Mods | None = None,

@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from .. import garmin_indoor
 from ..config import settings
@@ -82,6 +82,24 @@ def indoor_rides(include_series: bool = False) -> pd.DataFrame:
         df["series"] = df.pop("series_json").map(lambda s: json.loads(s or "{}"))
     df["hr_valid"] = df["hr_valid"].astype(bool)
     df["day"] = df["started_at"].dt.date
+    return df
+
+
+def _attach_series(df: pd.DataFrame) -> pd.DataFrame:
+    """Sekunden-Serie nur für die Fahrten in df nachladen (statt die Serien aller Fahrten)."""
+    df = df.copy()
+    ids = [str(i) for i in df["activity_id"]] if not df.empty else []
+    found: dict[str, dict] = {}
+    if ids:
+        with engine.connect() as con:
+            for start in range(0, len(ids), 500):
+                chunk = ids[start:start + 500]
+                marks = ", ".join(f":p{i}" for i in range(len(chunk)))
+                rows = con.execute(text(f"SELECT activity_id, series_json FROM garmin_indoor_rides "
+                                        f"WHERE activity_id IN ({marks})"),
+                                   {f"p{i}": v for i, v in enumerate(chunk)})
+                found.update({str(a): json.loads(js or "{}") for a, js in rows})
+    df["series"] = [found.get(str(i), {}) for i in df["activity_id"]] if ids else pd.Series(dtype=object)
     return df
 
 
@@ -293,11 +311,11 @@ def _display(series: dict, limit: int = 600) -> list[dict]:
 
 
 def ride_detail(activity_id: str) -> dict | None:
-    df = _with_load(indoor_rides(include_series=True))
+    df = _with_load(indoor_rides())
     hit = df[df["activity_id"] == activity_id] if not df.empty else df
     if hit.empty:
         return None
-    r = hit.iloc[0]
+    r = _attach_series(hit.iloc[:1]).iloc[0]
     seconds = _zone_seconds(r["series"], r["eftp"] if pd.notna(r["eftp"]) else None)
     return _clean({
         **_ride_row(r),
@@ -435,8 +453,8 @@ def efficiency(alpha: float = 0.25) -> dict:
             "current": round(float(smooth.iloc[-1]), 3), "rides": int(len(df)),
             "trend": stats.assess(stats.linear_trend(xs, df["ef"].tolist()), down_is_good=False),
         })
-    with_series = indoor_rides(include_series=True)
-    with_series = with_series[with_series["hr_valid"]] if not with_series.empty else with_series
+    with_series = indoor_rides()
+    with_series = _attach_series(with_series[with_series["hr_valid"]]) if not with_series.empty else with_series
     for _, r in with_series.iterrows():
         dec = _decoupling(r["series"])
         if dec is not None:
@@ -452,13 +470,13 @@ def efficiency(alpha: float = 0.25) -> dict:
 def zones(weeks: int = 12, today: date | None = None) -> dict:
     """Zeit in Coggan-Zonen je Woche (aus der Sekunden-Serie, eFTP am Fahrttag)."""
     today = _today(today)
-    df = _with_load(indoor_rides(include_series=True))
+    df = _with_load(indoor_rides())
     current = eftp(today=today)
     out = {"eftp": current["value"], "source": current["source"], "zones": current["zones"],
            "weeks": [], "unzoned_rides": 0}
     if df.empty:
         return _clean(out)
-    df = df[df["day"] > today - timedelta(weeks=weeks)]
+    df = _attach_series(df[df["day"] > today - timedelta(weeks=weeks)])
     buckets: dict[date, dict] = {}
     for _, r in df.iterrows():
         seconds = _zone_seconds(r["series"], r["eftp"] if pd.notna(r["eftp"]) else None)

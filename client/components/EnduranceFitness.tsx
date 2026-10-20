@@ -60,7 +60,7 @@ export function EnduranceFitnessCard() {
       </div>
       <div className="mt-4 border-t border-line pt-3">
         <p className="mb-1 text-xs font-semibold">Form · Fitness minus Ermüdung vom Vorabend</p>
-        <MultiTrend height={110} labels={labels} format={(n) => signed(n)}
+        <MultiTrend height={110} labels={labels} format={(n) => signed(n)} zeroLine
           series={[{ values: series.map((d) => d.tsb), label: "Form (über 0 = ausgeruht)", color: "var(--color-accent-2)", width: 2 }]} />
       </div>
       {weeks.length > 0 && <div className="mt-4 border-t border-line pt-3">

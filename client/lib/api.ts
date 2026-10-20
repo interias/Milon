@@ -305,7 +305,7 @@ export type Hero = {
   companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; rad?: number; gipfel?: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; events?: number; rad?: number; gipfel?: number; xp: number; level: number }[];
   mythic?: HeroMythic | null;
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];

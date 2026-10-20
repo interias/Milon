@@ -413,6 +413,21 @@ def test_zones_weekly_from_series(db, monkeypatch):
     assert seconds[3] == 1801 and sum(seconds) == 1801
 
 
+def test_series_loaded_only_for_needed_rides(db, monkeypatch):
+    monkeypatch.setattr(cycling.settings, "bike_ftp", 200.0)
+    store(TODAY, "90", power=200.0, seconds=1800)
+    store(TODAY - timedelta(weeks=10), "91", power=200.0, seconds=1800)
+    loaded: list[list[str]] = []
+    original = cycling._attach_series
+    monkeypatch.setattr(cycling, "_attach_series",
+                        lambda df: loaded.append(sorted(map(str, df["activity_id"]))) or original(df))
+    detail = cycling.ride_detail("90")
+    assert loaded == [["90"]] and detail["series"] and detail["zones"][3]["seconds"] == 1801
+    loaded.clear()
+    assert len(cycling.zones(weeks=4, today=TODAY)["weeks"]) == 1
+    assert loaded == [["90"]]  # the ride outside the window is never parsed
+
+
 def test_worlds_and_routes(db):
     store(TODAY, "70", title="Zwift - Tempus Fugit in Watopia")
     store(TODAY - timedelta(days=1), "71", title="Zwift - Tempus Fugit in Watopia")

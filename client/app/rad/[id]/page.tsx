@@ -83,27 +83,27 @@ export default function RideDetailPage() {
       <Card>
         <CardTitle title="Verlauf" sub="Leistung, Puls und Trittfrequenz über die Fahrzeit" />
         {s.length < 2 ? <Empty height={100}>keine Sekunden-Daten gespeichert</Empty> : <div className="space-y-5">
-          {some(watts) && <div><p className="mb-1 text-xs font-semibold">Leistung</p><AreaTrend values={watts} labels={labels} unit="W" format={(n) => de0(n)} height={130} /></div>}
-          {ride.hr_valid && some(bpm) && <div><p className="mb-1 text-xs font-semibold">Puls</p><AreaTrend values={bpm} labels={labels} unit="bpm" format={(n) => de0(n)} height={110} className="text-bad" /></div>}
-          {some(rpm) && <div><p className="mb-1 text-xs font-semibold">Trittfrequenz</p><AreaTrend values={rpm} labels={labels} unit="rpm" format={(n) => de0(n)} height={110} className="text-accent-2" /></div>}
+          {some(watts) && <div><p className="mb-1 text-xs font-semibold">Leistung</p><AreaTrend values={watts} labels={labels} unit="W" format={(n) => de0(n)} height={130} floor={0} /></div>}
+          {ride.hr_valid && some(bpm) && <div><p className="mb-1 text-xs font-semibold">Puls</p><AreaTrend values={bpm} labels={labels} unit="bpm" format={(n) => de0(n)} height={110} className="text-bad" floor={0} /></div>}
+          {some(rpm) && <div><p className="mb-1 text-xs font-semibold">Trittfrequenz</p><AreaTrend values={rpm} labels={labels} unit="rpm" format={(n) => de0(n)} height={110} className="text-accent-2" floor={0} /></div>}
           {!some(watts) && !some(bpm) && !some(rpm) && <Empty height={80}>weder Leistung noch Puls in der Serie</Empty>}
         </div>}
       </Card>
 
-      <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+      {power && <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
         <Card>
           <CardTitle title="Leistungskurve der Fahrt" sub="Beste Leistung dieser Fahrt je Dauer gegen deine Allzeit-Bestwerte" />
-          {power ? <LogCurve height={200}
+          <LogCurve height={200}
             lines={[
               { label: "diese Fahrt", color: "var(--color-accent)", points: ride.power_curve },
               { label: "Allzeit-Bestwerte", color: "var(--color-accent-2)", dash: "4 3", width: 1.6, points: bests.map((d) => ({ seconds: d.seconds, watts: d.best })) },
-            ]} /> : <Empty height={120}>keine Leistungsdaten</Empty>}
+            ]} />
         </Card>
         <Card>
           <CardTitle title="Zeit in Leistungszonen" sub="Coggan-Zonen bezogen auf die eFTP am Fahrttag" />
           <RideZoneBar zones={ride.zones ?? []} />
         </Card>
-      </div>
+      </div>}
     </div>
   </>;
 }
