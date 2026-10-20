@@ -201,12 +201,12 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
   ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event" | "auktion"; reason: string; date: string;
-  lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
+  lucky?: boolean; run_km?: number; ride_min?: number; claimed_at?: string; equipped?: boolean;
   set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number; price?: number; mail?: boolean;
 };
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
-  week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
+  week: string; runs: number; rides?: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
   stone_level?: number | null;
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
@@ -262,11 +262,11 @@ export type Hero = {
     level: number; title: string; xp: number; floor: number; next: number; progress: number;
     class: string; class_label: string; class_color: string; class_desc: string;
     spec: string | null; spec_label: string | null; spec_desc: string;
-    spec_scores: Record<string, number>; shares: { laufen: number; kraft: number; alltag: number };
+    spec_scores: Record<string, number>; shares: { laufen: number; rad?: number; kraft: number; alltag: number };
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events" | "rad", number>;
   duels: { won: number; total: number;
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
@@ -285,7 +285,7 @@ export type Hero = {
   companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; rad?: number; xp: number; level: number }[];
   mythic?: HeroMythic | null;
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];

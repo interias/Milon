@@ -1,7 +1,9 @@
 """Heldenreise: Wochenaufträge — aus Rohdaten berechnet, je ISO-Woche geseedet (stabil).
 
 Pro Woche ein Lauf-, ein Kraft- und ein Pflege-Auftrag (Talent der Stufe 40 ergänzt einen
-vierten). Die Lauf-Aufträge sind nach der Spezialisierung gewichtet. Ab 3 Krankheitstagen
+vierten). Die Lauf-Aufträge sind nach der Spezialisierung gewichtet. Ab ENDURANCE_FROM liegen im
+Lauf-Topf zusätzlich Ausdauer-Aufträge (Minuten bzw. Zonen-Minuten, Lauf ODER Indoor-Fahrt) — erst
+ab dann, damit die geseedete Auswahl früherer Wochen unverändert bleibt. Ab 3 Krankheitstagen
 halbieren sich die Ziele. Jeder Auftrag gibt EP am Tag der Erfüllung; alle erfüllt → Beute.
 """
 from __future__ import annotations
@@ -29,7 +31,13 @@ QUESTS = {
     "schlaf3": ("pflege", "Traumwandler", "Nächte ab 7 h Schlaf", 3, "Nächte"),
     "schritte60": ("pflege", "Wanderer", "Schritte", 60000, "Schritte"),
     "ruhetag1": ("pflege", "Ruhe ist Training", "Ruhetag ohne Lauf und Kraft", 1, "Tag"),
+    "ausdauer150": ("ausdauer", "Unermüdlich", "Ausdauer-Minuten, Lauf oder Rad", 150, "min"),
+    "grundlage90": ("ausdauer", "Ruhige Kurbel", "Minuten in Zone 1–2, Lauf oder Rad", 90, "min"),
+    "tempo30": ("ausdauer", "Glühende Pedale", "Minuten in Zone 3–4, Lauf oder Rad", 30, "min"),
 }
+ENDURANCE_FROM = date(2026, 10, 26)  # erste Woche mit Ausdauer-Aufträgen (#72)
+ENDURANCE = [k for k, v in QUESTS.items() if v[0] == "ausdauer"]
+SPEC_ENDURANCE = {"ausdauer": ["grundlage90"], "tempo": ["tempo30"], "last": ["ausdauer150"]}
 SPEC_LAUF = {"ausdauer": ["locker2", "locker2", "km20"], "tempo": ["tempo1", "tempo1", "morgen1"],
              "strecke": ["lang1", "lang1", "km20"], "last": ["laeufe3", "laeufe3", "km20"]}
 ALL_LAUF = [k for k, v in QUESTS.items() if v[0] == "lauf"]
@@ -44,9 +52,12 @@ def _rng(*parts) -> random.Random:
 def pick(week: date, spec: str | None, extra: str | None) -> list[str]:
     rng = _rng("quests", week.isoformat())
     pool = SPEC_LAUF.get(spec or "", []) + ALL_LAUF
+    endurance = week >= ENDURANCE_FROM
+    if endurance:
+        pool += SPEC_ENDURANCE.get(spec or "", []) + ENDURANCE
     chosen = [rng.choice(pool), rng.choice(CATS["kraft"]), rng.choice(CATS["pflege"])]
     if extra in CATS:
-        rest = [k for k in CATS[extra] if k not in chosen]
+        rest = [k for k in CATS[extra] + (ENDURANCE if extra == "lauf" and endurance else []) if k not in chosen]
         if rest:
             chosen.append(rng.choice(rest))
     return chosen
@@ -56,6 +67,16 @@ def _daily_values(qid: str, week: date, d: date, data: dict) -> float:
     """Beitrag des Tages d zum Auftrag (summiert sich über die Woche)."""
     runs, workouts = data["runs"], data["workouts"]
     day_runs = runs[runs["day"] == d] if not runs.empty else runs
+    if qid in ENDURANCE:  # Lauf ODER Indoor-Fahrt; Zone beider in Lauf-Skala (0..3)
+        rides = data.get("indoor")
+        day_rides = rides[rides["day"] == d] if rides is not None and not rides.empty else None
+        frames = [f for f in (day_runs, day_rides) if f is not None and not f.empty]
+        if not frames:
+            return 0.0
+        both = pd.concat([f[["dur_min", "zone"]] for f in frames], ignore_index=True)
+        zone = pd.to_numeric(both["zone"], errors="coerce")
+        mask = {"ausdauer150": pd.Series(True, index=both.index), "grundlage90": zone <= 1, "tempo30": zone >= 2}[qid]
+        return float(both.loc[mask, "dur_min"].sum())
     zone = day_runs["zone"] if not day_runs.empty else pd.Series(dtype=float)
     if qid == "locker2":
         return float((zone.dropna() <= 1).sum())

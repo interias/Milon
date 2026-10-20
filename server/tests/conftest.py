@@ -61,3 +61,22 @@ def _no_real_indoor_db(monkeypatch, _indoor_engine):
     nie data/tracker.db öffnen. Tests mit eigener DB setzen garmin_indoor.engine danach selbst."""
     from app import garmin_indoor
     monkeypatch.setattr(garmin_indoor, "engine", _indoor_engine)
+
+
+@pytest.fixture(scope="session")
+def _hero_ride_engine(tmp_path_factory):
+    engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('heroride') / 'heroride.db'}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_cycling_db(monkeypatch, _hero_ride_engine):
+    """Die Heldenreise liest Indoor-Fahrten über cycling.engine und deren HC-Spiegel über health.engine;
+    Tests, die nur hero.engine setzen, dürfen dabei nie data/tracker.db öffnen. Tests mit eigener DB setzen
+    beide danach selbst."""
+    from app.metrics import cycling, health
+    monkeypatch.setattr(cycling, "engine", _hero_ride_engine)
+    monkeypatch.setattr(health, "engine", _hero_ride_engine)
