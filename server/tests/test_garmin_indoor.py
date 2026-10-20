@@ -277,6 +277,66 @@ def test_eftp_fallback_chain(db, monkeypatch):
     assert (cycling.eftp(today=TODAY)["value"], cycling.eftp(today=TODAY)["source"]) == (300, "setting")
 
 
+def test_eftp_garmin_floor_until_hard_effort(db, monkeypatch):
+    set_garmin_ftp(db, 203.0)
+    # Easy rides only (raw auto eFTP 96 W like the real data) → Garmin FTP is the floor.
+    store(TODAY - timedelta(days=20), "50", power=101.0, seconds=2700)
+    easy = cycling.eftp(today=TODAY)
+    assert (easy["value"], easy["source"]) == (203, "garmin_floor")
+    row = cycling.rides()[0]
+    assert row["eftp"] == 203 and row["if"] == round(101 / 203, 2)
+    raw = cycling._raw_auto_eftp(cycling._usable(cycling.indoor_rides()), TODAY)
+    assert raw[1] == "20min" and raw[0] == pytest.approx(0.95 * 101)
+    # garmin_ftp=None (Heldenreise) → raw auto eFTP unchanged; _eftp_at too.
+    power = cycling._usable(cycling.indoor_rides())
+    assert cycling._auto_eftp(power, TODAY, None) == raw
+    assert cycling._eftp_at(power, TODAY, None) == raw
+    # Hard effort (20 min at 195 W >= 90 % of 203 W) → measured value counts, even below Garmin's.
+    store(TODAY - timedelta(days=2), "51", power=195.0, seconds=1800)
+    hard = cycling.eftp(today=TODAY)
+    assert (hard["value"], hard["source"]) == (round(0.95 * 195), "20min") and hard["value"] < 203
+    # The floor only applies until the effort has aged out of the 90-day window.
+    later = TODAY + timedelta(days=100)
+    assert cycling.eftp(today=later)["source"] == "garmin"
+    # BIKE_FTP wins over everything.
+    monkeypatch.setattr(cycling.settings, "bike_ftp", 250.0)
+    assert (cycling.eftp(today=TODAY)["value"], cycling.eftp(today=TODAY)["source"]) == (250, "setting")
+
+
+def test_eftp_floor_threshold_is_85_percent_of_garmin_ftp(db):
+    set_garmin_ftp(db, 200.0)
+    store(TODAY - timedelta(days=5), "80", power=178.0, seconds=1800)  # 0.95*178 = 169.1 < 170
+    assert cycling.eftp(today=TODAY)["source"] == "garmin_floor"
+    store(TODAY - timedelta(days=4), "81", power=180.0, seconds=1800)  # 0.95*180 = 171 >= 170
+    result = cycling.eftp(today=TODAY)
+    assert (result["value"], result["source"]) == (171, "20min")
+
+
+def test_eftp_floor_without_garmin_ftp_is_unchanged(db):
+    store(TODAY - timedelta(days=5), "60", power=101.0, seconds=2700)
+    result = cycling.eftp(today=TODAY)
+    assert (result["value"], result["source"]) == (round(0.95 * 101), "20min")
+
+
+def test_eftp_floor_in_weekly_series_and_endpoints(db):
+    set_garmin_ftp(db, 203.0)
+    store(TODAY - timedelta(days=35), "70", power=101.0, seconds=2700)
+    store(TODAY - timedelta(days=3), "71", power=200.0, seconds=1800)
+    result = cycling.eftp(weeks=8, today=TODAY)
+    sources = [w["source"] for w in result["series"]]
+    assert sources[0] == "garmin" or sources[0] == "garmin_floor"
+    assert "garmin_floor" in sources and sources[-1] == "20min"
+    assert sources.index("20min") > sources.index("garmin_floor")
+    assert [w["eftp"] for w in result["series"] if w["source"] == "garmin_floor"] == [203] * sources.count("garmin_floor")
+    assert result["series"][-1]["eftp"] == 190
+    app = FastAPI()
+    app.include_router(metrics_api.router)
+    client = TestClient(app)
+    for path in ("eftp", "summary", "rides"):
+        r = client.get(f"/metrics/cycling/{path}")
+        assert r.status_code == 200 and "NaN" not in r.text
+
+
 def test_eftp_weekly_series_and_wkg(db):
     with Session(db) as session:
         for offset in range(10):
