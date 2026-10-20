@@ -474,6 +474,57 @@ export type RunningFitnessReferenceUpdate =
   | { max_hr: number }
   | { sensor_change: { date: string; label: string } };
 
+// ---- Rad (Zwift & Indoor, /metrics/cycling) ----
+export type CycRide = {
+  activity_id: string; type: "virtual_ride" | "indoor_cycling" | string; title: string | null;
+  world: string | null; route: string | null; date: string; minutes: number | null; km: number | null;
+  elevation_m: number | null; avg_power: number | null; np: number | null; max_power: number | null;
+  kj: number | null; cadence: number | null; avg_hr: number | null; max_hr: number | null;
+  hr_valid: boolean; eftp: number | null; if: number | null; tss: number | null;
+  aerobic_te: number | null; anaerobic_te: number | null; training_load: number | null;
+};
+export type CycZone = { zone: number; name: string; lo_pct: number; hi_pct: number | null; lo_w: number; hi_w: number | null };
+export type CycSummary = {
+  rides: number; rides_with_power: number; hours: number; km: number; elevation_m: number; kj: number;
+  rides_30d: number; hours_30d: number; tss_7d: number; tss_28d: number; hr_valid_rides: number;
+  eftp: number | null; eftp_source: string | null; wkg: number | null; last_ride: CycRide | null;
+};
+export type CycEftp = {
+  value: number | null; source: string | null; wkg: number | null; weight_kg: number | null;
+  garmin_ftp: number | null; setting: number | null; window_days: number; factor: number;
+  zones: CycZone[]; series: { week: string; eftp: number | null; source: string | null }[]; caveat?: string;
+};
+export type CycCurve = {
+  window_days: number;
+  durations: { seconds: number; label: string; recent: number | null; previous: number | null; best: number | null; best_date: string | null }[];
+};
+export type CycTrend = FitTrend & { bpm_per_month?: number | null; bpm_per_watt?: number | null; delta_bpm?: number | null };
+export type CycHrAtPower = {
+  ref_power?: number; series?: { date: string; activity_id: string; hr: number; smooth: number }[];
+  current?: number | null; caveat?: string; trend?: CycTrend;
+};
+export type CycEfficiency = {
+  series?: { date: string; activity_id: string; ef: number; smooth: number }[]; current?: number | null; rides?: number;
+  trend?: FitTrend;
+  decoupling?: { date: string; activity_id: string; title: string | null; decoupling_pct: number; vi: number; minutes: number }[];
+  caveat?: string;
+};
+export type CycZones = {
+  eftp: number | null; source: string | null; zones: CycZone[];
+  weeks: { week: string; seconds: number[]; total: number; rides: number }[]; unzoned_rides: number;
+};
+export type CycRideDetail = CycRide & {
+  power_curve: { seconds: number; watts: number | null }[];
+  zones: (CycZone & { seconds: number | null })[];
+  garmin_power_zones: unknown; garmin_hr_zones: unknown; hr_dropout: number | null;
+  series: { t: number; power_w?: number | null; cadence_rpm?: number | null; hr_bpm?: number | null; speed_m_s?: number | null; altitude_m?: number | null }[];
+};
+export type CycWorlds = {
+  worlds: { world: string; rides: number; km: number; elevation_m: number; hours: number; last: string;
+    routes: { route: string; rides: number; km: number; elevation_m: number; hours: number; last: string }[] }[];
+  other_rides: number;
+};
+
 export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
@@ -526,6 +577,15 @@ export const api = {
   runEasyHr: () => get<EasyHr>("/metrics/running/easy-hr"),
   runTrimp: (weeks = 26) => get<Trimp>(`/metrics/running/trimp?weeks=${weeks}`),
   runPaceByZone: () => get<PaceByZone>("/metrics/running/pace-by-zone"),
+  cycSummary: () => get<CycSummary>("/metrics/cycling/summary"),
+  cycPowerCurve: () => get<CycCurve>("/metrics/cycling/power-curve"),
+  cycEftp: (weeks = 26) => get<CycEftp>(`/metrics/cycling/eftp?weeks=${weeks}`),
+  cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
+  cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
+  cycZones: (weeks = 12) => get<CycZones>(`/metrics/cycling/zones?weeks=${weeks}`),
+  cycRides: (limit = 20) => get<CycRide[]>(`/metrics/cycling/rides?limit=${limit}`),
+  cycRide: (id: string) => get<CycRideDetail>(`/metrics/cycling/ride/${encodeURIComponent(id)}`),
+  cycWorlds: () => get<CycWorlds>("/metrics/cycling/worlds"),
   runEf: () => get<EfTrend>("/metrics/running/ef"),
   runBestEfforts: (top = 3) => get<BestEfforts>(`/metrics/running/best-efforts?top=${top}`),
   runAchievements: () => get<Achievements>("/metrics/running/achievements"),
