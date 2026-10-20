@@ -32,6 +32,7 @@ const CATS: { key: string; label: string; icon: string }[] = [
   { key: "cross-domain", label: "Cross-Domain", icon: "🤸" },
   { key: "fun", label: "Fun & Kurios", icon: "✨" },
   { key: "weltkarte", label: "Weltkarte", icon: "🗺️" },
+  { key: "traumreiche", label: "Traumreiche", icon: "🌌" },
   { key: "meta", label: "Meta & Sammlung", icon: "🏆" },
 ];
 const CAT_LABEL = Object.fromEntries(CATS.map((c) => [c.key, c.label]));

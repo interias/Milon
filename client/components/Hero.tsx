@@ -99,7 +99,7 @@ const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
 function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
-  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute", auktion: "Auktionshaus" };
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute", auktion: "Auktionshaus", gipfel: "Von einem Zwift-Gipfel" };
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
@@ -757,6 +757,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "auftrag": return <span style={{ color: "#ffd100" }}>Auftrag abgeschlossen: {name("#ffd100")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "boss": return <span style={{ color: "#ff6a5c" }}>Boss besiegt: {name("#ff6a5c")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "instanz": return <span style={{ color: "#3d95ff" }}>Instanz bezwungen: {name("#3d95ff")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "gipfel": return <span style={{ color: "#6fd3e8" }}>Gipfel bezwungen: {name("#6fd3e8")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
@@ -787,7 +788,7 @@ export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClas
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Rad", x.rad ?? 0], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Rad", x.rad ?? 0], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung], ["Gipfel", x.gipfel ?? 0]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />

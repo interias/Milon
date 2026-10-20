@@ -93,9 +93,33 @@ def month_bosses(month: date, data: dict, today: date) -> list[dict]:
             won = w.day
     out.append(_boss("koloss", "Der Eisenkoloss", "Kraft", f"{target_sets} Arbeitssätze im Monat",
                      f"{cum:.0f} Sätze", max(0.0, 1 - cum / target_sets), won, "lila"))
+    chain = _chain_eater(month, end, prior, healthy, data.get("ride_min") or [])
+    if chain:
+        out.append(chain)
     for b in out:
         b["month"] = month.isoformat()
     return out
+
+
+def _hours(minutes: float) -> str:
+    h, m = divmod(int(round(minutes)), 60)
+    return f"{h} h {m:02d} min" if m else f"{h} h"
+
+
+def _chain_eater(month: date, end: date, prior: date, healthy: float, ride_min: list[tuple[date, float]]) -> dict | None:
+    """Rad-Zeit im Monat (Indoor + GPS) 10 % über dem Schnitt der letzten 3 Monate, mindestens 4 h; der erste
+    Rad-Monat hat fest 4 h. Erscheint nur, wenn in den 90 Tagen bis Monatsende (bzw. heute) eine Fahrt lag."""
+    if not any(end - timedelta(days=90) < d <= end for d, _ in ride_min):
+        return None
+    before = [m for d, m in ride_min if prior <= d < month]
+    target = round(max(240.0, sum(before) / 3 * 1.1) * healthy) if before else round(240 * healthy)
+    cum, won = 0.0, None
+    for d, m in sorted((x for x in ride_min if month <= x[0] <= end), key=lambda x: x[0]):
+        cum += m
+        if won is None and cum >= target:
+            won = d
+    return _boss("kettenfresser", "Der Kettenfresser", "Rad-Zeit", f"{_hours(target)} auf dem Rad im Monat",
+                 f"{_hours(cum)} gefahren", max(0.0, 1 - cum / target), won, "lila")
 
 
 def _boss(key, name, kind, goal, status, hp, won, loot):

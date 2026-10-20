@@ -1,6 +1,8 @@
 """Heldenreise: Titel, Ruf bei Fraktionen und Set-Boni — reine Berechnung aus Kennzahlen."""
 from __future__ import annotations
 
+from .hero_dreams import KNOWN_WORLDS
+
 # Ruf-Stufen wie in WoW (Untergrenze, Name).
 REP_LEVELS = [(0, "Neutral"), (3000, "Freundlich"), (9000, "Wohlwollend"), (18000, "Respektvoll"), (30000, "Ehrfürchtig")]
 FACTIONS = [
@@ -53,6 +55,9 @@ TITLES = [
     ("auenlaeufer", "Auenläufer", "3 Auen-Verliese bezwingen", "map_aue", 3),
     ("feldherr", "Feldherr", "3 Feld-Verliese bezwingen", "map_feld", 3),
     ("herr_der_marken", "Herr der Marken", "alle 25 Gebiete der Weltkarte entdecken", "regions", 25),
+    ("gipfelstuermer", "Gipfelstürmer", "in Zwift bis zum Mont Blanc klettern (4 Gipfel)", "peaks", 4),
+    ("dach_der_welt", "Dach der Welt", "in Zwift alle 6 Gipfel bis zum Everest erklimmen", "peaks", 6),
+    ("traumwandler", "Traumwandler", "alle Zwift-Welten befahren", "dream_worlds", len(KNOWN_WORLDS)),
     ("ehrfuerchtig", "Der Ehrfürchtige", "bei einer Fraktion Ehrfürchtig", "exalted", 1),
 ]
 

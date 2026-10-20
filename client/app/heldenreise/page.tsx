@@ -8,6 +8,7 @@ import { WelcomeBack, useLastVisit } from "@/components/HeroLife";
 import { HeroEvent, HeroTrainer } from "@/components/HeroEvents";
 import { HeroDuel, HeroMounts, HeroMythic, HeroSagaCard } from "@/components/HeroDuels";
 import { HeroAuction, HeroPotions } from "@/components/HeroTrade";
+import { HeroClimbCard, HeroDreamsCard } from "@/components/HeroClimb";
 import { HeroWorld } from "@/components/HeroWorld";
 import { PageTitle, Loading, ApiError } from "@/components/ui";
 import { HeroBags, HeroCharacter, HeroHeader, HeroLinkContext, HeroLog, HeroLogTicker, HeroPurse, HeroRules, HeroVaultCard, Icon, LootReveal, type Gear } from "@/components/Hero";
@@ -170,6 +171,7 @@ export default function Heldenreise() {
                     <div id="ab-instanzen"><HeroDungeons data={hero} /></div>
                   </div>
                   <div id="ab-duell" className="scroll-mt-32"><HeroDuel data={hero} /></div>
+                  <div id="ab-gipfel" className="scroll-mt-32"><HeroClimbCard data={hero} /></div>
                   <div id="ab-karte" className="scroll-mt-32"><HeroWorld data={hero} onChanged={load} /></div>
                 </>}
                 {tab === "talente" && <HeroTalentTree data={hero} onChoose={async (row, choice) => { await api.heroTalent(row, choice); await load(); }} />}
@@ -190,6 +192,7 @@ export default function Heldenreise() {
                 </>}
                 {tab === "sammlung" && <>
                   <HeroMounts data={hero} onChoose={async (key) => { await api.heroMount(key); play("equip"); await load(); }} />
+                  <HeroDreamsCard data={hero} />
                   <HeroMythic data={hero} />
                   {ach ? <><AchievementsSummary data={ach} showLevel={false} /><AchievementsGrid data={ach} collapsible /></> : <Loading />}
                 </>}
@@ -205,7 +208,7 @@ export default function Heldenreise() {
 }
 
 const JUMPS: [string, string][] = [["ab-gorm", "Gorm"], ["ab-event", "Event"], ["ab-truhe", "Truhe"], ["ab-auftraege", "Aufträge"],
-  ["ab-bosse", "Bosse"], ["ab-instanzen", "Instanzen"], ["ab-duell", "Duell"], ["ab-karte", "Karte"]];
+  ["ab-bosse", "Bosse"], ["ab-instanzen", "Instanzen"], ["ab-duell", "Duell"], ["ab-gipfel", "Gipfel"], ["ab-karte", "Karte"]];
 type TabKey = "charakter" | "abenteuer" | "talente" | "handel" | "chronik" | "sammlung" | "log";
 const TABS: { key: TabKey; label: string; short: string }[] = [
   { key: "charakter", label: "Charakter", short: "Held" },
