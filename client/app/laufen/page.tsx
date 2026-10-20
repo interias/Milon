@@ -14,6 +14,7 @@ import { RunZones } from "@/components/RunZones";
 import { RunRoutes } from "@/components/RunRoutes";
 import { RunReferenceCard } from "@/components/RunReference";
 import { RunningLoad } from "@/components/RunningLoad";
+import { EnduranceFitnessCard } from "@/components/EnduranceFitness";
 import { de, de0, dm, dur } from "@/lib/format";
 
 type Panel = "analyses" | "records" | null;
@@ -91,6 +92,7 @@ export default function Laufen() {
         <div className="min-w-0"><RunRoutes /></div>
       </div>
       <RunReferenceCard />
+      <EnduranceFitnessCard />
       <RunningLoad />
     </section>
 

@@ -7,6 +7,7 @@ import { weeklyJournal, type JournalDay, type WeeklyJournal } from "@/lib/weekly
 import { de, de0, dm } from "@/lib/format";
 import styles from "./WeeklyReview.module.css";
 import { useSyncFeedback } from "@/components/SyncFeedback";
+import { EnduranceFitnessCompact } from "@/components/EnduranceFitness";
 
 const delta = (value: number, unit: string, digits = 1) => `${value > 0 ? "+" : ""}${de(value, digits)} ${unit} zur Vorwoche`;
 const sleepTime = (hours: number | null | undefined) => hours == null ? "—" : `${Math.floor(Math.round(hours * 60) / 60)}:${String(Math.round(hours * 60) % 60).padStart(2, "0")} h`;
@@ -16,6 +17,7 @@ function JournalCell({ day, selected, fresh, onSelect, onKeyDown }: { day: Journ
   const energy = day.checkin?.energy;
   const dayLabel = new Date(`${day.date}T12:00:00Z`).toLocaleDateString("de-DE", { timeZone: "UTC", weekday: "short" });
   const asset = day.runs.length ? "easy" : day.strength.length ? "strength" : null;
+  const rideMinutes = day.rides.reduce((sum, ride) => sum + ride.minutes, 0);
   return <button type="button" className={`${styles.day} ${selected ? styles.selectedDay : ""} ${fresh ? "milon-new-data" : ""}`}
     aria-pressed={selected} aria-controls="journal-day-detail" aria-label={`${dayLabel}, ${dm(day.date)} · Tagesdetails${fresh ? " · Neue Daten" : ""}`}
     onClick={onSelect} onKeyDown={onKeyDown}>
@@ -25,6 +27,7 @@ function JournalCell({ day, selected, fresh, onSelect, onKeyDown }: { day: Journ
     <div className={styles.training}>
       {day.runs.length ? <span className={styles.run}><span className={styles.marker} />{de(runningKm, 1)} km</span> : <span className={styles.missing}>— <small>Laufen</small></span>}
       {day.strength.length ? <span className={styles.strength}><span className={styles.marker} />Gym{day.strength.length > 1 ? ` · ${day.strength.length}×` : ""}</span> : <span className={styles.missing}>— <small>Gym</small></span>}
+      {day.rides.length > 0 && <span className={styles.ride}><span className={styles.marker} />Rad · {de0(rideMinutes)} min</span>}
     </div>
     <div className={styles.sleep}><span>Schlaf</span><strong title={day.sleep ? `${day.sleep.label} · ${day.sleep.hours == null ? "Schlafzeit unbekannt" : "Hauptschlaf"}` : "Keine Hauptschlafphase erfasst"}>{sleepTime(day.sleep?.hours)}</strong>
       <div className={styles.sleepTrack} aria-hidden="true" title="Schlafdauer · Skala 0–10 Stunden">{day.sleep?.hours != null && <div style={{ width: `${Math.min(100, day.sleep.hours * 10)}%` }} />}</div>
@@ -38,8 +41,9 @@ function DayDetail({ day, onClose }: { day: JournalDay; onClose: () => void }) {
   return <section id="journal-day-detail" className={styles.dayDetail} aria-label={`Tagesdetails ${dm(day.date)}`}>
     <div className={styles.detailHeading}><h3>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString("de-DE", { timeZone: "UTC", weekday: "long", day: "2-digit", month: "2-digit" })}</h3><button type="button" aria-label="Tagesdetails schließen" onClick={onClose}>×</button></div>
     <div className={styles.detailGrid}>
-      <div><h4>Training</h4>{!day.runs.length && !day.strength.length && <p>Keine Einheit erfasst.</p>}
+      <div><h4>Training</h4>{!day.runs.length && !day.strength.length && !day.rides.length && <p>Keine Einheit erfasst.</p>}
         {day.runs.map((run, index) => <p key={`run-${index}`}>{run.activity_id ? <Link href={`/laufen/${encodeURIComponent(run.activity_id)}`}>{time(run.started_at)} · Lauf, {de(run.distance_km, 1)} km →</Link> : <span>{time(run.started_at)} · Lauf, {de(run.distance_km, 1)} km</span>}<small>{de(run.minutes, 0)} Minuten</small></p>)}
+        {day.rides.map((ride, index) => <p key={`ride-${index}`}><span>{time(ride.started_at)} · {ride.kind === "indoor" ? "Rad indoor" : "Rad"}, {de0(ride.minutes)} Minuten</span></p>)}
         {day.strength.map((workout, index) => <div className={styles.workout} key={`strength-${index}`}><p>{time(workout.started_at)} · {workout.title}</p><div className={styles.exerciseLinks}>{workout.exercises.length ? workout.exercises.map(exercise => <Link key={exercise} href={`/kraft/${encodeURIComponent(exercise)}`}>{exercise}</Link>) : <Link href="/kraft">Kraftübersicht →</Link>}</div></div>)}
       </div>
       <div><h4>Schlaf & Tagesgefühl</h4>{day.sleep ? <p><Link href={`/gesundheit?night=${day.date}`}>{sleepTime(day.sleep.hours)} Schlaf · {day.sleep.label} →</Link>{day.sleep.hours === null && <small>Schlafphasen unvollständig</small>}</p> : <p>Keine Nacht erfasst.</p>}
@@ -97,10 +101,12 @@ export function WeeklyReview() {
         <div><span>Gym · erfasst</span><strong>{summary!.strength_sessions} <small>{summary!.strength_sessions === 1 ? "Einheit" : "Einheiten"}</small></strong><p>{delta(summary!.strength_delta_sessions, "Einheiten", 0)}</p></div>
         <div><span>Schlaf · Ø</span><strong>{sleepTime(summary!.sleep_hours)}</strong><p>{summary!.sleep_nights}/7 Nächte · {data.sources.join(" / ") || "noch ohne Messung"}</p></div>
       </div>
+      {summary!.cycling_sessions > 0 || summary!.cycling_delta_sessions !== 0 ? <p className={styles.rideSummary}><strong>Rad · erfasst {summary!.cycling_sessions} {summary!.cycling_sessions === 1 ? "Fahrt" : "Fahrten"}</strong> · {delta(summary!.cycling_delta_sessions, "Fahrten", 0)}</p> : null}
       <div className={styles.calendar} ref={calendar} aria-label="Tagebuch · Tage antippen oder mit Pfeiltasten auswählen">{data.days.map((day, index) => <JournalCell key={day.date} day={day} selected={selected === day.date} fresh={freshDays.has(day.date)} onSelect={() => setSelected(previous => previous === day.date ? null : day.date)} onKeyDown={event => moveDay(event, index)} />)}</div>
       {active ? <DayDetail key={active.date} day={active} onClose={() => { setSelected(null); calendar.current?.querySelector<HTMLButtonElement>("button[aria-pressed=true]")?.focus(); }} /> : <p className={styles.exploreHint}>Tag antippen · Training und Nacht ansehen</p>}
       <div className={styles.footer}><p><strong>Gewicht {summary!.weight_delta_kg == null ? "—" : `${summary!.weight_delta_kg > 0 ? "+" : ""}${de(summary!.weight_delta_kg, 2)} kg`}</strong> · Wochenmittel, {summary!.weight_days}/7 Messtage, davor {summary!.previous_weight_days}/7</p>
         <p><strong>{de0(summary!.steps_avg)} Schritte/Tag</strong> · {summary!.steps_days}/7 Tage erfasst · {summary!.checkin_days}/7 Check-ins</p></div>
+      {offset === 0 && <EnduranceFitnessCompact />}
       <p className={styles.note}>{data.note}{data.sources.length > 1 ? " Diese Woche enthält einen Uhrenwechsel." : ""}</p>
     </>}
   </Card>;

@@ -71,7 +71,7 @@ export type WeeklyWeight = { week: string; weight: number };
 export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number; intake_avg: number; estimate_days: number };
 export type StepsPoint = { date: string; steps: number };
 export type StepsSummary = { last: number | null; last_day: string | null; avg7: number | null; series: StepsPoint[] };
-export type Activity = { kind: "run" | "workout"; date: string; title: string; detail: string };
+export type Activity = { kind: "run" | "workout" | "ride"; date: string; title: string; detail: string };
 export type WeatherInfo = { code: number | null; icon: string; text: string };
 export type WeatherHour = WeatherInfo & { time: string; temp: number; rain_prob: number | null; rain_mm: number; wind_kmh: number | null; is_day: boolean };
 export type RunWindow = {
@@ -85,7 +85,7 @@ export type Weather = { configured: false } | {
   current: WeatherInfo & { temp: number; feels_like: number; wind_kmh: number; is_day: boolean };
   day: WeatherInfo & { temp_max: number; temp_min: number; rain_mm: number; rain_prob_max: number | null; wind_max_kmh: number | null; sunrise: string; sunset: string };
 };
-export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; sick?: boolean };
+export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; ride?: boolean; sick?: boolean };
 export type Consistency = {
   days: ConsistencyDay[]; streak: number; active_days: number; trained_days: number; sick_days?: number; total: number; step_goal: number;
 };
@@ -93,6 +93,16 @@ export type WeekCompare = {
   days: number;
   running: { current_km: number; previous_km: number; current_runs: number; previous_runs: number; days: number };
   strength: { current_kg: number; previous_kg: number; days: number };
+  cycling?: { current_sessions: number; previous_sessions: number; current_minutes: number; previous_minutes: number; days: number };
+};
+export type EnduranceDay = { date: string; load: number; ctl: number; atl: number; tsb: number };
+export type EnduranceWeek = { week: string; run: number; bike: number; total: number; run_share: number | null; runs: number; rides: number; unrated: number };
+export type EnduranceSession = { date: string; sport: "run" | "bike"; minutes: number; avg_hr: number | null; trimp: number | null; activity_id: string | null; note: string | null };
+export type EnduranceFitness = {
+  days: number; ctl_days: number; atl_days: number; hr_rest: number; hr_max: number; history_days: number;
+  today: (EnduranceDay & { form: string | null; has_load_today: boolean }) | null;
+  series: EnduranceDay[]; weeks: EnduranceWeek[]; sessions: EnduranceSession[];
+  unrated: { runs: number; rides: number }; caveat: string;
 };
 export type StepsTrendPoint = { date: string; steps: number | null; avg7: number | null; days7: number };
 export type StepsWeek = { week: string; steps: number | null; days: number };
@@ -170,6 +180,7 @@ export type ActivityOverview = {
   from_date: string; to_date: string; previous_from_date: string; previous_to_date: string;
   running: { current_km: number; previous_km: number };
   strength: { current_sessions: number; previous_sessions: number };
+  cycling?: { current_sessions: number; previous_sessions: number; current_minutes: number; previous_minutes: number };
   steps: { current_avg: number | null; previous_avg: number | null; current_days: number; previous_days: number };
 };
 export type VolPoint = { week: string; km: number; runs: number };
@@ -495,6 +506,7 @@ export const api = {
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),
   weather: (index = 0, day = 0) => get<Weather>(`/weather?index=${index}&day=${day}`),
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
+  enduranceFitness: (days = 180) => get<EnduranceFitness>(`/metrics/endurance/fitness?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
   activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),
   weeklyReview: () => get<WeeklyReview>("/metrics/activity/weekly-review"),
