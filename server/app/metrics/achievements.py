@@ -785,6 +785,22 @@ def _specs():
     ]
     for iid, name, desc, pts, icon, fn in W:
         a((iid, "weltkarte", name, desc, pts, icon, (lambda fn: lambda c: fn(_world_of(c)))(fn)))
+
+    # ---------------- TRAUMREICHE (Zwift-Welten, -Routen und -Höhenmeter; keine Karte, keine Koordinaten) ----------------
+    from .. import hero_dreams
+    for world in hero_dreams.KNOWN_WORLDS:
+        slug = world.casefold().replace(" ", "_")
+        a((f"traum_welt_{slug}", "traumreiche", f"Reisender: {world}", f"Eine Fahrt in der Zwift-Welt {world}",
+           10 if world == "Watopia" else 15, "🌐", (lambda w: lambda c: _dream_world(c, w))(world)))
+    for target, pts, name in [(5, 30, "Wegekundig"), (10, 60, "Streckenkenner"), (25, 120, "Kartenmeister")]:
+        a((f"traum_routen_{target}", "traumreiche", name, f"{target} verschiedene Routen in einer Zwift-Welt fahren",
+           pts, "🧭", (lambda t: lambda c: _dream_routes(c, t))(target)))
+    a(("traum_alle", "traumreiche", "Traumwandler", f"Alle {len(hero_dreams.KNOWN_WORLDS)} Zwift-Welten befahren", 250, "🌈",
+       lambda c: _dream_all(c)))
+    for hm, pts, name in [(1000, 15, "Hügelläufer"), (5000, 30, "Bergfahrer"), (10000, 50, "Höhenjäger"),
+                          (25000, 100, "Gipfelsammler"), (50000, 200, "Himmelsstürmer"), (100000, 350, "Wolkenreiter")]:
+        a((f"traum_hm_{hm}", "traumreiche", name, f"{hm:,} Höhenmeter in Zwift sammeln".replace(",", "."), pts, "⛰️",
+           (lambda h: lambda c: _dream_hm(c, h))(hm)))
     return S
 
 
@@ -1462,6 +1478,46 @@ def _wk_dungeons(w, target, heroic=False, kind=None, min_level=0):
     return _wk_reach([d[key] for d in dgs if d["heroic" if heroic else "cleared"]], target, "Verliese")
 
 
+def _dream_tl(c) -> dict:
+    """Zwift-Chronik (einmal je Auswertung); ohne Fahrten leer."""
+    if not hasattr(c, "_dream_tl"):
+        from .. import hero_dreams
+        from . import cycling
+        try:
+            c._dream_tl = hero_dreams.timeline(cycling.indoor_rides())
+        except Exception as e:  # noqa: BLE001
+            log.warning("Zwift-Chronik für Erfolge nicht verfügbar: %s", e)
+            c._dream_tl = {"first": {}, "routes": {}, "hm": []}
+    return c._dream_tl
+
+
+def _dream_world(c, world):
+    first = _dream_tl(c)["first"].get(world)
+    return R(bool(first), first, 1.0 if first else 0.0, None)
+
+
+def _dream_routes(c, target):
+    routes = _dream_tl(c)["routes"]
+    best = max((len(v) for v in routes.values()), default=0)
+    day = min((v[target - 1] for v in routes.values() if len(v) >= target), default=None)
+    return R(best >= target, day, best / target, f"{min(best, target)} / {target} Routen in einer Welt")
+
+
+def _dream_all(c):
+    from .. import hero_dreams
+    first = _dream_tl(c)["first"]
+    have = [first[w] for w in hero_dreams.KNOWN_WORLDS if w in first]
+    n, total = len(have), len(hero_dreams.KNOWN_WORLDS)
+    return R(n >= total, max(have) if n >= total else None, n / total, f"{n} / {total} Welten")
+
+
+def _dream_hm(c, target):
+    steps = _dream_tl(c)["hm"]
+    cum = steps[-1][0] if steps else 0.0
+    day = next((d for h, d in steps if h >= target), None)
+    return R(cum >= target, day, cum / target, f"{cum:,.0f} / {target:,} Hm".replace(",", "."))
+
+
 def _meta_specs():
     M = []
     m = M.append
@@ -1503,8 +1559,8 @@ def _meta_points(A, n):
 
 
 def _meta_variety(A):
-    cats = {a["category"] for a in A}
-    have = {a["category"] for a in A if a["earned"]}
+    cats = {a["category"] for a in A} - {"traumreiche"}   # Zwift-Kategorie darf das Abzeichen nicht erschweren
+    have = {a["category"] for a in A if a["earned"]} & cats
     return R(have >= cats, None, len(have) / max(1, len(cats)), f"{len(have)} / {len(cats)} Kategorien")
 
 

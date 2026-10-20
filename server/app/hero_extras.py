@@ -77,11 +77,13 @@ MOUNTS = [
     # Rad-Reittiere: schalten sich über Rad-km (GPS-Fahrten aus Garmin) frei
     ("deichgaul", "Deichgaul", "rad", 100, "🏇"),
     ("auenhengst", "Auenhengst", "rad", 500, "🐎"),
+    # Zwift-Reittier: schaltet sich über virtuelle Zwift-km frei (nur Indoor-Fahrten)
+    ("watopia_wyvern", "Watopia-Wyvern", "zwift", 1000, "🐲"),
 ]
 
 MOUNT_KM_PER_LEVEL = 25  # Reittier-Stufe: 1 + gefütterte Rad-km / 25, höchstens 10
 MOUNT_MAX_LEVEL = 10
-_UNITS = {"km": "km", "saetze": "Arbeitssätze", "rad": "Rad-km"}
+_UNITS = {"km": "km", "saetze": "Arbeitssätze", "rad": "Rad-km", "zwift": "Zwift-km"}
 
 
 def mount_level(km: float) -> int:
@@ -99,14 +101,17 @@ def ride_feed(rides: list[tuple[date, float]], owner) -> list[dict]:
 
 
 def mounts(runs: pd.DataFrame, workouts: pd.DataFrame, chosen: str | None,
-           rides: list[tuple[date, float]] | None = None, fed: dict[str, float] | None = None) -> list[dict]:
+           rides: list[tuple[date, float]] | None = None, fed: dict[str, float] | None = None,
+           zwift: list[tuple[date, float]] | None = None) -> list[dict]:
     """Reittiere mit Freischaltdatum (Tag, an dem die Summe die Schwelle überschritt).
 
-    `rides` = Rad-km je Tag seit Starttag (schaltet Rad-Reittiere frei), `fed` = gefütterte km je Reittier (Stufe)."""
+    `rides` = GPS-Rad-km je Tag seit Starttag, `zwift` = virtuelle Zwift-km je Tag (zählen für die Rad-Reittiere mit
+    und schalten das Zwift-Reittier frei), `fed` = gefütterte km je Reittier (Stufe)."""
     series = {
         "km": runs.sort_values("started_at")[["day", "distance_km"]].values.tolist() if not runs.empty else [],
         "saetze": workouts.sort_values("started_at")[["day", "sets"]].values.tolist() if not workouts.empty else [],
-        "rad": sorted(rides or [], key=lambda r: r[0]),
+        "rad": sorted([*(rides or []), *(zwift or [])], key=lambda r: r[0]),
+        "zwift": sorted(zwift or [], key=lambda r: r[0]),
     }
     fed = fed or {}
     out = []
