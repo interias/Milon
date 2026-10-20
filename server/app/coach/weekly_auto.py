@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 from ..config import settings
 from ..db import engine
 from ..models import CoachReport
-from . import briefing, client, prompts, snapshot
+from . import briefing, client, prompts, rad, snapshot
 
 KIND = "weekly-auto"
 CUTOFF = time(23, 30)             # Sonntag, nach dem letzten Sync des Tages
@@ -28,13 +28,15 @@ log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """Erstelle meinen Wochenbericht für die abgelaufene Woche; ich lese ihn am Montagmorgen.
 Du liest nur und schlägst vor: du änderst keine Daten und triffst keine Spielentscheidungen.
-Format (Markdown, höchstens 220 Wörter):
+Format (Markdown, höchstens 250 Wörter):
 Erste Zeile genau: **Woche:** <Fazit in höchstens 12 Wörtern>
 - **Körper:** Gewicht (7-Tage-Mittel) und Trend der Woche.
 - **Laufen:** Umfang und Fitness-Trends; Urteil nur bei verdict besser/schlechter als belastbar behandeln.
 - **Kraft:** Einheiten, Tonnage und Stärke-Index.
 - **Ernährung:** Protein und Energie mit den erfassten Tagen; Einträge belegen keine vollständige Tageserfassung.
 - **Schlaf:** Schlafzeit der Woche und bekannte Nächte.
+- **Rad & Form:** nur wenn AUSDAUER-/FORM-/RAD-Zeilen vorliegen: Lauf/Rad-Anteil der Last, Form-Verlauf der Woche,
+  Rad-Urteile (nur bei signifikantem Urteil als Trend; Rad ersetzt Laufökonomie und Sehnenbelastbarkeit nicht). Höchstens zwei Sätze.
 **Für die kommende Woche:** Höchstens drei Vorschläge für die kommende Woche als nummerierte Liste, jeder konkret
 mit Datenbeleg und überprüfbarem Ziel; der erste ist die Hauptmaßnahme.
 Die Heldenreise erwähnst du höchstens mit einem Halbsatz. Fehlen Daten eines Bereichs, sag das in einem Halbsatz."""
@@ -114,6 +116,7 @@ def _week_lines(first: date, last: date) -> list[str]:
             "puls_im_locker_korridor": verdict(easy.get("trend")) if easy else None}, ensure_ascii=False, default=str))
     except Exception:  # noqa: BLE001
         log.warning("Wochenbericht: Fitness-Trends nicht verfügbar", exc_info=True)
+    lines += rad.week_lines(first, last)
     return lines
 
 

@@ -87,6 +87,13 @@ TOOLS = [
         "systematisch — nie als 'wo verbessere ich mich am meisten' deuten), resting_hr "
         "(Ruhepuls-Trend). Jedes trend-Objekt hat verdict (besser/schlechter/unklar/wenig_daten) "
         "— NUR bei significant=true als echten Trend deuten, sonst als Rauschen benennen."),
+    _fn("get_cycling_power", "Indoor-Rad (Zwift/Rolle): eFTP mit Quelle und W/kg, ausgedünnte Leistungskurve "
+        "(90 T vs. 90 T davor, Allzeit-Bestwert), Puls bei Referenzleistung (hr_at_power) und Effizienz NP/HF "
+        "(efficiency) mit Signifikanz-Urteil, letzte Fahrten und Form (TSB, pulsbasiert über Lauf + Rad). "
+        "Urteil NUR bei significant=true als echten Trend deuten, sonst als Rauschen benennen. Form-TRIMP nutzt "
+        "HFmax aus dem Setting und ist nicht direkt mit dem TRIMP aus get_run_fitness_trends vergleichbar; "
+        "Watt-TSS nie mit Lauflast verrechnen. Rad erhält die aerobe Basis, ersetzt aber nicht Laufökonomie "
+        "und Sehnen-/Knochenbelastbarkeit."),
     _fn("get_run_records", "Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz "
         "(1/5/10/15/20 km = schnellstes zusammenhaengendes Fenster INNERHALB eines Laufs, nicht "
         "die Gesamtzeit) + weitere Rekorde (laengster Lauf, groesste Wochendistanz, beste aerobe "
@@ -182,6 +189,9 @@ def dispatch(name: str, args: dict):
     if name == "get_run_zones":
         from ..metrics import run_zones
         return run_zones.zones()
+    if name == "get_cycling_power":
+        from . import rad
+        return rad.power_overview()
     if name == "get_run_records":
         return running.best_efforts()
     if name == "get_hero":

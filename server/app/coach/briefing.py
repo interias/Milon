@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 from ..config import settings
 from ..db import engine
 from ..models import CoachReport
-from . import client, prompts, snapshot
+from . import client, prompts, rad, snapshot
 
 KIND = "briefing"
 EARLIEST = time(4, 0)             # vorher wird nichts erzeugt, auch wenn der Schlaf schon da ist
@@ -39,6 +39,8 @@ Erste Zeile genau: **Heute:** <Empfehlung in höchstens 12 Wörtern>
 - **Empfehlung:** Lauf, Kraft oder Ruhe mit Intensität und Dauer; stütze sie auf Fitness-Trends, Belastung und Check-in.
 - **Laufwetter:** das Fenster ab Sonnenaufgang mit Kleidung aus LAUFWETTER übernehmen, nicht neu berechnen.
 - **Route:** das Verlies aus ROUTE als Vorschlag mit Name, Entfernung und Richtung.
+- **Zwift:** nur wenn ZWIFT-VORSCHLAG in den Fakten steht: heute statt Lauf Zwift vorschlagen, mit Grund, Form-Zahl und
+  Intensität aus der Zeile; erwähne, dass Rad Laufökonomie und Sehnenbelastbarkeit nicht ersetzt. Steht die Zeile nicht da, kein Zwift.
 Fehlen Schlafdaten, sag das in einem Halbsatz und stütze dich auf die übrigen Daten.
 Fehlt Wetter oder Route, lass den Punkt kurz weg."""
 
@@ -206,10 +208,25 @@ def _context_lines(day: date) -> list[str]:
     return lines
 
 
+def _zwift_lines(w: dict | None, day: date) -> list[str]:
+    """Form-Zahl (immer, wenn bekannt) und ZWIFT-VORSCHLAG (nur bei schlechtem Laufwetter)."""
+    lines = []
+    try:
+        text = rad.form_text(rad.form(day))
+        if text:
+            lines.append("FORM: " + text + ".")
+        zwift = rad.zwift_line((w or {}).get("run"), day)
+        if zwift:
+            lines.append(zwift)
+    except Exception:  # noqa: BLE001 -- fehlende Rad-Daten kürzen nur den Kontext
+        log.warning("Briefing: Rad-Kontext unvollständig", exc_info=True)
+    return lines
+
+
 def build_messages(now: datetime, night: dict | None, w: dict | None, dungeon: dict | None,
                    snap: str, context: list[str]) -> list[dict]:
     facts = [f"JETZT: {now:%Y-%m-%d %H:%M} ({settings.timezone})", _sleep_line(night, now), *context,
-             _weather_line(w), _route_line(dungeon)]
+             _weather_line(w), *_zwift_lines(w, now.date()), _route_line(dungeon)]
     return [{"role": "system", "content": prompts.system_prompt()},
             {"role": "system", "content": f"Aktueller Datensnapshot:\n{snap}"},  # letzter System-Block = Cache-Breakpoint
             {"role": "user", "content": INSTRUCTIONS + "\n\n" + "\n".join(facts)}]
