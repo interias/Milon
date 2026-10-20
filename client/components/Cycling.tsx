@@ -12,6 +12,7 @@ export const powerZoneColor = (zone: number) => POWER_ZONE_COLORS[Math.min(7, Ma
 
 export const EFTP_SOURCE: Record<string, string> = {
   setting: "Einstellung", "20min": "beste 20 min", fit: "Critical Power", garmin: "Garmin-FTP",
+  garmin_floor: "Garmin-FTP als Untergrenze",
 };
 
 export const fmtMin = (seconds: number) => `${de0(seconds / 60)} min`;
