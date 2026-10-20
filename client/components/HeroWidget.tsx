@@ -19,7 +19,7 @@ export function HeroWidget() {
   const max = Math.max(...cur.slots.map((s) => s.threshold));
   const chips: [string, string, boolean][] = [
     ...(d ? [[d.done ? "✓" : "!", `Tagesaufgabe: ${d.title}`, !d.done] as [string, string, boolean]] : []),
-    [`${cur.runs}/${max}`, "Läufe für die Wochentruhe", false],
+    [`${cur.runs}/${max}`, "Läufe/Fahrten für die Wochentruhe", false],
     ...(ev ? [[`${ev.tokens}/${ev.goal}`, ev.name, false] as [string, string, boolean]] : []),
     ...(hero.vault.claimable.length || hero.vault.veteran ? [["!", "Truhe wählbar", true] as [string, string, boolean]] : []),
   ];

@@ -124,7 +124,7 @@ export function AttributeRadar({ items, color }: { items: HeroAttribute[]; color
 
 // --- Chronik: Stufenverlauf + EP je Woche nach Quelle -------------------------------------
 const SOURCES: [keyof Hero["progression"][number], string, string][] = [
-  ["laufen", "Laufen", "#aad372"], ["kraft", "Kraft", "#c69b6d"], ["alltag", "Alltag", "#3fc7eb"],
+  ["laufen", "Laufen", "#aad372"], ["rad", "Rad", "#7fbf3f"], ["kraft", "Kraft", "#c69b6d"], ["alltag", "Alltag", "#3fc7eb"],
   ["erfolge", "Erfolge", "#ffd100"], ["ruhebonus", "Ausgeruht", "#3d7bd9"],
   ["buffs", "Buffs", "#ff7d0a"], ["fokus", "Fokus", "#f48cba"], ["talente", "Talente", "#a330c9"], ["auftraege", "Aufträge", "#e6cc80"],
   ["bosse", "Bosse", "#c41e3a"], ["instanzen", "Instanzen", "#0070dd"], ["taeglich", "Tagesaufgaben", "#9d9d9d"], ["event", "Events", "#ff8a3d"], ["duelle", "Duelle", "#a9b8d8"], ["erkundung", "Erkundung", "#d9c08a"],
@@ -145,7 +145,7 @@ export function HeroChronicle({ data }: { data: Hero }) {
   const grid = Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, k) => Math.ceil(lo / step) * step + k * step).filter((v) => v <= hi);
 
   const recent = prog.slice(-12);
-  const maxWeek = Math.max(1, ...recent.map((p) => SOURCES.reduce((s, [k]) => s + (p[k] as number), 0)));
+  const maxWeek = Math.max(1, ...recent.map((p) => SOURCES.reduce((s, [k]) => s + ((p[k] as number) || 0), 0)));
   const BW = 330, BH = 140;
   const slot = (BW - L) / recent.length;
   return (
@@ -172,9 +172,9 @@ export function HeroChronicle({ data }: { data: Hero }) {
             {recent.map((p, i) => {
               let acc = 0;
               return <g key={p.week}>
-                <title>{`Woche ${dm(p.week)}: ${SOURCES.map(([k, l]) => `${l} ${de0(p[k] as number)}`).join(", ")}`}</title>
+                <title>{`Woche ${dm(p.week)}: ${SOURCES.map(([k, l]) => `${l} ${de0((p[k] as number) || 0)}`).join(", ")}`}</title>
                 {SOURCES.map(([k, , col]) => {
-                  const v = p[k] as number;
+                  const v = (p[k] as number) || 0;
                   const h = (v / maxWeek) * (BH - B - 18);
                   acc += h;
                   return v > 0 ? <rect key={k} x={L + i * slot + slot * 0.15} width={slot * 0.7} y={BH - B - acc} height={h} fill={col} /> : null;

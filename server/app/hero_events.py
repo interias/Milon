@@ -44,8 +44,10 @@ def daily_done(key: str, d: date, data: dict) -> bool:
     if key == "checkin":
         return data["checkins"].get(d) is not None
     if key == "bewegung":
+        rides = data.get("indoor")  # Indoor-Fahrt = Training (ihr HC-Spiegel zählt nicht mehr als Radeln)
         trained = (not runs.empty and bool((runs["day"] == d).any())) or \
-                  (not workouts.empty and bool((workouts["day"] == d).any()))
+                  (not workouts.empty and bool((workouts["day"] == d).any())) or \
+                  (rides is not None and not rides.empty and bool((rides["day"] == d).any()))
         return trained or data["other"].get(d, 0.0) >= 20
     if key == "schlaf":
         return data["sleep"].get(d, 0) >= 420

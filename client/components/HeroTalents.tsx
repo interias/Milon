@@ -62,7 +62,7 @@ export function HeroQuestLog({ data }: { data: Hero }) {
     </Card>
   );
 }
-const CAT: Record<string, string> = { lauf: "Laufen", kraft: "Kraft", pflege: "Pflege" };
+const CAT: Record<string, string> = { lauf: "Laufen", ausdauer: "Ausdauer", kraft: "Kraft", pflege: "Pflege" };
 
 // --- Talentbaum: eine Reihe je 10 Stufen, je eine von drei Optionen ------------------------
 export function HeroTalentTree({ data, onChoose }: { data: Hero; onChoose: (row: number, choice: string | null) => Promise<void> }) {
