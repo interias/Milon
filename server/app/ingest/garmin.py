@@ -22,7 +22,8 @@ TOKEN_KEYS = ("di_token", "di_refresh_token", "di_client_id")
 PAGE_SIZE = 50
 HISTORY_LIMIT = 1000
 RECENT_LIMIT = 30
-# Garmin's "cycling" parent type includes indoor/virtual rides whose tracks are not real places.
+# Garmin's "cycling" parent type includes indoor/virtual rides whose tracks are not real places:
+# they go to garmin_indoor (power/HR only, never coordinates), never to garmin_rides.
 _NO_GPS_RIDE_MARKERS = ("indoor", "virtual")
 _import_lock = threading.Lock()
 
@@ -224,17 +225,23 @@ def _pull_routes(api, full: bool, collected: list[dict] | None = None) -> dict:
     return result
 
 
-def _pull_rides(api, full: bool) -> dict:
+def _pull_rides(api, full: bool, indoor: dict | None = None) -> dict:
     """Cycling tracks go to their own table; they never feed running records, weather or metrics.
 
-    Optional like weather: failures stay in result["rides"] and never fail the running sync."""
-    from .. import garmin_routes
+    Indoor/virtual rides are collected into indoor["items"] for garmin_indoor (indoor["complete"] =
+    the listing finished). Optional like weather: failures stay in result["rides"] and never fail
+    the running sync."""
+    from .. import garmin_indoor, garmin_routes
 
     known = _known_ride_ids()
     runs = _known_route_ids()
-    limit = HISTORY_LIMIT if full or not known else RECENT_LIMIT
+    try:
+        indoor_backfilled = indoor is None or garmin_indoor.backfilled()
+    except Exception:  # an indoor storage fault surfaces in result["indoor_rides"], not here
+        indoor_backfilled = True
+    limit = HISTORY_LIMIT if full or not known or not indoor_backfilled else RECENT_LIMIT
     result = {"mode": "full" if full else "incremental" if known else "initial",
-              "imported": 0, "skipped": 0, "no_route": 0, "checked": 0, "errors": 0}
+              "imported": 0, "skipped": 0, "no_route": 0, "indoor": 0, "checked": 0, "errors": 0}
     seen: set[str] = set()
     offset = 0
     while offset < limit:
@@ -251,13 +258,20 @@ def _pull_rides(api, full: bool) -> dict:
             try:
                 summary = _summary(activity)
                 activity_id = summary["activity_id"]
+                ride_type = _ride_type(activity)
+                if ride_type and any(marker in ride_type for marker in _NO_GPS_RIDE_MARKERS):
+                    if activity_id not in seen and activity_id not in runs and indoor is not None:
+                        seen.add(activity_id)
+                        indoor["items"].append(activity)
+                        result["indoor"] += 1
+                    else:
+                        result["skipped"] += 1
+                    continue
                 if activity_id in seen or activity_id in runs or (activity_id in known and not full):
                     result["skipped"] += 1
                     continue
                 seen.add(activity_id)
-                ride_type = _ride_type(activity)
-                if (activity.get("hasPolyline") is False
-                        or (ride_type and any(marker in ride_type for marker in _NO_GPS_RIDE_MARKERS))):
+                if activity.get("hasPolyline") is False:
                     result["no_route"] += 1
                     continue
                 raw = api.download_activity(activity_id, dl_fmt=api.ActivityDownloadFormat.GPX)
@@ -272,15 +286,21 @@ def _pull_rides(api, full: bool) -> dict:
         offset += page_size
         if len(activities) < page_size:
             break
+    if indoor is not None:
+        indoor["complete"] = True
     return result
 
 
 def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
-    from .. import garmin_activity, garmin_daily, garmin_weather, garmin_load
+    from .. import garmin_activity, garmin_daily, garmin_indoor, garmin_weather, garmin_load
 
     outcomes = {}
+    indoor: dict = {"items": [], "complete": False}
     for name, pull in (
-        ("rides", lambda: _pull_rides(api, full)),
+        ("rides", lambda: _pull_rides(api, full, indoor)),
+        # Optional like rides: indoor failures stay in result["indoor_rides"].
+        ("indoor_rides", lambda: garmin_indoor.sync_indoor(api, indoor["items"], full=full,
+                                                           listing_complete=indoor["complete"])),
         ("activities", lambda: garmin_activity.sync_activities(api, activities, full=full)),
         ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
         ("weather", lambda: garmin_weather.sync_weather(api, activities, full=full)),

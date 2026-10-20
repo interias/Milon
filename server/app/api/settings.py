@@ -61,6 +61,7 @@ def _current() -> dict:
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
+        "bike_ftp": settings.bike_ftp,
         "weather_places": [item["place"] for item in weather.places()],
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
@@ -91,6 +92,7 @@ class SettingsIn(BaseModel):
     anthropic_api_key: str | None = None
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
+    bike_ftp: float | None = None  # 0 = automatisch (eFTP)
     weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
@@ -110,6 +112,8 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Effort: low, medium oder high.")
     if body.llm_monthly_budget_usd is not None and not 0 <= body.llm_monthly_budget_usd < float("inf"):
         raise HTTPException(status_code=422, detail="Budget muss eine Zahl ≥ 0 sein (0 = kein Limit).")
+    if body.bike_ftp is not None and not 0 <= body.bike_ftp <= 1000:
+        raise HTTPException(status_code=422, detail="FTP muss zwischen 0 und 1000 W liegen (0 = automatisch).")
 
 
 @router.put("")
@@ -149,6 +153,11 @@ def update_settings(body: SettingsIn) -> dict:
     if body.run_hr_max is not None and body.run_hr_max >= 0:
         settings.run_hr_max = body.run_hr_max
         env_updates["RUN_HR_MAX"] = str(body.run_hr_max)
+
+    # Rad-FTP: 0 = wieder automatisch (eFTP aus den Fahrten).
+    if body.bike_ftp is not None:
+        settings.bike_ftp = body.bike_ftp
+        env_updates["BIKE_FTP"] = str(body.bike_ftp)
 
     if body.weather_places is not None:
         names = [name.strip() for name in body.weather_places if name.strip()]

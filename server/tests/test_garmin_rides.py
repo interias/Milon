@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from app import garmin_activity, garmin_daily, garmin_load, garmin_routes, garmin_weather, hero_world
+from app import garmin_activity, garmin_daily, garmin_indoor, garmin_load, garmin_routes, garmin_weather, hero_world
 from app.garmin_activity import GarminActivity
 from app.ingest import garmin
 from app.metrics import health, route_atlas
@@ -47,7 +47,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(garmin, "SESSION_FILE", path)
     monkeypatch.setattr(garmin, "settings", SimpleNamespace(timezone="Europe/Berlin"))
     monkeypatch.setattr(garmin_routes.settings, "timezone", "Europe/Berlin")
-    for module in (garmin_routes, health, hero_world, route_atlas):
+    for module in (garmin_routes, garmin_indoor, health, hero_world, route_atlas):
         monkeypatch.setattr(module, "engine", engine)
     # Run-only consumers record what the sync hands them; nothing here may contact Garmin.
     handed = SimpleNamespace(activities=None, weather=None)
@@ -79,8 +79,10 @@ def ids(engine, model):
 def test_sync_fetches_cycling_with_gps_and_marks_it_as_ride(isolated):
     result = garmin.import_garmin()
     assert (0, 50, "cycling") in isolated.api.pages and (0, 50, "running") in isolated.api.pages
-    assert result["rides"] == {"mode": "initial", "imported": 1, "skipped": 0, "no_route": 2,
+    # Indoor/virtual rides are handed to garmin_indoor (#69) instead of being dropped as no_route.
+    assert result["rides"] == {"mode": "initial", "imported": 1, "skipped": 0, "no_route": 0, "indoor": 2,
                                "checked": 3, "errors": 0}
+    assert result["indoor_rides"]["checked"] == 2
     assert isolated.api.downloads == ["1", "2"]  # indoor/virtual rides have no real track
     assert ids(isolated.engine, garmin_routes.GarminRide) == {"2"}
     assert ids(isolated.engine, garmin_routes.GarminRoute) == {"1"}
