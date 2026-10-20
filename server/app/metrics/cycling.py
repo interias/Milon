@@ -2,7 +2,9 @@
 
 eFTP von Milon: 95 % der besten 20 min der letzten 90 Tage, ohne 20-min-Wert 95 % der Critical
 Power aus einem Fit über die Leistungskurve (2–20 min); ohne brauchbare Fahrt Garmins FTP
-(Startwert); BIKE_FTP > 0 übersteuert. Leistungszonen nach Coggan (55/75/90/105/120/150 % eFTP),
+(Startwert); solange keine harte Anstrengung vorliegt (Roh-eFTP < 85 % der Garmin-FTP) gilt Garmins
+FTP als Untergrenze (Quelle garmin_floor); BIKE_FTP > 0 übersteuert.
+Leistungszonen nach Coggan (55/75/90/105/120/150 % eFTP),
 NP/IF/TSS je Fahrt selbst berechnet (Garmin liefert kein TSS/IF), W/kg mit dem 7-Tage-Gewicht.
 
 EHRLICHE STATISTIK (wie Laufen, stats.py): Urteile „werde ich besser?“ nur auf Fahrt-Ebene
@@ -26,6 +28,7 @@ from . import stats
 
 EFTP_WINDOW_DAYS = 90
 EFTP_FACTOR = 0.95
+HARD_EFFORT_SHARE = 0.85  # raw eFTP / Garmin FTP from which a hard effort exists (= 20-min power >= 90 % FTP)
 COGGAN = (0.55, 0.75, 0.90, 1.05, 1.20, 1.50)  # Obergrenzen Z1–Z6 als Anteil der eFTP; Z7 darüber
 ZONE_NAMES = ("Aktive Erholung", "Grundlage", "Tempo", "Schwelle", "VO2max", "Anaerob", "Neuromuskulär")
 STEADY_VI = 1.08          # Variabilitätsindex NP/Ø-Leistung, bis zu dem eine Fahrt als gleichmäßig gilt
@@ -109,7 +112,8 @@ def _cp_fit(curve: dict[int, float]) -> float | None:
     return slope if slope > 0 else None
 
 
-def _auto_eftp(power: pd.DataFrame, day: date, garmin_ftp: float | None) -> tuple[float | None, str | None]:
+def _raw_auto_eftp(power: pd.DataFrame, day: date) -> tuple[float | None, str | None]:
+    """eFTP purely from the rides of the 90-day window (no Garmin value, no floor)."""
     window = power[(power["day"] > day - timedelta(days=EFTP_WINDOW_DAYS)) & (power["day"] <= day)] \
         if not power.empty else power
     if not window.empty:
@@ -119,9 +123,25 @@ def _auto_eftp(power: pd.DataFrame, day: date, garmin_ftp: float | None) -> tupl
         cp = _cp_fit(curve)
         if cp is not None:
             return EFTP_FACTOR * cp, "fit"
-    if garmin_ftp:
-        return garmin_ftp, "garmin"
     return None, None
+
+
+def _auto_eftp(power: pd.DataFrame, day: date, garmin_ftp: float | None) -> tuple[float | None, str | None]:
+    """Auto eFTP with Garmin's FTP as floor until a hard effort exists in the 90-day window.
+
+    Hard effort = raw auto eFTP >= HARD_EFFORT_SHARE x Garmin FTP, i.e. best 20 min >= 90 % of the
+    Garmin FTP (or a CP fit that implies the same). Easy rides stay far below that and never lift
+    the floor (real data: 96 W vs. Garmin 203 W gave IF 1.23 on an easy ride); a ramp test or a
+    hard 20-min piece does, after which the measured value counts even if it is below Garmin's.
+    garmin_ftp=None returns the raw auto eFTP unchanged."""
+    auto, source = _raw_auto_eftp(power, day)
+    if not garmin_ftp:
+        return auto, source
+    if auto is None:
+        return garmin_ftp, "garmin"
+    if auto < HARD_EFFORT_SHARE * garmin_ftp:
+        return garmin_ftp, "garmin_floor"
+    return auto, source
 
 
 def _eftp_at(power: pd.DataFrame, day: date, garmin_ftp: float | None) -> tuple[float | None, str | None]:
@@ -198,7 +218,8 @@ def eftp(weeks: int = 26, today: date | None = None) -> dict:
         "window_days": EFTP_WINDOW_DAYS, "factor": EFTP_FACTOR,
         "zones": _zone_bounds(value), "series": series,
         "caveat": "eFTP = 95 % der besten 20 min (90 T), sonst 95 % der Critical Power aus der "
-                  "Leistungskurve, sonst Garmin-FTP. BIKE_FTP > 0 übersteuert.",
+                  "Leistungskurve, sonst Garmin-FTP. Solange nur lockere Fahrten vorliegen (Wert unter "
+                  "85 % der Garmin-FTP), gilt Garmins FTP als Untergrenze. BIKE_FTP > 0 übersteuert.",
     })
 
 

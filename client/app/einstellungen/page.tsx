@@ -226,7 +226,7 @@ export default function Einstellungen() {
           </label>
           <p className="mt-2 text-[11px] text-muted">
             <strong>0</strong> = automatisch: eFTP aus deinen Fahrten (95 % der besten 20 min der letzten 90 Tage),
-            ohne brauchbare Fahrt Garmins FTP. Ein fester Wert übersteuert die Schätzung.
+            ohne brauchbare Fahrt Garmins FTP. Solange nur lockere Fahrten vorliegen (Wert unter 85 % der Garmin-FTP), gilt Garmins FTP als Untergrenze. Ein fester Wert übersteuert die Schätzung.
           </p>
         </Card>
 
