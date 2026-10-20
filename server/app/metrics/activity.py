@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..config import settings
 from ..db import engine
-from . import running, strength
+from . import endurance, running, strength
 
 RUN = 33
 
@@ -51,6 +51,8 @@ def overview(now: datetime | None = None) -> dict:
         "running": {"current_km": round(float(current_runs["distance_km"].sum()), 1),
                     "previous_km": round(float(previous_runs["distance_km"].sum()), 1)},
         "strength": {"current_sessions": len(current_workouts), "previous_sessions": len(previous_workouts)},
+        "cycling": {**{f"current_{k}": v for k, v in endurance.ride_window(boundary, cutoff).items()},
+                    **{f"previous_{k}": v for k, v in endurance.ride_window(pd.Timestamp(previous_start), boundary).items()}},
         "steps": {"current_avg": average(current_steps), "previous_avg": average(previous_steps),
                   "current_days": len(current_steps), "previous_days": len(previous_steps)},
     }
@@ -59,7 +61,12 @@ def overview(now: datetime | None = None) -> dict:
 def compare(days: int = 7) -> dict:
     """Rollender Vergleich „letzte N Tage" vs. „die N Tage davor" für Laufvolumen + Tonnage
     (fairer als Kalenderwoche). Schritte/Gewicht macht die Übersicht bereits rollend."""
-    return {"days": days, "running": running.volume_window(days), "strength": strength.tonnage_window(days)}
+    now = pd.Timestamp.now()
+    return {"days": days, "running": running.volume_window(days), "strength": strength.tonnage_window(days),
+            "cycling": {**{f"current_{k}": v for k, v in endurance.ride_window(now - pd.Timedelta(days=days), now).items()},
+                        **{f"previous_{k}": v for k, v in endurance.ride_window(
+                            now - pd.Timedelta(days=2 * days), now - pd.Timedelta(days=days)).items()},
+                        "days": days}}
 
 
 def weekly_review(now: datetime | None = None) -> dict:
@@ -111,6 +118,8 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     for df in (wo, runs):
         if not df.empty:
             trained |= {t.date() for t in df["started_at"].dropna()}
+    ride_days = set(endurance.ride_sessions()["day"])  # Fahrten (Indoor + längere Outdoor) sind Trainingstage
+    trained |= ride_days
     step_map: dict[date, int] = {}
     if not steps.empty:
         step_map = {d.date(): int(s) for d, s in zip(steps["day"], steps["steps"])}
@@ -127,7 +136,7 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
         is_train = d in trained
         st = step_map.get(d, 0)
         level = 3 if is_train else (2 if st >= step_goal else 1 if st >= step_goal / 2 else 0)
-        out.append({"date": d.isoformat(), "level": level, "steps": st, "trained": is_train, "sick": d in sick})
+        out.append({"date": d.isoformat(), "level": level, "steps": st, "trained": is_train, "ride": d in ride_days, "sick": d in sick})
 
     rev = list(reversed(out))
     skip = 1 if (rev and rev[0]["level"] == 0) else 0  # heute evtl. noch nicht erfasst
@@ -176,6 +185,12 @@ def recent(limit: int = 8) -> list[dict]:
         items.append({
             "kind": "workout", "date": r["started_at"].isoformat(),
             "title": r["title"] or "Workout", "detail": "Kraft",
+        })
+    rides = endurance.ride_sessions()
+    for _, r in rides.tail(25).iterrows():
+        items.append({
+            "kind": "ride", "date": r["started_at"].isoformat(), "title": r["title"],
+            "detail": f"Rad · {r['minutes']:.0f} min",
         })
     items.sort(key=lambda x: x["date"], reverse=True)
     return items[:limit]

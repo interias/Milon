@@ -1,6 +1,7 @@
 export type JournalDay = {
   date: string;
   runs: { started_at: string; distance_km: number; minutes: number; activity_id: string | null }[];
+  rides: { started_at: string; title: string; kind: "indoor" | "outdoor"; minutes: number }[];
   strength: { started_at: string; title: string; exercises: string[] }[];
   sleep: { hours: number | null; source: string; label: string; window_hours: number } | null;
   checkin: { energy: number | null; training_effort: number | null } | null;
@@ -18,6 +19,8 @@ export type WeeklyJournal = {
     running_km: number;
     running_delta_km: number;
     running_sessions: number;
+    cycling_sessions: number;
+    cycling_delta_sessions: number;
     strength_sessions: number;
     strength_delta_sessions: number;
     sleep_hours: number | null;

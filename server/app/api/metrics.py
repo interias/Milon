@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from ..metrics import achievements, activity, body, cycling, health, nutrition, run_analysis, run_fitness_service, running, strength
+from ..metrics import achievements, activity, body, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -154,6 +154,11 @@ def health_cycling_recent(limit: int = 8) -> list[dict]:
 
 
 # --- Rad (Indoor/Zwift) ---
+@router.get("/endurance/fitness")
+def endurance_fitness(days: int = 180) -> dict:
+    return endurance.fitness(max(14, min(days, 1100)))
+
+
 @router.get("/cycling/summary")
 def cycling_summary() -> dict:
     return cycling.summary()

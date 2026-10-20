@@ -12,7 +12,7 @@ from ..config import settings
 from ..db import engine
 from ..garmin_activity import GarminActivity
 from ..models import ExerciseSession, StepsDaily, Workout, WorkoutSet
-from . import body, running, sleep
+from . import body, endurance, running, sleep
 
 
 def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
@@ -29,6 +29,9 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
     # Imports own source reconciliation. Never append Garmin's parallel raw activity store here.
     current_runs = runs[(runs["started_at"] >= pd.Timestamp(first)) & (runs["started_at"] < pd.Timestamp(boundary))]
     previous_runs = runs[(runs["started_at"] >= pd.Timestamp(previous_first)) & (runs["started_at"] < pd.Timestamp(first))]
+    all_rides = endurance.ride_sessions()
+    current_rides = all_rides[(all_rides["started_at"] >= pd.Timestamp(first)) & (all_rides["started_at"] < pd.Timestamp(boundary))]
+    previous_rides = all_rides[(all_rides["started_at"] >= pd.Timestamp(previous_first)) & (all_rides["started_at"] < pd.Timestamp(first))]
     with Session(engine) as session:
         workouts = session.exec(select(Workout).where(Workout.source == "hevy", Workout.started_at >= previous_time,
                                                       Workout.started_at < end_time).order_by(Workout.started_at)).all()
@@ -62,6 +65,9 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
         days.append({"date": day.isoformat(),
                      "runs": [{"started_at": row.started_at.isoformat(), "distance_km": round(float(row.distance_km), 2),
                                "minutes": round(float(row.dur_min), 1), "activity_id": activity_id(row)} for row in daily_runs.itertuples()],
+                     "rides": [{"started_at": row.started_at.isoformat(), "title": row.title, "kind": row.kind,
+                                "minutes": round(float(row.minutes), 1)}
+                               for row in current_rides[current_rides["day"] == day].itertuples()],
                      "strength": [{"started_at": row.started_at.isoformat(), "title": row.title or "Krafttraining",
                                    "exercises": exercises.get(row.id, [])}
                                   for row in daily_strength],
@@ -83,6 +89,7 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
             "days": days,
             "summary": {"running_km": round(current_km, 1), "running_delta_km": round(current_km - previous_km, 1),
                         "running_sessions": len(current_runs), "strength_sessions": len(current_workouts),
+                        "cycling_sessions": len(current_rides), "cycling_delta_sessions": len(current_rides) - len(previous_rides),
                         "strength_delta_sessions": len(current_workouts) - len(previous_workouts),
                         "sleep_hours": round(sum(measured_sleep) / len(measured_sleep), 2) if measured_sleep else None,
                         "sleep_nights": len(measured_sleep), "weight_delta_kg": weight_delta,
