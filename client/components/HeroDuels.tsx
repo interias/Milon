@@ -95,7 +95,7 @@ export function HeroMounts({ data, onChoose }: { data: Hero; onChoose: (key: str
                 ? <>
                     <span className="block truncate text-[11px] text-muted">{m.chosen ? "reitet mit dir" : `seit ${dm(m.unlocked_on!)}`}</span>
                     {m.chosen || (m.ride_km ?? 0) > 0
-                      ? <span className="block truncate text-[11px] text-muted">Stufe {m.level ?? 1} · {String(m.ride_km ?? 0).replace(".", ",")} km zu Rad</span>
+                      ? <span className="block truncate text-[11px] text-muted">Stufe {m.level ?? 1} · {String(m.ride_km ?? 0).replace(".", ",")} Rad-km</span>
                       : null}
                   </>
                 : <>

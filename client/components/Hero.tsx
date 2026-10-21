@@ -99,7 +99,7 @@ const BTN = "rounded border px-3 py-1.5 font-display text-xs font-bold";
 const BTN_STYLE = { background: "linear-gradient(180deg, #3b2c18, #1d150c)", borderColor: "#6b5230", color: TIP_YELLOW };
 
 function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolean }) {
-  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute", auktion: "Auktionshaus" };
+  const SOURCE: Record<HeroItem["source"], string> = { beute: "Beute nach einem Lauf", truhe: "Aus der Wochentruhe", veteran: "Aus der Veteranentruhe", auftrag: "Auftragsbeute", boss: "Hort eines Monatsbosses", instanz: "Schatz einer Instanz", taeglich: "Fleißbelohnung", event: "Festtagsbeute", auktion: "Auktionshaus", gipfel: "Von einem Zwift-Gipfel" };
   return <>
     {worn && <p className="mb-0.5 text-[11px] text-[#9d9d9d]">Derzeit angelegt</p>}
     <p className="text-[15px] font-bold leading-snug" style={{ color: rc(item.rarity) }}>{item.name}</p>
@@ -109,7 +109,7 @@ function ItemTooltipBody({ item, worn = false }: { item: HeroItem; worn?: boolea
     {item.lucky && <p style={{ color: "#1eff00" }}>Glücksfund: eine Stufe besser als verdient</p>}
     {item.set && <p className="mt-1" style={{ color: TIP_YELLOW }}>Garnitur {item.set}</p>}
     <p className="mt-1 italic" style={{ color: TIP_YELLOW }}>„{item.flavor}“</p>
-    <p className="mt-1 text-[12px] text-[#9d9d9d]">{SOURCE[item.source]} · {dm(item.date)}{item.run_km ? ` · ${item.run_km.toLocaleString("de-DE")} km` : ""}</p>
+    <p className="mt-1 text-[12px] text-[#9d9d9d]">{item.ride_min ? "Beute nach einer Radfahrt" : SOURCE[item.source]} · {dm(item.date)}{item.run_km ? ` · ${item.run_km.toLocaleString("de-DE")} km` : ""}{item.ride_min ? ` · ${item.ride_min} min` : ""}</p>
     {item.price != null && <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-white">Verkaufspreis: <Money copper={item.price} /></p>}
   </>;
 }
@@ -320,7 +320,7 @@ export function HeroHeader({ data, onSpec, onTitle, fromXp }: { data: Hero; onSp
   const [details, setDetails] = useState(false);
   const h = data.hero;
   const shares: [string, number, string][] = [
-    ["Laufen", h.shares.laufen, "#aad372"], ["Kraft", h.shares.kraft, "#c69b6d"], ["Alltag", h.shares.alltag, "#00ff98"],
+    ["Laufen", h.shares.laufen, "#aad372"], ["Rad", h.shares.rad ?? 0, "#7fbf3f"], ["Kraft", h.shares.kraft, "#c69b6d"], ["Alltag", h.shares.alltag, "#00ff98"],
   ];
   return (
     <Card className="relative">
@@ -559,17 +559,17 @@ export function HeroVaultCard({ data, onClaim }: { data: Hero; onClaim: (week: s
               <div>
                 <Icon size={30}>{s.unlocked ? CHEST : LOCK}</Icon>
                 <p className="mt-1 font-display text-[11px] font-bold">{s.unlocked ? s.item.rarity_label : `${Math.min(cur.runs, s.threshold)} / ${s.threshold}`}</p>
-                <p className="text-[10px] text-muted">{s.threshold} {s.threshold === 1 ? "Lauf" : "Läufe"}</p>
+                <p className="text-[10px] text-muted">{s.threshold} {s.threshold === 1 ? "Einheit" : "Einheiten"}</p>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-muted">{cur.runs} {cur.runs === 1 ? "Lauf" : "Läufe"} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}{cur.stone_level ? ` · höchster Stein +${cur.stone_level} bestimmt Slot 1` : ""}</p>
+      <p className="mt-2 text-[11px] text-muted">{cur.runs - (cur.rides ?? 0)} {cur.runs - (cur.rides ?? 0) === 1 ? "Lauf" : "Läufe"}{cur.rides ? ` + ${cur.rides} ${cur.rides === 1 ? "Fahrt" : "Fahrten"} ab 30 min` : ""} diese Woche{cur.sick_days > 0 ? ` · ${cur.sick_days} Krankheitstage, Schwellen gesenkt` : ""}{cur.stone_level ? ` · höchster Stein +${cur.stone_level} bestimmt Slot 1` : ""}</p>
       {(data.vault.veteran || data.vault.claimable.length > 0) && (
         <div className="mt-4 space-y-3">
           {data.vault.veteran && <VaultChoice vault={data.vault.veteran} title="Veteranentruhe · für deine bisherige Reise" onClaim={onClaim} />}
-          {data.vault.claimable.map((v) => <VaultChoice key={v.week} vault={v} title={`Woche vom ${dm(v.week)} · ${v.runs} Läufe`} onClaim={onClaim} />)}
+          {data.vault.claimable.map((v) => <VaultChoice key={v.week} vault={v} title={`Woche vom ${dm(v.week)} · ${v.runs} ${v.rides ? "Einheiten" : "Läufe"}`} onClaim={onClaim} />)}
         </div>
       )}
     </Card>
@@ -757,6 +757,7 @@ function LogLine({ e, linkable = true }: { e: Hero["log"][number]; linkable?: bo
     case "auftrag": return <span style={{ color: "#ffd100" }}>Auftrag abgeschlossen: {name("#ffd100")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "boss": return <span style={{ color: "#ff6a5c" }}>Boss besiegt: {name("#ff6a5c")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "instanz": return <span style={{ color: "#3d95ff" }}>Instanz bezwungen: {name("#3d95ff")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
+    case "gipfel": return <span style={{ color: "#6fd3e8" }}>Gipfel bezwungen: {name("#6fd3e8")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "event": return <span style={{ color: "#ff8a3d" }}>Event abgeschlossen: {name("#ff8a3d")}!{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "duell": return <span style={{ color: "#a9b8d8" }}>Duell gewonnen gegen {name("#a9b8d8")}{e.xp ? ` (+${e.xp} EP)` : ""}</span>;
     case "reittier": return <span style={{ color: "#ffd100" }}>Neues Reittier: {name("#ff8000")}!</span>;
@@ -787,7 +788,7 @@ export function HeroLog({ data, listClass = "max-h-96" }: { data: Hero; listClas
 
 export function HeroRules({ data }: { data: Hero }) {
   const x = data.xp_sources;
-  const rows: [string, number][] = [["Laufen", x.laufen], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung]];
+  const rows: [string, number][] = [["Laufen", x.laufen], ["Rad", x.rad ?? 0], ["Kraft", x.kraft], ["Alltag", x.alltag], ["Erfolge", x.erfolge], ["Ausgeruht-Bonus", x.ruhebonus], ["Buffs", x.buffs], ["Fokus", x.fokus], ["Talente", x.talente], ["Aufträge", x.auftraege], ["Bosse", x.bosse], ["Instanzen", x.instanzen], ["Tagesaufgaben", x.taeglich], ["Events", x.event], ["Duelle", x.duelle], ["Erkundung", x.erkundung], ["Ereignisse", x.events ?? 0], ["Gipfel", x.gipfel ?? 0]];
   return (
     <Card>
       <CardTitle title="Woher deine EP stammen" sub={`Gesamt ${de0(data.hero.xp)} EP seit Beginn deiner Daten`} />

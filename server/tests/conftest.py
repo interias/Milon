@@ -43,3 +43,40 @@ def _no_real_world_db(monkeypatch, _world_engine):
     dürfen dabei nie data/tracker.db öffnen. Tests mit eigener DB setzen hero_world.engine danach selbst."""
     from app import hero_world
     monkeypatch.setattr(hero_world, "engine", _world_engine)
+
+
+@pytest.fixture(scope="session")
+def _ride_engine(tmp_path_factory):
+    from app import garmin_indoor  # noqa: F401 -- registriert garmin_indoor_* vor create_all
+    engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('rides') / 'rides.db'}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_ride_db(monkeypatch, _ride_engine):
+    """Fahrten zählen als Trainingstage (activity.*, weekly_journal); cycling/health lesen sie über ihr
+    eigenes engine und dürfen in Tests nie data/tracker.db öffnen. Tests mit eigener DB setzen es danach selbst."""
+    from app.metrics import cycling, health
+    monkeypatch.setattr(cycling, "engine", _ride_engine)
+    monkeypatch.setattr(health, "engine", _ride_engine)
+
+
+@pytest.fixture(scope="session")
+def _indoor_engine(tmp_path_factory):
+    from app import garmin_indoor  # noqa: F401 -- registriert garmin_indoor_* vor create_all
+    engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('indoor') / 'indoor.db'}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_indoor_db(monkeypatch, _indoor_engine):
+    """Jeder Garmin-Sync mit gemocktem Client reicht Indoor-Fahrten an garmin_indoor weiter; der darf
+    nie data/tracker.db öffnen. Tests mit eigener DB setzen garmin_indoor.engine danach selbst."""
+    from app import garmin_indoor
+    monkeypatch.setattr(garmin_indoor, "engine", _indoor_engine)

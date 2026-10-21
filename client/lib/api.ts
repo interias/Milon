@@ -71,7 +71,7 @@ export type WeeklyWeight = { week: string; weight: number };
 export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number; intake_avg: number; estimate_days: number };
 export type StepsPoint = { date: string; steps: number };
 export type StepsSummary = { last: number | null; last_day: string | null; avg7: number | null; series: StepsPoint[] };
-export type Activity = { kind: "run" | "workout"; date: string; title: string; detail: string };
+export type Activity = { kind: "run" | "workout" | "ride"; date: string; title: string; detail: string };
 export type WeatherInfo = { code: number | null; icon: string; text: string };
 export type WeatherHour = WeatherInfo & { time: string; temp: number; rain_prob: number | null; rain_mm: number; wind_kmh: number | null; is_day: boolean };
 export type RunWindow = {
@@ -85,7 +85,7 @@ export type Weather = { configured: false } | {
   current: WeatherInfo & { temp: number; feels_like: number; wind_kmh: number; is_day: boolean };
   day: WeatherInfo & { temp_max: number; temp_min: number; rain_mm: number; rain_prob_max: number | null; wind_max_kmh: number | null; sunrise: string; sunset: string };
 };
-export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; sick?: boolean };
+export type ConsistencyDay = { date: string; level: number; steps: number; trained: boolean; ride?: boolean; sick?: boolean };
 export type Consistency = {
   days: ConsistencyDay[]; streak: number; active_days: number; trained_days: number; sick_days?: number; total: number; step_goal: number;
 };
@@ -93,6 +93,16 @@ export type WeekCompare = {
   days: number;
   running: { current_km: number; previous_km: number; current_runs: number; previous_runs: number; days: number };
   strength: { current_kg: number; previous_kg: number; days: number };
+  cycling?: { current_sessions: number; previous_sessions: number; current_minutes: number; previous_minutes: number; days: number };
+};
+export type EnduranceDay = { date: string; load: number; ctl: number; atl: number; tsb: number };
+export type EnduranceWeek = { week: string; run: number; bike: number; total: number; run_share: number | null; runs: number; rides: number; unrated: number };
+export type EnduranceSession = { date: string; sport: "run" | "bike"; minutes: number; avg_hr: number | null; trimp: number | null; activity_id: string | null; note: string | null };
+export type EnduranceFitness = {
+  days: number; ctl_days: number; atl_days: number; hr_rest: number; hr_max: number; history_days: number;
+  today: (EnduranceDay & { form: string | null; has_load_today: boolean }) | null;
+  series: EnduranceDay[]; weeks: EnduranceWeek[]; sessions: EnduranceSession[];
+  unrated: { runs: number; rides: number }; caveat: string;
 };
 export type StepsTrendPoint = { date: string; steps: number | null; avg7: number | null; days7: number };
 export type StepsWeek = { week: string; steps: number | null; days: number };
@@ -170,6 +180,7 @@ export type ActivityOverview = {
   from_date: string; to_date: string; previous_from_date: string; previous_to_date: string;
   running: { current_km: number; previous_km: number };
   strength: { current_sessions: number; previous_sessions: number };
+  cycling?: { current_sessions: number; previous_sessions: number; current_minutes: number; previous_minutes: number };
   steps: { current_avg: number | null; previous_avg: number | null; current_days: number; previous_days: number };
 };
 export type VolPoint = { week: string; km: number; runs: number };
@@ -200,13 +211,13 @@ export type Achievements = { achievements: Achievement[]; summary: AchievementSu
 
 export type HeroItem = {
   id: string; name: string; slot: string; slot_label: string; rarity: Rarity; rarity_label: string;
-  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event" | "auktion"; reason: string; date: string;
-  lucky?: boolean; run_km?: number; claimed_at?: string; equipped?: boolean;
+  ilvl: number; flavor: string; source: "beute" | "truhe" | "veteran" | "auftrag" | "boss" | "instanz" | "taeglich" | "event" | "auktion" | "gipfel"; reason: string; date: string;
+  lucky?: boolean; run_km?: number; ride_min?: number; claimed_at?: string; equipped?: boolean;
   set?: string | null; upgrades?: number; upgrade_cost?: number | null; dust?: number; price?: number; mail?: boolean;
 };
 export type HeroVaultSlot = { slot: number; threshold: number; unlocked: boolean; item: HeroItem };
 export type HeroVault = {
-  week: string; runs: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
+  week: string; runs: number; rides?: number; sick_days: number; slots: HeroVaultSlot[]; complete: boolean; claimed_slot: number | null;
   stone_level?: number | null;
 };
 export type HeroBuff = { key: string; name: string; kind: "buff" | "debuff"; icon: string; effect: string; source: string };
@@ -256,22 +267,31 @@ export type HeroLiveState = {
 };
 export type HeroLiveOverlay = { sessions: string[]; cells: [number, number][]; routes: { session: string; date: string; points: [number, number][] }[]; km2: number };
 
+export type HeroPeak = { key: string; name: string; hm: number; xp: number; loot: string; reached: boolean; reached_on: string | null; progress: number };
+export type HeroClimb = { total_hm: number; rides: number; peaks: HeroPeak[];
+  rounds: { n: number; name: string; hm: number; reached_on: string; xp: number }[]; next: HeroPeak | null; next_in_hm: number };
+export type HeroDreams = { worlds: { world: string; known: boolean; rides: number; route_count: number; routes: { route: string; rides: number }[];
+    km: number; hm: number; first_on: string; last_on: string }[];
+  known: string[]; visited_known: number; known_total: number; all_worlds: boolean; total_hm: number; best_routes: number;
+  route_tiers: number[]; hm_tiers: { hm: number; reached: boolean }[] };
 export type Hero = {
   today: string; start: string;
   hero: {
     level: number; title: string; xp: number; floor: number; next: number; progress: number;
     class: string; class_label: string; class_color: string; class_desc: string;
     spec: string | null; spec_label: string | null; spec_desc: string;
-    spec_scores: Record<string, number>; shares: { laufen: number; kraft: number; alltag: number };
+    spec_scores: Record<string, number>; shares: { laufen: number; rad?: number; kraft: number; alltag: number };
     rested: number; rested_cap: number; week_xp: number;
     spec_auto: string | null; spec_chosen: string | null; title_chosen: string | null;
   };
-  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events", number>;
+  xp_sources: Record<"laufen" | "kraft" | "alltag" | "erfolge" | "ruhebonus" | "buffs" | "fokus" | "talente" | "auftraege" | "bosse" | "instanzen" | "taeglich" | "event" | "duelle" | "erkundung" | "events" | "rad" | "gipfel", number>;
   duels: { won: number; total: number;
     last: { date: string; km: number; pace: number; ef: number | null; twin_date: string; twin_km: number; twin_pace: number; twin_ef: number | null; won: boolean; xp: number } | null;
     shadows: { label: string; available: boolean; appears?: string | null; wins?: number; won?: boolean;
       rows?: { key: string; name: string; now: number | null; then: number | null; better: boolean | null }[] }[] };
   mounts: { key: string; name: string; kind: string; need: number; glyph: string; value: number; unlocked: boolean; unlocked_on: string | null; chosen: boolean; unit: string; ride_km?: number; level?: number }[];
+  climb?: HeroClimb;
+  dreams?: HeroDreams;
   daily: { streak: number; today: HeroDaily | null; last7: HeroDaily[] } | null;
   event: { month: string; name: string; token: string; item: string; effect: string; tokens: number; goal: number; done: boolean; done_on: string | null; xp: number; rule: string } | null;
   trainer: { name: string; role: string; quote: string };
@@ -285,7 +305,7 @@ export type Hero = {
   companion: { species: string; name: string; stage: number; stage_label: string; streak: number; next_stage: number | null; mood: string; text: string };
   specs: { key: string; label: string; desc: string; focus: string; score: number | null }[];
   attributes: HeroAttribute[];
-  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; xp: number; level: number }[];
+  progression: { week: string; laufen: number; kraft: number; alltag: number; erfolge: number; ruhebonus: number; buffs: number; fokus: number; talente: number; auftraege: number; bosse: number; instanzen: number; taeglich: number; event: number; duelle: number; erkundung: number; events?: number; rad?: number; gipfel?: number; xp: number; level: number }[];
   mythic?: HeroMythic | null;
   vault: { current: HeroVault; claimable: HeroVault[]; veteran: HeroVault | null };
   inventory: HeroItem[];
@@ -305,7 +325,7 @@ export type Hero = {
   titles: { key: string; name: string; condition: string; value: number; target: number; earned: boolean; chosen: boolean }[];
   reputation: { key: string; name: string; source: string; value: number; standing: string; rank: number; floor: number; next: number | null; progress: number }[];
   ilvl_avg: number | null;
-  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz" | "fahrt"; text: string; rarity?: Rarity; name?: string; level?: number; km?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
+  log: { date: string; kind: "level" | "klasse" | "erfolg" | "beute" | "truhe" | "auftrag" | "boss" | "instanz" | "event" | "duell" | "reittier" | "tasche" | "erkundung" | "verlies" | "abschnitt" | "schrein" | "schatz" | "fahrt" | "gipfel"; text: string; rarity?: Rarity; name?: string; level?: number; km?: number; xp?: number; item_id?: string; tip?: string[] | null }[];
   rules: { runs_full_xp: number; workouts_full_xp: number; rest_per_day: number; vault_thresholds: number[] };
 };
 export type PaceDetail = {
@@ -408,12 +428,12 @@ export type LlmBudget = {
 export type AppSettings = {
   openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
   anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
-  timezone: string; scheduler_enabled: boolean; run_hr_max: number; weather_places: string[]; fddb_user_masked: string;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; bike_ftp: number; weather_places: string[]; fddb_user_masked: string;
   keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
   openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
-  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; bike_ftp?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
@@ -474,6 +494,57 @@ export type RunningFitnessReferenceUpdate =
   | { max_hr: number }
   | { sensor_change: { date: string; label: string } };
 
+// ---- Rad (Zwift & Indoor, /metrics/cycling) ----
+export type CycRide = {
+  activity_id: string; type: "virtual_ride" | "indoor_cycling" | string; title: string | null;
+  world: string | null; route: string | null; date: string; minutes: number | null; km: number | null;
+  elevation_m: number | null; avg_power: number | null; np: number | null; max_power: number | null;
+  kj: number | null; cadence: number | null; avg_hr: number | null; max_hr: number | null;
+  hr_valid: boolean; eftp: number | null; if: number | null; tss: number | null;
+  aerobic_te: number | null; anaerobic_te: number | null; training_load: number | null;
+};
+export type CycZone = { zone: number; name: string; lo_pct: number; hi_pct: number | null; lo_w: number; hi_w: number | null };
+export type CycSummary = {
+  rides: number; rides_with_power: number; hours: number; km: number; elevation_m: number; kj: number;
+  rides_30d: number; hours_30d: number; tss_7d: number; tss_28d: number; hr_valid_rides: number;
+  eftp: number | null; eftp_source: string | null; wkg: number | null; last_ride: CycRide | null;
+};
+export type CycEftp = {
+  value: number | null; source: string | null; wkg: number | null; weight_kg: number | null;
+  garmin_ftp: number | null; setting: number | null; window_days: number; factor: number;
+  zones: CycZone[]; series: { week: string; eftp: number | null; source: string | null }[]; caveat?: string;
+};
+export type CycCurve = {
+  window_days: number;
+  durations: { seconds: number; label: string; recent: number | null; previous: number | null; best: number | null; best_date: string | null }[];
+};
+export type CycTrend = FitTrend & { bpm_per_month?: number | null; bpm_per_watt?: number | null; delta_bpm?: number | null };
+export type CycHrAtPower = {
+  ref_power?: number; series?: { date: string; activity_id: string; hr: number; smooth: number }[];
+  current?: number | null; caveat?: string; trend?: CycTrend;
+};
+export type CycEfficiency = {
+  series?: { date: string; activity_id: string; ef: number; smooth: number }[]; current?: number | null; rides?: number;
+  trend?: FitTrend;
+  decoupling?: { date: string; activity_id: string; title: string | null; decoupling_pct: number; vi: number; minutes: number }[];
+  caveat?: string;
+};
+export type CycZones = {
+  eftp: number | null; source: string | null; zones: CycZone[];
+  weeks: { week: string; seconds: number[]; total: number; rides: number }[]; unzoned_rides: number;
+};
+export type CycRideDetail = CycRide & {
+  power_curve: { seconds: number; watts: number | null }[];
+  zones: (CycZone & { seconds: number | null })[];
+  garmin_power_zones: unknown; garmin_hr_zones: unknown; hr_dropout: number | null;
+  series: { t: number; power_w?: number | null; cadence_rpm?: number | null; hr_bpm?: number | null; speed_m_s?: number | null; altitude_m?: number | null }[];
+};
+export type CycWorlds = {
+  worlds: { world: string; rides: number; km: number; elevation_m: number; hours: number; last: string;
+    routes: { route: string; rides: number; km: number; elevation_m: number; hours: number; last: string }[] }[];
+  other_rides: number;
+};
+
 export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
@@ -495,6 +566,7 @@ export const api = {
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),
   weather: (index = 0, day = 0) => get<Weather>(`/weather?index=${index}&day=${day}`),
   activityConsistency: (days = 140) => get<Consistency>(`/metrics/activity/consistency?days=${days}`),
+  enduranceFitness: (days = 180) => get<EnduranceFitness>(`/metrics/endurance/fitness?days=${days}`),
   activityCompare: (days = 7) => get<WeekCompare>(`/metrics/activity/compare?days=${days}`),
   activityOverview: () => get<ActivityOverview>("/metrics/activity/overview"),
   weeklyReview: () => get<WeeklyReview>("/metrics/activity/weekly-review"),
@@ -526,6 +598,15 @@ export const api = {
   runEasyHr: () => get<EasyHr>("/metrics/running/easy-hr"),
   runTrimp: (weeks = 26) => get<Trimp>(`/metrics/running/trimp?weeks=${weeks}`),
   runPaceByZone: () => get<PaceByZone>("/metrics/running/pace-by-zone"),
+  cycSummary: () => get<CycSummary>("/metrics/cycling/summary"),
+  cycPowerCurve: () => get<CycCurve>("/metrics/cycling/power-curve"),
+  cycEftp: (weeks = 26) => get<CycEftp>(`/metrics/cycling/eftp?weeks=${weeks}`),
+  cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
+  cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
+  cycZones: (weeks = 12) => get<CycZones>(`/metrics/cycling/zones?weeks=${weeks}`),
+  cycRides: (limit = 20) => get<CycRide[]>(`/metrics/cycling/rides?limit=${limit}`),
+  cycRide: (id: string) => get<CycRideDetail>(`/metrics/cycling/ride/${encodeURIComponent(id)}`),
+  cycWorlds: () => get<CycWorlds>("/metrics/cycling/worlds"),
   runEf: () => get<EfTrend>("/metrics/running/ef"),
   runBestEfforts: (top = 3) => get<BestEfforts>(`/metrics/running/best-efforts?top=${top}`),
   runAchievements: () => get<Achievements>("/metrics/running/achievements"),

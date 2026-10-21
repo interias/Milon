@@ -14,7 +14,7 @@ const zoneColor = (idx: number) => ZONE_COLORS[Math.min(ZONE_COLORS.length, Math
 
 // Signifikanz-Badge: nur ein statistisch belastbarer Trend (95%-CI) wird als
 // besser/schlechter eingefärbt — sonst ehrlich "kein belastbarer Trend".
-function TrendBadge({ t }: { t?: FitTrend }) {
+export function TrendBadge({ t }: { t?: FitTrend }) {
   if (!t) return null;
   const good = t.verdict === "besser";
   const bad = t.verdict === "schlechter";

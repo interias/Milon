@@ -27,7 +27,7 @@ import pandas as pd
 from typing import Optional
 from sqlmodel import Field, Session, SQLModel, select
 
-from . import hero_bosses, hero_economy, hero_events, hero_events_live, hero_extras, hero_keystone, hero_quests, hero_social, hero_world
+from . import hero_bosses, hero_climb, hero_dreams, hero_economy, hero_events, hero_events_live, hero_extras, hero_keystone, hero_quests, hero_social, hero_world
 from .checkins import local_today
 from .db import engine
 
@@ -203,6 +203,11 @@ def _runs() -> pd.DataFrame:
     return df.sort_values("started_at").reset_index(drop=True)
 
 
+def _hr_max(runs: pd.DataFrame) -> float:
+    from .metrics import running
+    return running._resolved_hr_max(runs if "max_hr" in runs else pd.DataFrame())[0]
+
+
 def _workouts() -> pd.DataFrame:
     df = _read("SELECT w.id, w.started_at, COUNT(ws.id) AS sets FROM workouts w "
                "LEFT JOIN workout_sets ws ON ws.workout_id = w.id AND ws.set_type = 'normal' "
@@ -212,9 +217,50 @@ def _workouts() -> pd.DataFrame:
     return df.sort_values("started_at").reset_index(drop=True) if not df.empty else df
 
 
+RIDE_ZONE = [0, 1, 2, 2, 3, 3, 3]   # Coggan Z1..Z7 → Lauf-Zone (ZONE_FACTOR): Z3–4 = Tempo, Z5+ = Hart
+RIDE_COLUMNS = ["key", "activity_id", "started_at", "day", "dur_min", "zone", "power_zone", "km", "elevation_m",
+                "kj", "np", "avg_hr", "ef", "eftp", "power_curve", "world", "has_power"]
+
+
+def _indoor_rides(hr_max: float = 180.0) -> pd.DataFrame:
+    """Indoor-Fahrten (Zwift/Rolle) für die Heldenreise, eine Zeile je Fahrt — nie Koordinaten.
+    zone wie bei Läufen (0..3 → ZONE_FACTOR): aus NP/eFTP (Coggan), ohne Watt aus dem Ø-Puls
+    (%HFmax wie Läufe, nur bei plausibler Pulsmessung), sonst None. Basis für Rad-EP, Beute,
+    Truhe, Aufträge und Disziplin (und für die Kletter-Bosse/Reittiere aus #73)."""
+    from .metrics import cycling
+    df = cycling.indoor_rides()
+    if df.empty:
+        return pd.DataFrame(columns=RIDE_COLUMNS)
+    df = cycling._with_load(df)
+    seconds = df["duration_seconds"].fillna(df["elapsed_duration_seconds"]).astype(float)
+    df["dur_min"] = seconds / 60
+    df = df[(df["dur_min"] > 5) & (df["dur_min"] < 600)].copy()
+    if df.empty:
+        return pd.DataFrame(columns=RIDE_COLUMNS)
+    df["has_power"] = (df["avg_power_w"].fillna(0) > 0) & df["power_curve"].map(bool)
+    df["np"] = df["norm_power_w"].fillna(df["avg_power_w"]).where(df["has_power"])
+    ratio = df["np"] / df["eftp"]
+    df["power_zone"] = ratio.map(lambda x: int(np.searchsorted(cycling.COGGAN, x, side="right")) + 1
+                                 if pd.notna(x) and x > 0 else None)
+    bounds = np.array([0.70, 0.80, 0.90]) * hr_max
+    hr = df["avg_hr"].where(df["hr_valid"])
+    hr_zone = hr.map(lambda h: int(np.searchsorted(bounds, h, side="right")) if pd.notna(h) and h > 0 else None)
+    df["zone"] = [RIDE_ZONE[int(p) - 1] if p is not None and pd.notna(p) else (z if z is not None and pd.notna(z) else None)
+                  for p, z in zip(df["power_zone"], hr_zone)]
+    df["km"] = df["distance_km"].fillna(0.0).astype(float)
+    df["elevation_m"] = df["elevation_gain_m"].fillna(0.0).astype(float)
+    df["kj"] = df["work_kj"].fillna(df["avg_power_w"] * seconds / 1000).fillna(0.0).astype(float)
+    df["ef"] = (df["np"] / hr).where(hr > 0)
+    df["key"] = "ride:" + df["activity_id"].astype(str)
+    return df.sort_values("started_at")[RIDE_COLUMNS].reset_index(drop=True)
+
+
 def _other_minutes() -> dict[date, float]:
+    from .metrics import health
     df = _read("SELECT started_at, ended_at FROM exercise_sessions WHERE exercise_type IN (4, 53)",
                parse_dates=["started_at", "ended_at"])
+    # HC-Spiegel einer Indoor-Fahrt (Garmin Connect → HC) sind keine Alltagsbewegung: die Fahrt gibt Rad-EP.
+    df = health._drop_overlapping(df.dropna(subset=["started_at"]), health._indoor_windows())
     out: dict[date, float] = {}
     for s, e in zip(df["started_at"], df["ended_at"]):
         if pd.notna(s) and pd.notna(e):
@@ -369,16 +415,18 @@ def day_buffs(protein: dict[date, float], target: float | None, sleep: dict[date
 
 
 def matches_spec(spec: str | None, run, week_index: int) -> bool:
+    """Passt eine Einheit zur Spezialisierung? Fahrten (Zeilen aus _indoor_rides) zählen über ihre Zone
+    und den gemeinsamen Ausdauer-Wochenzähler, nie für „Strecke“ (virtuelle km)."""
     zone = run.zone if run.zone is not None and pd.notna(run.zone) else None
     return {"ausdauer": zone is not None and zone <= 1, "tempo": zone is not None and zone >= 2,
-            "strecke": run.distance_km >= 10, "last": week_index >= 3}.get(spec or "", False)
+            "strecke": (getattr(run, "distance_km", None) or 0) >= 10, "last": week_index >= 3}.get(spec or "", False)
 
 
-XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung", "events"]
+XP_KEYS = ["laufen", "kraft", "alltag", "erfolge", "ruhebonus", "buffs", "fokus", "talente", "auftraege", "bosse", "instanzen", "taeglich", "event", "duelle", "erkundung", "events", "rad", "gipfel"]
 EXTRA_KEY = {"auftrag": ("auftraege", "Auftrag"), "boss": ("bosse", "Boss besiegt:"), "instanz": ("instanzen", "Instanz"),
              "taeglich": ("taeglich", "Tagesaufgabe"), "event": ("event", "Event"), "duell": ("duelle", "Duell gewonnen:"), "erkundung": ("erkundung", "Gebiet entdeckt:"),
              "verlies": ("erkundung", "Verlies bezwungen:"), "abschnitt": ("erkundung", "Abschnitt bezwungen:"), "schrein": ("erkundung", "Schrein entdeckt:"), "schatz": ("erkundung", "Schatz gefunden:"),
-             "spontan": ("events", "Ereignis bestanden:")}
+             "spontan": ("events", "Ereignis bestanden:"), "gipfel": ("gipfel", "Gipfel bezwungen:")}
 
 
 class Mods:
@@ -446,16 +494,20 @@ def step_xp(steps: int) -> int:
 
 
 def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | None = None,
-           extra: list[tuple[date, float, str, str]] | None = None) -> dict:
-    """Chronologisches XP-Buch mit Ruhebonus und Wochen-Abschwächung."""
+           extra: list[tuple[date, float, str, str]] | None = None, rides: pd.DataFrame | None = None) -> dict:
+    """Chronologisches XP-Buch mit Ruhebonus und Wochen-Abschwächung.
+    Läufe und Indoor-Fahrten teilen sich einen Ausdauer-Wochenzähler (ab der 5. Einheit halbe EP)."""
     entries: list[dict] = []
     by_day_runs: dict[date, list] = {}
     for r in runs.itertuples():
         by_day_runs.setdefault(r.day, []).append(r)
+    by_day_rides: dict[date, list] = {}
+    for r in (rides.itertuples() if rides is not None else []):
+        by_day_rides.setdefault(r.day, []).append(r)
     by_day_wo: dict[date, list] = {}
     for w in workouts.itertuples():
         by_day_wo.setdefault(w.day, []).append(w)
-    days = [*by_day_runs, *by_day_wo, *steps, *other, *(d for d, _, _ in ach if d)]
+    days = [*by_day_runs, *by_day_rides, *by_day_wo, *steps, *other, *(d for d, _, _ in ach if d)]
     if not days:
         return {"entries": [], "pool": 0, "totals": {}, "daily": {}}
     first = min(days)
@@ -479,16 +531,22 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
         buff_pct = mods.training(d)
         pool = min(mods.rest_cap(d), pool + mods.refill(d))
         ran, lifted = bool(by_day_runs.get(d)), bool(by_day_wo.get(d))
-        for r in by_day_runs.get(d, []):
+        sessions = [("lauf", r) for r in by_day_runs.get(d, [])]
+        if by_day_rides.get(d):  # reine Lauftage behalten ihre Reihenfolge
+            sessions = sorted(sessions + [("rad", r) for r in by_day_rides[d]], key=lambda s: s[1].started_at)
+        for kind, r in sessions:
             week_runs[wk] = week_runs.get(wk, 0) + 1
+            # Fahrt = Lauf-Formel: 2 EP/min × Zonenfaktor (Zone aus Leistung, sonst Puls)
             xp = run_xp(r) * (1.0 if week_runs[wk] <= RUNS_FULL_XP else 0.5)
             bonus = min(pool, xp)
             pool -= bonus
-            buff, focus, tal = xp * buff_pct, xp * mods.focus(d, r, week_runs[wk]), xp * mods.run_talent(d, r, lifted)
+            tal = xp * mods.run_talent(d, r, lifted) if kind == "lauf" else 0.0  # Talente nennen ausdrücklich Läufe
+            buff, focus = xp * buff_pct, xp * mods.focus(d, r, week_runs[wk])
             trained = True
-            entries.append({"date": d, "kind": "lauf", "xp": xp + buff + focus + tal, "bonus": bonus, "ref": r.key,
-                            "label": f"Lauf {r.distance_km:.1f} km"})
-            day_xp["laufen"] += xp
+            label = f"Lauf {r.distance_km:.1f} km" if kind == "lauf" else f"Radfahrt {r.dur_min:.0f} min"
+            entries.append({"date": d, "kind": kind, "xp": xp + buff + focus + tal, "bonus": bonus, "ref": r.key,
+                            "label": label})
+            day_xp["laufen" if kind == "lauf" else "rad"] += xp
             day_xp["ruhebonus"] += bonus
             day_xp["buffs"] += buff
             day_xp["fokus"] += focus
@@ -558,22 +616,26 @@ def _level_events(entries: list[dict]) -> list[dict]:
 
 
 # --- Klasse & Spezialisierung -----------------------------------------------------------
-def classify(daily: dict[date, dict], runs: pd.DataFrame, d: date) -> dict:
+def classify(daily: dict[date, dict], runs: pd.DataFrame, d: date, rides: pd.DataFrame | None = None) -> dict:
+    """Klasse aus 90 Tagen; Rad-EP zählen zur Ausdauer-Seite (Jäger-Anteil) wie Lauf-EP."""
     start = d - timedelta(days=89)
     win = [v for k, v in daily.items() if start <= k <= d]
     run_xp_ = sum(v["laufen"] for v in win)
+    ride_xp = sum(v.get("rad", 0.0) for v in win)
     str_xp = sum(v["kraft"] for v in win)
     daily_xp = sum(v["alltag"] for v in win)
     sub = runs[(runs["day"] >= start) & (runs["day"] <= d)] if not runs.empty else runs
-    training = run_xp_ + str_xp
-    sessions = len(sub) + sum(1 for v in win if v["kraft"] > 0)
+    n_rides = int(((rides["day"] >= start) & (rides["day"] <= d)).sum()) if rides is not None and not rides.empty else 0
+    endurance = run_xp_ + ride_xp
+    training = endurance + str_xp
+    sessions = len(sub) + n_rides + sum(1 for v in win if v["kraft"] > 0)
     if training <= 0 or sessions < 6 or daily_xp > training:
         cls = "moench"
     else:
-        share = run_xp_ / training
+        share = endurance / training
         cls = "jaeger" if share >= 0.65 else "krieger" if share <= 0.35 else "paladin"
     total = training + daily_xp or 1.0
-    shares = {"laufen": round(run_xp_ / total, 3), "kraft": round(str_xp / total, 3),
+    shares = {"laufen": round(run_xp_ / total, 3), "rad": round(ride_xp / total, 3), "kraft": round(str_xp / total, 3),
               "alltag": round(daily_xp / total, 3)}
     spec, scores = None, {}
     if len(sub) >= 4:
@@ -591,12 +653,12 @@ def classify(daily: dict[date, dict], runs: pd.DataFrame, d: date) -> dict:
             "spec_scores": {k: round(v, 2) for k, v in scores.items()}}
 
 
-def _class_events(daily, runs, first: date, today: date) -> list[dict]:
+def _class_events(daily, runs, first: date, today: date, rides: pd.DataFrame | None = None) -> list[dict]:
     events, prev = [], None
     d = _monday(first) + timedelta(days=6)
     while d <= today + timedelta(days=6):
         at = min(d, today)
-        c = classify(daily, runs, at)
+        c = classify(daily, runs, at, rides)
         cur = (c["class"], c["spec"])
         if prev is not None and cur != prev:
             label = CLASSES[c["class"]]["label"] + (f" ({SPECS[c['spec']]['label']})" if c["spec"] else "")
@@ -611,7 +673,7 @@ def _clamp(x: float) -> int:
     return int(round(min(100.0, max(0.0, x))))
 
 
-def attributes(runs, workouts, steps, sick, today: date) -> list[dict]:
+def attributes(runs, workouts, steps, sick, today: date, rides: pd.DataFrame | None = None) -> list[dict]:
     vo2 = _safe(lambda: _read("SELECT measured_at, vo2 FROM vo2max", parse_dates=["measured_at"]),
                 pd.DataFrame(columns=["measured_at", "vo2"]))
     be = _best_efforts()
@@ -621,6 +683,7 @@ def attributes(runs, workouts, steps, sick, today: date) -> list[dict]:
     idx = _safe(_strength_series, [])
     train_days = set(runs["day"]) if not runs.empty else set()
     train_days |= set(workouts["day"]) if not workouts.empty else set()
+    train_days |= set(rides["day"]) if rides is not None and not rides.empty else set()  # Fahrten = Trainingstage
 
     def ausdauer(d):
         s = vo2[vo2["measured_at"].dt.date <= d]["vo2"] if not vo2.empty else []
@@ -729,6 +792,7 @@ _CHEST_FLAVOR = {
     "taeglich": "Fleißbelohnung für sieben erledigte Tagesaufgaben am Stück.",
     "event": "Festtagsbeute – nur in diesem einen Monat zu erringen.",
     "auktion": "Im Auktionshaus von Wesel erstanden – Gold gegen Glanz.",
+    "gipfel": "Vom Gipfel mitgebracht – Höhenmeter für Höhenmeter in Zwift erklommen.",
     "verlies": "Aus einem Verlies im Nebel geborgen – je weiter der Weg, desto reicher der Hort.",
 }
 
@@ -751,11 +815,116 @@ def make_item(rng: random.Random, rarity: str, when: datetime, zone, level: int,
     if RARITIES.index(rarity) >= RARITIES.index("lila"):
         candidates = _EPIC_SUFFIX
     base, suffix = rng.choice(bases), rng.choice(candidates)
-    name = f"{base} {suffix}"
+    return _item(rng, base, suffix, slot, rarity, level, flavor(rarity, source), source, reason, when)
+
+
+def _item(rng: random.Random, base: str, suffix: str, slot: str, rarity: str, level: int, flavor_text: str,
+          source: str, reason: str, when: datetime) -> dict:
     ilvl = 100 + 2 * level + 8 * RARITIES.index(rarity) + rng.randint(0, 3)
-    return {"name": name, "set": suffix, "slot": slot, "slot_label": slot_label, "rarity": rarity,
-            "rarity_label": RARITY_LABEL[rarity], "ilvl": ilvl, "flavor": flavor(rarity, source),
+    return {"name": f"{base} {suffix}", "set": suffix, "slot": slot, "slot_label": SLOTS[slot][0], "rarity": rarity,
+            "rarity_label": RARITY_LABEL[rarity], "ilvl": ilvl, "flavor": flavor_text,
             "source": source, "reason": reason, "date": when.date().isoformat()}
+
+
+# Beute je Indoor-Fahrt: eigene Grundnamen (Rad statt Lauf), Namenszusatz aus der virtuellen Welt.
+RIDE_BASES = {
+    "kopf": ["Radhelm", "Radkappe", "Aerohelm"], "schultern": ["Windschultern", "Schulterkappen"],
+    "brust": ["Radtrikot", "Zeitfahrwams", "Windweste"], "haende": ["Radhandschuhe", "Lenkerfäustlinge"],
+    "handgelenk": ["Armlinge", "Schaltmanschetten"], "beine": ["Trägerhose", "Beinlinge"],
+    "fuesse": ["Klickschuhe", "Überschuhe", "Pedalplatten"], "hals": ["Kettenamulett", "Ritzelanhänger"],
+    "ring": ["Kettenring", "Speichenring"], "schmuck": ["Wattstein", "Trittfrequenzmesser", "Glockenspiel"],
+}
+_RIDE_EPIC_SUFFIX = ["des Sprinters", "der brennenden Kurbel", "des Gipfelstürmers", "des tausendsten Watts",
+                     "des Windschattens"]
+_RIDE_ZONE_SUFFIX = ["der leichten Kurbel", "der Grundlage", "der Schwelle", "des Wattsturms"]
+RIDE_PR_SLOTS = {5: ["schmuck", "ring"], 60: ["schmuck", "ring"], 300: ["haende", "handgelenk"], 1200: ["brust"]}
+RIDE_PR_LABEL = {5: "5 s", 60: "1 min", 300: "5 min", 1200: "20 min"}
+_RIDE_FLAVOR = {
+    "grau": "Kurz auf der Rolle – immerhin hast du getreten.",
+    "gruen": "Mehr Zeit oder mehr Arbeit als sonst hat es geschmiedet.",
+    "blau": "Seltener Fund: eine lange oder besonders effiziente Fahrt.",
+    "lila": "Episch – an diesem Tag ist ein Leistungs-Bestwert gefallen.",
+    "orange": "Legendär: geschmiedet aus neuer Schwellenleistung.",
+    "rot": "Ein Artefakt. Hundert Kilometer oder ein ganzer Everest auf der Rolle.",
+}
+
+
+def make_ride_item(rng: random.Random, rarity: str, ride, level: int, reason: str, slots: list[str] | None) -> dict:
+    slot = rng.choice(slots or list(SLOTS))
+    when = ride.started_at.to_pydatetime() if hasattr(ride.started_at, "to_pydatetime") else ride.started_at
+    zone = ride.zone if ride.zone is not None and pd.notna(ride.zone) else None
+    if RARITIES.index(rarity) >= RARITIES.index("lila"):
+        candidates = _RIDE_EPIC_SUFFIX
+    elif isinstance(ride.world, str) and ride.world:
+        candidates = [f"von {ride.world}"]
+    else:
+        candidates = [_SEASON_SUFFIX[_season(when.month)]] + ([_RIDE_ZONE_SUFFIX[min(3, int(zone))]] if zone is not None else [])
+    base, suffix = rng.choice(RIDE_BASES[slot]), rng.choice(candidates)
+    return _item(rng, base, suffix, slot, rarity, level, _RIDE_FLAVOR.get(rarity, _FLAVOR[rarity]), "beute", reason, when)
+
+
+def _eftp_rise(rides: pd.DataFrame, i: int) -> bool:
+    """Hebt die Fahrt i Milons automatische eFTP (90 T) gegenüber dem Stand direkt davor?"""
+    from .config import settings
+    from .metrics import cycling
+    if settings.bike_ftp and settings.bike_ftp > 0:
+        return False
+    ride = rides.iloc[i]
+    before = rides.iloc[:i]
+    before = before[before["has_power"]]
+    if not ride["has_power"] or before.empty:
+        return False
+    old, _ = cycling._auto_eftp(before, ride["day"], None)
+    new, _ = cycling._auto_eftp(pd.concat([before, rides.iloc[i:i + 1]]), ride["day"], None)
+    return bool(old and new and new > old + 0.5)
+
+
+def ride_rarity(ride, prior: pd.DataFrame, eftp_rise: bool = False) -> tuple[str, str, list[str] | None]:
+    """Verdiente Rarität einer Fahrt gegen die eigenen Fahrten davor (Bestwerte) bzw. der 90 Tage davor.
+    Liefert zusätzlich die Ausrüstungsplätze, aus denen ein Bestwert-Gegenstand stammt."""
+    if ride.km >= 100 or ride.elevation_m >= 8848:
+        return "rot", "100 km oder 8.848 Hm in einer Fahrt", None
+    if ride.dur_min < 20:
+        return "grau", "kurze Fahrt", None
+    prs = []
+    for sec in RIDE_PR_SLOTS:
+        watts = (ride.power_curve or {}).get(sec)
+        earlier = [c[sec] for c in prior["power_curve"] if c and c.get(sec)] if not prior.empty else []
+        if watts and earlier and watts > max(earlier):
+            prs.append(sec)
+    if 1200 in prs:
+        return "orange", "neuer 20-min-Bestwert", RIDE_PR_SLOTS[1200]
+    if eftp_rise:
+        return "orange", "eFTP gestiegen", RIDE_PR_SLOTS[1200]
+    if prs:
+        sec = max(prs)
+        return "lila", f"neuer Bestwert über {RIDE_PR_LABEL[sec]}", RIDE_PR_SLOTS[sec]
+    window = prior[prior["started_at"] >= ride.started_at - pd.Timedelta(days=90)] if not prior.empty else prior
+    if len(window) >= 3 and ride.dur_min > window["dur_min"].max():
+        return "blau", "längste Fahrt seit 90 Tagen", None
+    efs = window["ef"].dropna() if not window.empty else pd.Series(dtype=float)
+    if pd.notna(ride.ef) and len(efs) >= 3 and ride.ef >= efs.quantile(0.75):
+        return "blau", "effizienter als 3 von 4 Fahrten", None
+    if len(window) >= 3 and (ride.dur_min > window["dur_min"].mean() or ride.kj > window["kj"].mean()):
+        return "gruen", "mehr Zeit oder Arbeit als dein Schnitt", None
+    return "weiss", "solide Fahrt", None
+
+
+def ride_drops(rides: pd.DataFrame, entries: list[dict], start: date, mods: Mods | None = None) -> list[dict]:
+    """Beute je Indoor-Fahrt ab Starttag — Rarität verdient, Gegenstand fest an die Fahrt geseedet."""
+    out = []
+    for i, r in enumerate(rides.itertuples()):
+        if r.day < start:
+            continue
+        rarity, reason, slots = ride_rarity(r, rides.iloc[:i], _safe(lambda i=i: _eftp_rise(rides, i), False))
+        rng = _rng("ride", r.key)
+        lucky = rarity not in ("orange", "rot") and rng.random() < (mods or Mods()).luck(r.day)
+        if lucky:
+            rarity = RARITIES[RARITIES.index(rarity) + 1]
+            reason += " · Glücksfund"
+        item = make_ride_item(rng, rarity, r, _level_at(entries, r.day), reason, slots)
+        out.append({**item, "id": f"drop:{r.key}", "lucky": lucky, "ride_min": int(round(float(r.dur_min)))})
+    return out
 
 
 def drop_rarity(run, prior: pd.DataFrame, efforts: pd.DataFrame) -> tuple[str, str]:
@@ -812,6 +981,7 @@ def drops(runs: pd.DataFrame, entries: list[dict], start: date, mods: Mods | Non
 
 # --- Wochentruhe ------------------------------------------------------------------------
 VAULT_THRESHOLDS = [1, 3, 4]
+RIDE_VAULT_MIN = 30   # Fahrt zählt ab 30 min für die Truhen-Schwellen
 
 
 def _claims() -> dict[str, HeroClaim]:
@@ -827,9 +997,13 @@ def stone_rarity(level: int) -> str | None:
 
 
 def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date], entries, today: date,
-               mods: Mods | None = None, stones: list[dict] | None = None) -> dict:
+               mods: Mods | None = None, stones: list[dict] | None = None, rides: pd.DataFrame | None = None) -> dict:
     end = week + timedelta(days=6)
     n = int(((runs["day"] >= week) & (runs["day"] <= end)).sum()) if not runs.empty else 0
+    # Fahrten ab 30 min zählen wie Läufe für die Slot-Schwellen; ihre Beute (Quelle „beute“) für die Qualität.
+    n_rides = int(((rides["day"] >= week) & (rides["day"] <= end) & (rides["dur_min"] >= RIDE_VAULT_MIN)).sum()) \
+        if rides is not None and not rides.empty else 0
+    n += n_rides
     sick_n = sum(1 for i in range(7) if week + timedelta(days=i) in sick)
     relief = sick_n // 2
     thresholds = [max(1, t - relief) for t in VAULT_THRESHOLDS]
@@ -850,7 +1024,7 @@ def vault_week(week: date, runs: pd.DataFrame, items: list[dict], sick: set[date
                          "truhe", f"Wochentruhe · Slot {i + 1}")
         item["ilvl"] += 3 * i + (stone if i == 0 else 0)
         slots.append({"slot": i, "threshold": t, "unlocked": n >= t, "item": {**item, "id": f"truhe:{week}:{i}"}})
-    return {"week": week.isoformat(), "runs": n, "sick_days": sick_n, "slots": slots,
+    return {"week": week.isoformat(), "runs": n, "rides": n_rides, "sick_days": sick_n, "slots": slots,
             "complete": end < today, "stone_level": stone or None}
 
 
@@ -860,20 +1034,20 @@ def veteran_chest(level: int, today: date) -> dict:
     for i, rarity in enumerate(["blau", "lila", "orange"]):
         item = make_item(_rng("veteran", i), rarity, when, None, level, "veteran", "Veteranentruhe für deine bisherige Reise")
         slots.append({"slot": i, "threshold": 0, "unlocked": True, "item": {**item, "id": f"veteran:{i}"}})
-    return {"week": "veteran", "runs": 0, "sick_days": 0, "slots": slots, "complete": True}
+    return {"week": "veteran", "runs": 0, "rides": 0, "sick_days": 0, "slots": slots, "complete": True}
 
 
 def vault(runs, items, sick, entries, start: date, today: date, level: int, mods: Mods | None = None,
-          stones: list[dict] | None = None) -> dict:
+          stones: list[dict] | None = None, rides: pd.DataFrame | None = None) -> dict:
     claims = _claims()
     def with_claim(v):
         c = claims.get(v["week"])
         return {**v, "claimed_slot": c.slot if c else None}
-    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today, mods, stones))
+    current = with_claim(vault_week(_monday(today), runs, items, sick, entries, today, mods, stones, rides))
     claimable = []
     w = _monday(start)
     while w < _monday(today):
-        v = with_claim(vault_week(w, runs, items, sick, entries, today, mods, stones))
+        v = with_claim(vault_week(w, runs, items, sick, entries, today, mods, stones, rides))
         if v["claimed_slot"] is None and any(s["unlocked"] for s in v["slots"]):
             claimable.append(v)
         w += timedelta(days=7)
@@ -895,7 +1069,7 @@ def claim(week: str, slot: int, today: date | None = None) -> dict:
         if monday.weekday() != 0 or monday < _monday(data["start"]) or monday >= _monday(today):
             raise ValueError("Diese Woche ist noch nicht abgeschlossen oder liegt vor dem Start.")
         chest = vault_week(monday, data["runs"], data["drops"], data["sick"], data["entries"], today, data["mods"],
-                           data.get("stones"))
+                           data.get("stones"), data.get("indoor"))
     picked = next((s for s in chest["slots"] if s["slot"] == slot), None)
     if picked is None or not picked["unlocked"]:
         raise ValueError("Slot nicht freigeschaltet.")
@@ -1113,6 +1287,24 @@ def _ride_days() -> list[tuple[date, float]]:
     return out
 
 
+def _zwift_days(indoor: pd.DataFrame) -> list[tuple[date, float]]:
+    """Virtuelle Zwift-km je Fahrt (Tag, km) — füttern Reittiere zum vollen Satz; nie Koordinaten."""
+    if indoor is None or indoor.empty:
+        return []
+    return [(r.day, float(r.km)) for r in indoor.itertuples() if pd.notna(r.km) and 0 < float(r.km) <= 300]
+
+
+def _ride_minutes(indoor: pd.DataFrame) -> list[tuple[date, float]]:
+    """Rad-Zeit je Fahrt (Tag, Minuten): Indoor-Fahrten plus GPS-Fahrten — Basis des Monatsbosses Kettenfresser."""
+    out = [] if indoor is None or indoor.empty else [(r.day, float(r.dur_min)) for r in indoor.itertuples()]
+    df = _safe(lambda: _read("SELECT started_at, duration_seconds FROM garmin_rides"), None)
+    if df is not None:
+        for ts, sec in zip(pd.to_datetime(df["started_at"]), df["duration_seconds"]):
+            if pd.notna(sec) and 5 * 60 < float(sec) < 600 * 60:
+                out.append((ts.date(), float(sec) / 60))
+    return out
+
+
 def _mount_history(start: date) -> list[dict]:
     """Datierte Reittier-Wahl [{from, value}]; ein älterer, undatierter Wert gilt ab Starttag."""
     hist = _history("mount_history")
@@ -1125,7 +1317,7 @@ def _mount_history(start: date) -> list[dict]:
 
 def _all_mounts(data: dict, chosen: str | None) -> list[dict]:
     fed: dict[str, float] = data.get("fed") or {}
-    mounts = hero_extras.mounts(data["runs"], data["workouts"], chosen, data.get("rides"), fed)
+    mounts = hero_extras.mounts(data["runs"], data["workouts"], chosen, data.get("rides"), fed, data.get("zwift_days"))
     for p in _purchases():
         if p.kind == "mount":
             m = json.loads(p.payload)
@@ -1165,14 +1357,17 @@ def choose_title(key: str | None, today: date | None = None) -> None:
 def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> dict:
     runs, target = data["runs"], data["protein_target"]
     months: dict[str, int] = {}
+    raid: dict[str, list[bool]] = {}
     for b in data["bosses"]:
         months[b["month"]] = months.get(b["month"], 0) + (1 if b["defeated"] else 0)
+        if b["key"] != "kettenfresser":   # Zusatzboss: ein schon gewonnener Schlachtzug geht durch ihn nie verloren
+            raid.setdefault(b["month"], []).append(b["defeated"])
     stats = {
         "runs": int(len(runs)), "km": float(runs["distance_km"].sum()) if not runs.empty else 0.0,
         "early_runs": int((runs["started_at"].dt.hour < 8).sum()) if not runs.empty else 0,
         "workouts": int(len(data["workouts"])), "streak": _safe(_streak, 0),
         "quests_done": sum(q["done"] for wk in data["quest_weeks"] for q in wk["quests"]),
-        "bosses_down": sum(months.values()), "full_raids": sum(1 for v in months.values() if v >= 4),
+        "bosses_down": sum(months.values()), "full_raids": sum(1 for v in raid.values() if all(v)),
         "dungeons_cleared": sum(1 for d in data["dungeons"] if d["cleared"]),
         "items": len(inventory), "legendaries": sum(1 for it in inventory if it["rarity"] in ("orange", "rot")),
         "level": level, "laufen": totals.get("laufen", 0.0), "kraft": totals.get("kraft", 0.0),
@@ -1180,6 +1375,8 @@ def _hero_stats(data: dict, inventory: list[dict], level: int, totals: dict) -> 
         "sleep_nights": sum(1 for m in data["sleep"].values() if m >= 420),
     }
     stats["regions"] = sum(1 for r in data.get("world", {}).get("regions", []) if r["discovered"])
+    stats["peaks"] = sum(1 for p in (data.get("climb") or {}).get("peaks", []) if p["reached"])
+    stats["dream_worlds"] = (data.get("dreams") or {}).get("visited_known", 0)
     dgs = [d for d in data.get("world", {}).get("dungeons", []) if not d.get("own")]   # Option B: eigene zählen nicht
     mythic = _safe(lambda: hero_keystone.rating(data.get("stones")), None) or {}
     stats["key_best"], stats["key_total"] = mythic.get("best_level", 0), mythic.get("total", 0)
@@ -1276,6 +1473,17 @@ def boss_loot(bosses: list[dict], dungeons: list[dict], entries: list[dict]) -> 
         item = make_item(rng, dg["loot"], datetime.combine(day, datetime.min.time()).replace(hour=12), None,
                          _level_at(entries, day), "instanz", f"{dg['tier_label']}e Instanz „{dg['name']}“ bezwungen")
         out.append({**item, "id": dg["id"]})
+    return out
+
+
+def climb_loot(events: list[dict], entries: list[dict]) -> list[dict]:
+    out = []
+    for e in events:
+        rng = _rng("climbloot", e["id"])
+        day = date.fromisoformat(e["date"])
+        item = make_item(rng, e["loot"], datetime.combine(day, datetime.min.time()).replace(hour=17), None,
+                         _level_at(entries, day), "gipfel", f"Gipfel „{e['name']}“ bezwungen")
+        out.append({**item, "id": f"climb:{e['id']}"})
     return out
 
 
@@ -1463,6 +1671,7 @@ def _load(today: date) -> dict:
     runs = _safe(_runs, pd.DataFrame())
     if runs.empty:
         runs = pd.DataFrame(columns=["external_id", "started_at", "day", "distance_km", "dur_min", "ef", "zone", "key"])
+    indoor = _safe(lambda: _indoor_rides(_safe(lambda: _hr_max(runs), 180.0)), pd.DataFrame(columns=RIDE_COLUMNS))
     workouts = _safe(_workouts, pd.DataFrame(columns=["id", "started_at", "sets", "day"]))
     steps = _safe(_steps, {})
     other = _safe(_other_minutes, {})
@@ -1477,7 +1686,8 @@ def _load(today: date) -> dict:
     mods = Mods(buffs, spec_hist, talents, _safe(_potion_days, {}))
     start = start_date(today)
     base = {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "protein": protein,
-            "protein_target": target, "sleep": sleep}
+            "protein_target": target, "sleep": sleep, "indoor": indoor,
+            "ride_min": _safe(lambda: _ride_minutes(indoor), [])}
     weeks = []
     w = _monday(start)
     while w <= _monday(today):
@@ -1528,15 +1738,20 @@ def _load(today: date) -> dict:
     extra += [(date.fromisoformat(dg["date"]), dg["xp"], dg["name"], "instanz") for dg in dungeons if dg["xp"]]
     live_events = [e for e in _safe(hero_events_live.confirmed, []) if date.fromisoformat(e["date"]) >= start]
     extra += [(date.fromisoformat(e["date"]), e["xp"], e["name"], "spontan") for e in live_events]
-    book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra)
+    climb = _safe(lambda: hero_climb.climb(indoor, start), {"total_hm": 0, "peaks": [], "rounds": [], "next": None, "next_in_hm": 0, "rides": 0})
+    climb_events = _safe(lambda: hero_climb.events(climb), [])
+    extra += [(date.fromisoformat(e["date"]), e["xp"], e["name"], "gipfel") for e in climb_events]
+    dreams = _safe(hero_dreams.dreams, {})
+    book = ledger(runs, workouts, steps, other, sick, ach, today, mods, extra, indoor)
     rides = [(d, km) for d, km in _safe(_ride_days, []) if d >= start]
     mount_hist = _mount_history(start)
-    mount_feed = hero_extras.ride_feed(rides, lambda d: _active(mount_hist, d) or None)
+    zwift_days = [(d, km) for d, km in _zwift_days(indoor) if d >= start]
+    mount_feed = hero_extras.ride_feed([*rides, *zwift_days], lambda d: _active(mount_hist, d) or None)
     fed: dict[str, float] = {}
     for f in mount_feed:
         fed[f["mount"]] = fed.get(f["mount"], 0.0) + f["km"]
     tips: dict[tuple[str, str], list[str]] = {}
-    cat = {"lauf": "Laufen", "kraft": "Kraft", "pflege": "Pflege"}
+    cat = {"lauf": "Laufen", "ausdauer": "Ausdauer", "kraft": "Kraft", "pflege": "Pflege"}
     for wk in weeks:
         for q in wk["quests"]:
             tips[("auftrag", q["title"])] = [f"Wochenauftrag · {cat.get(q['category'], q['category'])}",
@@ -1546,6 +1761,9 @@ def _load(today: date) -> dict:
     for dg in dungeons:
         tips[("instanz", dg["name"])] = [f"{dg['tier_label']}e Instanz · {dg['km']:.1f} km".replace(".", ","),
                                          "Bosse: " + ", ".join(b["name"] for b in dg["bosses"] if b["defeated"])]
+    for e in climb_events:
+        tips[("gipfel", e["name"])] = [f"Kletter-Boss · {e['hm']:,} Hm Zwift".replace(",", "."), "Kumulierte Zwift-Höhenmeter seit Beginn",
+                                       f"Belohnung: {e['xp']} EP + {RARITY_LABEL[e['loot']].lower()} Beute"]
     for e in events:
         tips[("event", e["name"])] = ["Saison-Event", e["rule"], f"Belohnung: {e['xp']} EP + {e['item']}"]
     for r in world.get("regions", []):
@@ -1578,14 +1796,16 @@ def _load(today: date) -> dict:
     total = sum(e["xp"] + e["bonus"] for e in book["entries"])
     level = level_for(total)["level"]
     loot = _safe(lambda: drops(runs, book["entries"], start, mods), [])
+    loot += _safe(lambda: ride_drops(indoor, book["entries"], start, mods), [])
     loot += _safe(lambda: quest_loot(weeks, book["entries"]), [])
     loot += _safe(lambda: boss_loot(bosses, dungeons, book["entries"]), [])
     loot += _safe(lambda: event_loot(daily, events, book["entries"]), [])
+    loot += _safe(lambda: climb_loot(climb_events, book["entries"]), [])
     loot += _safe(lambda: map_loot(world, start), [])
     loot += _safe(lambda: live_event_loot(live_events, book["entries"]), [])
-    return {"runs": runs, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
+    return {"runs": runs, "indoor": indoor, "workouts": workouts, "steps": steps, "sick": sick, "book": book,
             "protein": protein, "protein_target": target, "sleep": sleep, "buffs": buffs, "spec_hist": spec_hist,
-            "rides": rides, "mount_hist": mount_hist, "mount_feed": mount_feed, "fed": fed,
+            "rides": rides, "zwift_days": zwift_days, "climb": climb, "dreams": dreams, "mount_hist": mount_hist, "mount_feed": mount_feed, "fed": fed,
             "mods": mods, "talents": talents, "quest_weeks": weeks, "bosses": bosses, "dungeons": dungeons, "daily": daily, "events": events, "duels": duels, "tips": tips, "world": world,
             "entries": book["entries"], "start": start, "level": level, "drops": loot, "total": total,
             "stones": _safe(hero_keystone.results, [])}
@@ -1596,7 +1816,7 @@ def overview(today: date | None = None) -> dict:
     data = _load(today)
     book, runs, entries = data["book"], data["runs"], data["entries"]
     lv = level_for(data["total"])
-    cls = classify(book["daily"], runs, today)
+    cls = classify(book["daily"], runs, today, data["indoor"])
     chosen = _active(data["spec_hist"], today)
     spec = chosen or cls["spec"]
     week_start = _monday(today)
@@ -1617,10 +1837,10 @@ def overview(today: date | None = None) -> dict:
 
     log_events = _level_events(entries)
     first = min(book["daily"]) if book["daily"] else today
-    log_events += _safe(lambda: _class_events(book["daily"], runs, first, today), [])
+    log_events += _safe(lambda: _class_events(book["daily"], runs, first, today, data["indoor"]), [])
     log_events += [{"date": e["date"], "kind": e["kind"], "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"]), "tip": data["tips"].get((e["kind"], e["name"]))}
-                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung", "verlies", "abschnitt", "schrein", "schatz", "spontan")]
+                   for e in entries if e["kind"] in ("auftrag", "boss", "instanz", "event", "duell", "erkundung", "verlies", "abschnitt", "schrein", "schatz", "spontan", "gipfel")]
     log_events += [{"date": e["date"], "kind": "erfolg", "text": e["label"] + f" (+{e['xp']:.0f} XP)",
                     "name": e["name"], "xp": round(e["xp"])}
                    for e in entries if e["kind"] == "erfolg"]
@@ -1636,7 +1856,7 @@ def overview(today: date | None = None) -> dict:
     for b in bags:
         log_events.append({"date": date.fromisoformat(b["date"][:10]), "kind": "tasche", "text": f"Tasche erhalten: {b['name']}",
                            "name": b["name"], "tip": [f"Tasche · {b['slots']} Plätze", f"Gefunden: {b['source']}"]})
-    for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None, data.get("rides"), data.get("fed")), []):
+    for m in _safe(lambda: hero_extras.mounts(runs, data["workouts"], None, data.get("rides"), data.get("fed"), data.get("zwift_days")), []):
         if m["unlocked"]:
             log_events.append({"date": date.fromisoformat(m["unlocked_on"]), "kind": "reittier",
                                "text": f"Reittier erhalten: {m['name']}", "name": m["name"],
@@ -1672,14 +1892,16 @@ def overview(today: date | None = None) -> dict:
         "buffs": buffs_today(data, today, book["pool"], chosen),
         "companion": companion(cls["class"], data, today),
         "specs": [{"key": k, **v, "focus": FOCUS_TEXT[k], "score": cls["spec_scores"].get(k)} for k, v in SPECS.items()],
-        "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today),
+        "attributes": attributes(runs, data["workouts"], data["steps"], data["sick"], today, data["indoor"]),
         "vault": vault(runs, data["drops"], data["sick"], entries, data["start"], today, data["level"], data["mods"],
-                       data.get("stones")),
+                       data.get("stones"), data["indoor"]),
         "mythic": _safe(lambda: hero_keystone.rating(data.get("stones")), None),
         "talents": talents_view(data["mods"], lv["level"], today),
         "quests": data["quest_weeks"][-1] if data["quest_weeks"] else None,
         "bosses": [b for b in data["bosses"] if b["month"] == today.replace(day=1).isoformat()],
         "dungeons": data["dungeons"][::-1][:10],
+        "climb": data["climb"],
+        "dreams": data["dreams"],
         "daily": {k: v for k, v in data["daily"].items() if k in ("today", "streak", "last7")} if data["daily"] else None,
         "event": next((e for e in data["events"] if e["month"] == today.replace(day=1).isoformat()), None),
         "duels": {"last": data["duels"][-1] if data["duels"] else None,
@@ -1702,7 +1924,8 @@ def overview(today: date | None = None) -> dict:
         "ilvl_avg": round(sum(it["ilvl"] for it in equipment.values()) / len(equipment)) if equipment else None,
         "log": [{**e, "date": e["date"].isoformat()} for e in log_events[:40]],
         "rules": {"runs_full_xp": RUNS_FULL_XP, "workouts_full_xp": WORKOUTS_FULL_XP,
-                  "rest_per_day": REST_PER_DAY, "vault_thresholds": VAULT_THRESHOLDS},
+                  "rest_per_day": REST_PER_DAY, "vault_thresholds": VAULT_THRESHOLDS,
+                  "ride_vault_min": RIDE_VAULT_MIN},
     }
     return _with_trainer(result, data, today)
 

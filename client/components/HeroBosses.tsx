@@ -12,6 +12,7 @@ const BOSS_ICON: Record<string, React.ReactNode> = {
   wyrm: <path d="M4 18c3 0 3-4 6-4s3 4 6 4 3-6 6-6M2 8c2 0 3-3 5-3s3 3 5 3" />,
   fresser: <><path d="M3 12h18" /><path d="M12 3a9 9 0 1 0 9 9" /><path d="m15 3 6 6" /></>,
   koloss: <><path d="M14.4 14.4 9.6 9.6" /><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z" /><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z" /></>,
+  kettenfresser: <><circle cx="6" cy="16" r="3.5" /><circle cx="18" cy="16" r="3.5" /><path d="M6 16 10 8h5l3 8M10 8 12 16h-6" /></>,
 };
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 

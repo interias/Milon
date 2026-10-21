@@ -48,6 +48,7 @@ export default function Einstellungen() {
   const [budget, setBudget] = useState("100");
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
+  const [ftp, setFtp] = useState("");
   const [places, setPlaces] = useState<string[]>([]);
   const [newPlace, setNewPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
@@ -62,7 +63,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setPlaces(d.weather_places ?? []); })
+      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setFtp(String(d.bike_ftp ?? "")); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -80,6 +81,8 @@ export default function Einstellungen() {
       if (!Number.isNaN(bud) && bud >= 0 && bud !== s.llm_monthly_budget_usd) body.llm_monthly_budget_usd = bud;
       const hr = parseFloat(hrMax);
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
+      const watts = parseFloat(ftp);
+      if (!Number.isNaN(watts) && watts >= 0 && watts !== s.bike_ftp) body.bike_ftp = watts;
       const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
       if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
@@ -92,6 +95,7 @@ export default function Einstellungen() {
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
+      setFtp(String(updated.bike_ftp ?? ""));
       setPlaces(updated.weather_places ?? []);
       setNewPlace("");
       setSecrets({});
@@ -207,6 +211,22 @@ export default function Einstellungen() {
             Zonen-Grenzen: Z1 &lt;70 % · Z2 70–80 % · Z3 80–90 % · Z4 ≥90 % von HFmax.
             <strong> 0</strong> = automatisch aus den Daten ableiten (robustes 95.-Perzentil, Boden 180) —
             fest eingetragen ist robuster gegen Sensor-Ausreißer.
+          </p>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardTitle title="Rad · FTP" sub="Basis für Leistungszonen, IF und TSS der Indoor-Fahrten (Zwift/Rolle)" />
+          <label className="block max-w-xs">
+            <span className="mb-1 block text-[11px] text-muted">FTP in Watt</span>
+            <input
+              type="number" inputMode="numeric" min={0} max={1000} step={1}
+              value={ftp} onChange={(e) => setFtp(e.target.value)}
+              placeholder="0 = automatisch" className={INPUT}
+            />
+          </label>
+          <p className="mt-2 text-[11px] text-muted">
+            <strong>0</strong> = automatisch: eFTP aus deinen Fahrten (95 % der besten 20 min der letzten 90 Tage),
+            ohne brauchbare Fahrt Garmins FTP. Solange nur lockere Fahrten vorliegen (Wert unter 85 % der Garmin-FTP), gilt Garmins FTP als Untergrenze. Ein fester Wert übersteuert die Schätzung.
           </p>
         </Card>
 

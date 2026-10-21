@@ -45,7 +45,7 @@ export function Heatmap({ days }: { days: ConsistencyDay[] }) {
                 {Array.from({ length: 7 }).map((_, di) => {
                   const c = w[di];
                   const title = c
-                    ? `${c.date}: ${c.sick ? "Krank" + (c.trained ? " · Training" : "") : c.trained ? "Training" : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "Keine Aktivität erfasst"}`
+                    ? `${c.date}: ${c.sick ? "Krank" + (c.trained ? " · Training" : "") : c.trained ? (c.ride ? "Training (Rad)" : "Training") : c.steps ? `${c.steps.toLocaleString("de-DE")} Schritte` : "Keine Aktivität erfasst"}`
                     : "";
                   return (
                     <div

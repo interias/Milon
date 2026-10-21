@@ -3,6 +3,8 @@
 exercise_type 4 = Radfahren (android.health.connect ExerciseSessionType BIKING; verifiziert
 über App-Attribution Samsung Health + Distanz-/Speed-Profil) plus Garmin-Radfahrten mit GPS
 (Tabelle garmin_rides; überlappt eine HC-Fahrt zeitlich eine Garmin-Fahrt, gewinnt Garmin).
+Indoor-Fahrten (garmin_indoor_rides, Zwift/Rolle) zählen NICHT als Outdoor-km, verdrängen aber
+überlappende HC-Spiegel derselben Fahrt.
 Reine Funktionen über die DB —
 speisen wie alle Metriken REST + Coach + MCP."""
 from __future__ import annotations
@@ -104,16 +106,33 @@ def _garmin_rides() -> pd.DataFrame:
     return df[["started_at", "ended_at", "distance_km"]]
 
 
+def _indoor_windows() -> pd.DataFrame:
+    """Indoor ride windows, only to drop HC mirrors of the same ride (no km on this page)."""
+    with engine.connect() as con:
+        if not inspect(con).has_table("garmin_indoor_rides"):
+            return pd.DataFrame(columns=["started_at", "ended_at"])
+        df = pd.read_sql("SELECT started_at, COALESCE(elapsed_duration_seconds, duration_seconds) AS seconds "
+                         "FROM garmin_indoor_rides", con, parse_dates=["started_at"])
+    df = df.dropna(subset=["started_at", "seconds"])
+    df["ended_at"] = df["started_at"] + pd.to_timedelta(df["seconds"], unit="s")
+    return df[["started_at", "ended_at"]]
+
+
+def _drop_overlapping(hc: pd.DataFrame, windows: pd.DataFrame) -> pd.DataFrame:
+    if hc.empty or windows.empty:
+        return hc
+    starts, ends = windows["started_at"].to_numpy(), windows["ended_at"].to_numpy()
+    hc_ends = hc["ended_at"].fillna(hc["started_at"])
+    overlap = [bool(((starts < end) & (ends > start)).any())
+               for start, end in zip(hc["started_at"].to_numpy(), hc_ends.to_numpy())]
+    return hc[[not hit for hit in overlap]]
+
+
 def _merge_rides(hc: pd.DataFrame, garmin: pd.DataFrame) -> pd.DataFrame:
     """HC rides overlapping any Garmin ride window are the same trip mirrored: Garmin wins."""
     if garmin.empty:
         return hc
-    if not hc.empty:
-        starts, ends = garmin["started_at"].to_numpy(), garmin["ended_at"].to_numpy()
-        hc_ends = hc["ended_at"].fillna(hc["started_at"])
-        overlap = [bool(((starts < end) & (ends > start)).any())
-                   for start, end in zip(hc["started_at"].to_numpy(), hc_ends.to_numpy())]
-        hc = hc[[not hit for hit in overlap]]
+    hc = _drop_overlapping(hc, garmin)
     return pd.concat([frame for frame in (hc, garmin) if not frame.empty], ignore_index=True)
 
 
@@ -123,7 +142,8 @@ def _rides() -> pd.DataFrame:
         f"WHERE exercise_type = {BIKE}",
         parse_dates=["started_at", "ended_at"],
     )
-    df = _merge_rides(hc.dropna(subset=["started_at"]), _garmin_rides())
+    hc = _drop_overlapping(hc.dropna(subset=["started_at"]), _indoor_windows())
+    df = _merge_rides(hc, _garmin_rides())
     if df.empty:
         return df
     df = df.copy()
