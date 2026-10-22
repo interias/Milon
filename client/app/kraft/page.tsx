@@ -7,6 +7,7 @@ import { Card, PageTitle } from "@/components/ui";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { StrengthDetails } from "@/components/StrengthDetails";
+import { NextTraining } from "@/components/NextTraining";
 import { de, dm } from "@/lib/format";
 
 const MUSCLE_ICON: Record<string, string> = {
@@ -67,7 +68,8 @@ export default function Kraft() {
 
   return <>
     <PageTitle title="Kraft" sub="Stärkeentwicklung & Training" />
-    <Card>
+    <NextTraining />
+    <Card className="mt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-sm font-semibold">Gesamtstärke</h2>
         <div className="flex gap-1" aria-label="Zeitraum der Gesamtstärke">

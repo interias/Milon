@@ -85,13 +85,21 @@ def _upsert_workout(s: Session, w: dict) -> bool:
     s.execute(delete(WorkoutSet).where(WorkoutSet.workout_id == wo.id))
     for ex in w.get("exercises", []):
         title = ex.get("title")
+        template = ex.get("exercise_template_id")
         for st in ex.get("sets", []):
             s.add(WorkoutSet(
-                workout_id=wo.id, exercise=title,
+                workout_id=wo.id, exercise=title, exercise_template_id=template,
                 set_index=st.get("index"), set_type=st.get("type"),
                 weight_kg=st.get("weight_kg"), reps=st.get("reps"), rpe=st.get("rpe"),
             ))
     return is_new
+
+
+def _missing_template_ids(s: Session) -> bool:
+    return s.execute(
+        select(WorkoutSet.id).join(Workout, Workout.id == WorkoutSet.workout_id)
+        .where(Workout.source == SOURCE, WorkoutSet.exercise_template_id.is_(None)).limit(1)
+    ).first() is not None
 
 
 def _now_iso() -> str:
@@ -111,6 +119,8 @@ def import_hevy(full: bool = False) -> dict:
     with Session(engine) as s:
         st = s.get(SyncState, SOURCE)
         cursor = None if full else (st.cursor if st else None)
+        if cursor and _missing_template_ids(s):
+            cursor = None  # einmaliger Nachzug der Template-IDs (Altbestand vor der Spalte)
 
     if cursor:
         events = fetch_events(key, cursor)
