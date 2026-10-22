@@ -63,7 +63,8 @@ class Ladder:
 
 
 # Hammer Strength Select (Rudern, Seitheben, Pec Fly/Rear Delt, Beinbeugen, Beinstrecker): 7-kg-Stack + 2 Fallgewichte à 2,5 kg.
-# Beinpresse 45°: 53-kg-Schlitten + Plattenpaare (2 × 2,5 kg). Kurzhanteln, MTS, SZ/Langhantel-Arme: 2,5 kg.
+# Beinpresse 45°: 53-kg-Schlitten + Plattenpaare (2 × 2,5 kg). RDL: 20-kg-Stange + Plattenpaare (5 kg).
+# Kurzhanteln: Gesamtgewicht beider Hanteln, Hanteln in 2,5-kg-Stufen → 5 kg. MTS, Stirndrücken: 2,5 kg.
 def _select(anchor: float) -> Ladder:
     return Ladder(7.0, anchor, (0.0, 2.5, 5.0))
 
@@ -109,7 +110,7 @@ PLANS: tuple[Plan, ...] = (
                      superset=0),
         PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
                      ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
-                     2, (10, 15), 90, Ladder(2.5), superset=1, failure_last=True),
+                     2, (10, 15), 90, Ladder(5.0), superset=1, failure_last=True),
         PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
                      ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 2, (10, 15), 90, Ladder(2.5),
                      superset=1, failure_last=True),
