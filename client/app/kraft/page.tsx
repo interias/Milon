@@ -68,8 +68,7 @@ export default function Kraft() {
 
   return <>
     <PageTitle title="Kraft" sub="Stärkeentwicklung & Training" />
-    <NextTraining />
-    <Card className="mt-4">
+    <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-sm font-semibold">Gesamtstärke</h2>
         <div className="flex gap-1" aria-label="Zeitraum der Gesamtstärke">
@@ -89,6 +88,8 @@ export default function Kraft() {
       </> : <p className="mt-4 text-sm text-muted" role="status">{status("index", !indexLoading)}</p>}
       <button type="button" className="mt-4 rounded border border-line px-3 py-2 text-sm" onClick={() => setDetails(true)}>Weitere Kraftanalysen</button>
     </Card>
+
+    <div className="mt-4"><NextTraining /></div>
 
     <Card className="mt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
