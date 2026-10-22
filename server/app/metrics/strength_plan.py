@@ -62,7 +62,7 @@ class Ladder:
         return lower[-1] if lower else self.values()[0]
 
 
-# Hammer Strength Select (Rudern, Seitheben, Pec Fly/Rear Delt, Beinbeugen): 7-kg-Stack + 2 Fallgewichte à 2,5 kg.
+# Hammer Strength Select (Rudern, Seitheben, Pec Fly/Rear Delt, Beinbeugen, Beinstrecker): 7-kg-Stack + 2 Fallgewichte à 2,5 kg.
 # Beinpresse 45°: 53-kg-Schlitten + Plattenpaare (2 × 2,5 kg). Kurzhanteln, MTS, SZ/Langhantel-Arme: 2,5 kg.
 def _select(anchor: float) -> Ladder:
     return Ladder(7.0, anchor, (0.0, 2.5, 5.0))
@@ -123,7 +123,7 @@ PLANS: tuple[Plan, ...] = (
                      ("Liegendes Beinbeugen (Maschine)", "Lying Leg Curl (Machine)"), 3, (10, 15), 90, _select(39),
                      superset=0),
         PlanExercise("legext", "Beinstrecker (Maschine)", ("75A4F6C4",),
-                     ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 3, (10, 15), 90, Ladder(7.0, 61),
+                     ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 3, (10, 15), 90, _select(61),
                      superset=0),
     )),
 )
