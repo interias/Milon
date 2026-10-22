@@ -13,6 +13,12 @@ def _no_real_llm_provider(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "")
 
 
+@pytest.fixture(autouse=True)
+def _no_real_hevy(monkeypatch):
+    """Der Plan-Schreiber setzt Hevy-Routinen; Tests dürfen nie das echte Konto beschreiben."""
+    monkeypatch.setattr(settings, "hevy_api_key", "")
+
+
 @pytest.fixture(scope="session")
 def _costs_engine(tmp_path_factory):
     engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('costs') / 'costs.db'}",

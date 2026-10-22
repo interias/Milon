@@ -394,6 +394,18 @@ export type PR = {
   date: string; exercise: string; muscle: string; e1rm: number; top_weight: number;
   kind: "e1rm" | "weight" | "both";
 };
+export type PlanSet = { type: "warmup" | "normal"; weight_kg: number | null; reps: number; rpe: number | null };
+export type PlanExercise = {
+  key: string; name: string; template_id: string; rep_range: [number, number]; rest_seconds: number;
+  superset: number | null; weight_kg: number | null; step_up_kg: number | null; sets: PlanSet[];
+  action: "increase" | "hold" | "decrease" | "deload" | "pause" | "start" | "new";
+  reason: string; rir_note: string; last: { date: string; summary: string } | null;
+};
+export type TrainingPlan = {
+  key: string; title: string; name: string; per_week: number; done: number;
+  last_date: string | null; duration_min: number; exercises: PlanExercise[];
+};
+export type NextTraining = { date: string; week_start: string; next: string | null; plans: TrainingPlan[] };
 export type StrengthIndexPoint = { week: string; raw: number; smoothed: number; anchor: number };
 export type StrengthDriver = { exercise: string; muscle: string; pct: number };
 export type StrengthIndex = {
@@ -674,6 +686,8 @@ export const api = {
   strengthRecords: (days = 120, limit = 25) => get<PR[]>(`/metrics/strength/records?days=${days}&limit=${limit}`),
   strengthIndex: (period = "3m") => get<StrengthIndex>(`/metrics/strength/index?period=${period}`),
   strengthEnergy: () => get<StrengthEnergy>(`/metrics/strength/energy`),
+  strengthPlan: () => get<NextTraining>("/metrics/strength/plan"),
+  writeHevyRoutines: () => post<Record<string, unknown>>("/ingest/hevy-routines"),
   // Coach
   coachReports: (limit = 10) => get<Report[]>(`/coach/reports?limit=${limit}`),
   coachDaily: () => post<Report>("/coach/daily"),

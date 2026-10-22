@@ -69,7 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       const feedback = await finishManualSync(before);
       const failed = Object.entries(result).filter(([, value]) =>
         value != null && typeof value === "object" && "error" in value
-      ).map(([source]) => ({ hevy: "Hevy", fddb: "FDDB", health_connect: "Health Connect", garmin: "Garmin" }[source] || source));
+      ).map(([source]) => ({ hevy: "Hevy", hevy_routines: "Hevy-Routinen", fddb: "FDDB", health_connect: "Health Connect", garmin: "Garmin" }[source] || source));
       setRefreshFailed(failed.length > 0);
       setRefreshMessage(failed.length ? `Import teilweise fehlgeschlagen: ${failed.join(", ")}. ${feedback}` : feedback);
       try { const st = await api.ingestStatus(); setLast(latestSync(st.state)); }

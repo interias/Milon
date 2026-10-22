@@ -81,6 +81,11 @@ def _run_migrations() -> None:
         if cols("hero_keystones"):
             con.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_hero_keystones_session_status "
                                 "ON hero_keystones (session, status)")
+        set_cols = cols("workout_sets")
+        if set_cols and "exercise_template_id" not in set_cols:
+            con.exec_driver_sql("ALTER TABLE workout_sets ADD COLUMN exercise_template_id VARCHAR")
+            con.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workout_sets_exercise_template_id "
+                                "ON workout_sets (exercise_template_id)")
         checkin_cols = cols("checkins")
         if checkin_cols and "sick" not in checkin_cols:
             con.exec_driver_sql("ALTER TABLE checkins ADD COLUMN sick BOOLEAN")

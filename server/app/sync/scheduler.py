@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 
 from ..config import INCOMING_DIR, settings
 from ..db import engine
-from ..ingest import fddb, garmin, health_connect, hevy
+from ..ingest import fddb, garmin, health_connect, hevy, hevy_routines
 from ..models import SyncState
 
 _scheduler: BackgroundScheduler | None = None
@@ -57,6 +57,19 @@ def sync_hevy() -> None:
         record_sync("hevy", "ok", json.dumps(hevy.import_hevy()))
     except Exception as e:  # noqa: BLE001
         record_sync("hevy", "error", str(e))
+        return
+    sync_hevy_routines()
+
+
+def sync_hevy_routines(force: bool = False) -> dict:
+    """Trainingsplan nach dem Hevy-Sync als Routinen zurückschreiben; Fehler bleiben im eigenen Status."""
+    try:
+        res = hevy_routines.write_routines(force=force)
+    except Exception as e:  # noqa: BLE001
+        record_sync(hevy_routines.STATE, "error", str(e))
+        return {"error": str(e)}
+    record_sync(hevy_routines.STATE, "ok", json.dumps(res))
+    return res
 
 
 def sync_fddb() -> None:

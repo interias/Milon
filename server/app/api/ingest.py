@@ -36,7 +36,18 @@ def _run(source: str, fn, cursor: str | None = None) -> dict:
 
 @router.post("/hevy")
 def ingest_hevy(full: bool = False) -> dict:
-    return _run("hevy", lambda: hevy.import_hevy(full=full))
+    res = _run("hevy", lambda: hevy.import_hevy(full=full))
+    scheduler.sync_hevy_routines()
+    return res
+
+
+@router.post("/hevy-routines")
+def ingest_hevy_routines() -> dict:
+    """Trainingsplan sofort als Hevy-Routinen „Milon OK“/„Milon UK“ schreiben (auch wenn unverändert)."""
+    res = scheduler.sync_hevy_routines(force=True)
+    if "error" in res:
+        raise HTTPException(status_code=502, detail=f"Hevy-Routinen fehlgeschlagen: {res['error']}")
+    return res
 
 
 @router.post("/fddb")
@@ -81,6 +92,8 @@ def refresh_all(full: bool = False) -> dict:
             res[src] = _run(src, fn)
         except HTTPException as e:
             res[src] = {"error": e.detail}
+    if "error" not in res["hevy"]:
+        res["hevy_routines"] = scheduler.sync_hevy_routines()
     if settings.hc_drive_file_id:
         try:
             r = drive.pull(full=full)

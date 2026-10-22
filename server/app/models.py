@@ -56,6 +56,7 @@ class WorkoutSet(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     workout_id: int = Field(foreign_key="workouts.id", index=True)
     exercise: str
+    exercise_template_id: Optional[str] = Field(default=None, index=True)  # Hevy; gleich für DE/EN-Namen
     set_index: Optional[int] = None
     set_type: Optional[str] = None  # 'normal' | 'warmup' | ...
     weight_kg: Optional[float] = None

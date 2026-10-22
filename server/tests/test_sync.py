@@ -41,6 +41,7 @@ class SyncTests(TestCase):
         app.include_router(ingest.router)
         with (
             patch.object(ingest.hevy, "import_hevy", return_value={"events": 0}),
+            patch.object(ingest.scheduler, "sync_hevy_routines", return_value={"mode": "unchanged"}) as routines,
             patch.object(ingest.fddb, "import_fddb", side_effect=RuntimeError("Provider unavailable")),
             patch.object(ingest.settings, "hc_drive_file_id", "test-file"),
             patch.object(ingest.drive, "pull", return_value={"new_body": 1}),
@@ -56,6 +57,8 @@ class SyncTests(TestCase):
             self.assertEqual(response.json()["health_connect"], {"new_body": 1})
             states = {row["source"]: row["status"] for row in client.get("/ingest/status").json()["state"]}
             self.assertEqual(states, {"hevy": "ok", "fddb": "error", "health_connect": "ok"})
+            routines.assert_called_once()
+            self.assertEqual(response.json()["hevy_routines"], {"mode": "unchanged"})
 
     def test_garmin_endpoint_records_sanitized_failure(self):
         app = FastAPI()
