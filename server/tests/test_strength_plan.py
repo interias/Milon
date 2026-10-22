@@ -9,6 +9,8 @@ from app.models import Workout, WorkoutSet
 TODAY = date(2026, 11, 2)
 ROW = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "row")
 SKULL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "skull")
+RDL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "rdl")
+LATERAL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "lateral")
 
 
 def _session(day, sets):
@@ -28,16 +30,28 @@ def test_increase_when_all_sets_at_top_on_target_rpe():
     assert s["action"] == "increase"
     assert s["weight_kg"] == 56.5
     work = [x for x in s["sets"] if x["type"] == "normal"]
-    assert [x["rpe"] for x in work] == [8, 8, 9]
-    assert all(8 <= x["reps"] <= 12 for x in work)
+    assert [x["rpe"] for x in work] == [8, 9, 10]
+    assert len({x["reps"] for x in work}) == 1 and 8 <= work[0]["reps"] <= 12
     assert s["sets"][0]["type"] == "warmup"
 
 
 def test_failure_reps_are_converted_to_target_rpe():
-    # 12 Wdh. bei RPE 10 ≈ 10 Wdh. bei RPE 8 → kein Steigern, halten mit +1.
+    # 3 × 12 bei RPE 10: Satz 1 ≈ 10 Wdh. bei RPE 8, alle Sätze halten das → Ziel 11 für alle.
     s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, 10), (54, 12, 10), (54, 12, 10)])], TODAY)
     assert s["action"] == "hold"
-    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [11, 11, 12]
+    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [11, 11, 11]
+
+
+def test_same_goal_when_later_set_misses_it():
+    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 11, 8), (61, 11, 8.5), (61, 8, 9.5)])], TODAY)
+    assert s["action"] == "hold" and s["weight_kg"] == 61
+    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [11, 11, 11]
+
+
+def test_rir_falls_across_sets_with_rdl_and_four_set_exceptions():
+    assert sp._targets(ROW) == [8, 9, 10]
+    assert sp._targets(LATERAL) == [8, 9, 9, 10]
+    assert sp._targets(RDL) == [8, 9, 9, 9]
 
 
 def test_missing_rpe_needs_reps_above_top():
@@ -68,9 +82,10 @@ def test_plateau_after_three_plan_sessions_without_gain():
     assert s["action"] == "deload" and s["weight_kg"] == 52
 
 
-def test_failure_last_targets_rpe_10_without_warmup():
+def test_superset_isolation_two_sets_without_warmup():
     s = sp.suggest(SKULL, [_session(TODAY - timedelta(days=3), [(25, 14, 8), (25, 14, 10)])], TODAY)
     assert [x["rpe"] for x in s["sets"]] == [8, 10]
+    assert [x["reps"] for x in s["sets"]] == [15, 15]
     assert all(x["type"] == "normal" for x in s["sets"])
 
 
@@ -112,3 +127,21 @@ def test_next_training_week_count_and_name_fallback(plan_db):
     legpress = next(e for e in uk["exercises"] if e["key"] == "legpress")
     assert legpress["last"]["date"] == "2026-10-28"
     assert uk["last_date"] == "2026-10-28"
+
+
+def test_weekly_volume_counts_hard_sets_fractionally(plan_db):
+    with Session(plan_db) as s:
+        _workout(s, "a", datetime(2026, 11, 2, 16), [
+            ("Rudern sitzend (Maschine)", "1DF4A847", "warmup", 40, 12, None),
+            ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
+            ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 6),  # zu leicht: kein harter Satz
+            ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, None),  # ohne RPE zählt
+        ])
+        _workout(s, "b", datetime(2026, 10, 20, 16), [
+            ("Seitheben (Maschine)", "D5D0354D", "normal", 32, 12, 9),
+        ])
+        s.commit()
+    v = {m["muscle"]: m for m in sp.weekly_volume(date(2026, 11, 4))["muscles"]}
+    assert v["Rücken"]["this_week"] == 2 and v["Bizeps"]["this_week"] == 1
+    assert v["Seitliche Schulter"]["avg_4w"] == 0.2  # 1 Satz in den 4 Wochen davor
+    assert v["Seitliche Schulter"]["planned"] == 8 and v["Gesäß"]["planned"] == 6

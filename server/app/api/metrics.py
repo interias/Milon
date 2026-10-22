@@ -385,6 +385,11 @@ def strength_next_training() -> dict:
     return strength_plan.next_training()
 
 
+@router.get("/strength/volume")
+def strength_volume() -> dict:
+    return strength_plan.weekly_volume()
+
+
 @router.get("/strength/energy")
 def strength_energy() -> dict:
     return strength.strength_energy()

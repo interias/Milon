@@ -8,6 +8,7 @@ import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { StrengthDetails } from "@/components/StrengthDetails";
 import { NextTraining } from "@/components/NextTraining";
+import { WeeklyVolume } from "@/components/WeeklyVolume";
 import { de, dm } from "@/lib/format";
 
 const MUSCLE_ICON: Record<string, string> = {
@@ -90,6 +91,7 @@ export default function Kraft() {
     </Card>
 
     <div className="mt-4"><NextTraining /></div>
+    <div className="mt-4"><WeeklyVolume /></div>
 
     <Card className="mt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
