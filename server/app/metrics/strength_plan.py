@@ -1,13 +1,14 @@
 """Trainingsplan „Nächstes Training“: zwei feste Programme (Oberkörper/Unterkörper) mit
-doppelter Progression. Je Übung entscheidet die letzte Einheit über Gewicht und Wiederholungen
-der nächsten; Wiederholungen werden dafür auf die Ziel-RPE umgerechnet (RPE 10 × 12 Wdh. ≈
-RPE 8 × 10 Wdh.), damit Sätze bis zum Versagen nicht als Fortschritt durchgehen.
+doppelter Progression und konstanten Wiederholungen. Wiederholungen werden auf die Ziel-RPE je
+Satz umgerechnet (RPE 10 × 12 Wdh. ≈ RPE 8 × 10 Wdh.), damit Sätze bis zum Versagen nicht als
+Fortschritt durchgehen.
 
-Regeln (Coaching-Entscheidung, siehe CLAUDE.md „Trainingsplan“):
-- Ziel: Sätze 1..n-1 bei RPE 8 (2 RIR), letzter Satz RPE 9 (Isolation mit `failure_last`: RPE 10).
-- Steigern: alle n Sätze erreichen das obere Ende des Bereichs (auf Ziel-RPE gerechnet).
-- Halten: sonst; Ziel je Satz = letztes Ergebnis + 1, gedeckelt am oberen Ende.
-- Zurück: ein Satz unter dem unteren Ende → eine Stufe leichter.
+Regeln (im Grilling mit dem User festgelegt, belegt über „harte Sätze“ 0–3 RIR):
+- Gleiche Wdh. in allen Sätzen, RIR sinkt: Satz 1 RPE 8, mittlere RPE 9, letzter `last_rpe`
+  (10 = bis zum Versagen erlaubt; RDL 9).
+- Ziel = erster Satz der letzten Einheit, umgerechnet auf RPE 8.
+- Steigern: alle Sätze am oberen Ende des Bereichs. Halten: alle Sätze am Ziel → Ziel + 1, sonst
+  dasselbe Ziel. Zurück: ein Satz unter dem unteren Ende → eine Stufe leichter.
 - Plateau: 3 Einheiten (ab PLAN_START) auf demselben Gewicht ohne Wiederholungsgewinn → eine Stufe leichter.
 - Pause > 21 Tage → eine Stufe leichter; > 90 Tage oder neu → Start aus dem e1RM der letzten 180 Tage.
 Fehlende RPE zählt als eine Stufe über dem Ziel (steigern erst bei Wdh. über dem oberen Ende)."""
@@ -81,7 +82,8 @@ class PlanExercise:
     ladder: Ladder
     warmup: bool = False
     superset: int | None = None
-    failure_last: bool = False
+    last_rpe: float = 10.0              # Ziel-RPE des letzten Satzes
+    muscles: tuple[tuple[str, float], ...] = ()  # harte Sätze je Muskel; mitbeteiligt = 0,5
 
 
 @dataclass(frozen=True)
@@ -96,38 +98,49 @@ class Plan:
 PLANS: tuple[Plan, ...] = (
     Plan("ok", "Milon OK", "Oberkörper", 2, (
         PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
-                     ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True),
+                     ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True,
+                     muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5))),
         PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
-                     ("MTS Incline Press",), 3, (8, 12), 150, Ladder(2.5), warmup=True),
+                     ("MTS Incline Press",), 3, (8, 12), 150, Ladder(2.5), warmup=True,
+                     muscles=(("Brust", 1), ("Trizeps", .5))),
         PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
-                     ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 3, (12, 20), 90, _select(25), failure_last=True),
+                     ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 20), 90, _select(25),
+                     muscles=(("Seitliche Schulter", 1),)),
         PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
-                     ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0)),
+                     ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0),
+                     muscles=(("Rücken", 1), ("Bizeps", .5))),
         PlanExercise("fly", "Butterfly (Maschine)", ("78683336", "9DCE2D64"),
-                     ("Fliegende (Maschine)", "Butterfly (Pec Deck)"), 2, (10, 15), 90, _select(82), superset=0),
+                     ("Fliegende (Maschine)", "Butterfly (Pec Deck)"), 2, (10, 15), 90, _select(82), superset=0,
+                     muscles=(("Brust", 1),)),
         PlanExercise("rear_fly", "Reverse Butterfly (Maschine)", ("D8281C62",),
                      ("Reverse Fliegende (Maschine)", "Rear Delt Reverse Fly (Machine)"), 2, (10, 15), 90, _select(40),
-                     superset=0),
+                     superset=0, muscles=(("Hintere Schulter", 1),)),
         PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
                      ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
-                     2, (10, 15), 90, Ladder(5.0), superset=1, failure_last=True),
+                     2, (10, 15), 90, Ladder(5.0), superset=1, muscles=(("Bizeps", 1),)),
         PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
                      ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 2, (10, 15), 90, Ladder(2.5),
-                     superset=1, failure_last=True),
+                     superset=1, muscles=(("Trizeps", 1),)),
     )),
     Plan("uk", "Milon UK", "Unterkörper", 1, (
         PlanExercise("legpress", "Beinpresse (Maschine)", ("C7973E0E",),
-                     ("Beinpresse (Maschine)", "Leg Press (Machine)"), 3, (10, 15), 150, Ladder(5.0, 53), warmup=True),
+                     ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True,
+                     muscles=(("Quadrizeps", 1), ("Gesäß", .5))),
         PlanExercise("rdl", "Romanian Deadlift (Langhantel)", ("2B4B7310",),
-                     ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 3, (8, 12), 150, Ladder(5.0)),
+                     ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 4, (8, 12), 150, Ladder(5.0),
+                     last_rpe=9.0, muscles=(("Beinbeuger", 1), ("Gesäß", 1))),
         PlanExercise("legcurl", "Liegendes Beinbeugen (Maschine)", ("B8127AD1",),
-                     ("Liegendes Beinbeugen (Maschine)", "Lying Leg Curl (Machine)"), 3, (10, 15), 90, _select(39),
-                     superset=0),
+                     ("Liegendes Beinbeugen (Maschine)", "Lying Leg Curl (Machine)"), 4, (10, 15), 90, _select(39),
+                     superset=0, muscles=(("Beinbeuger", 1),)),
         PlanExercise("legext", "Beinstrecker (Maschine)", ("75A4F6C4",),
-                     ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 3, (10, 15), 90, _select(61),
-                     superset=0),
+                     ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 4, (10, 15), 90, _select(61),
+                     superset=0, muscles=(("Quadrizeps", 1),)),
     )),
 )
+MUSCLES = ("Brust", "Rücken", "Seitliche Schulter", "Hintere Schulter", "Bizeps", "Trizeps",
+           "Quadrizeps", "Beinbeuger", "Gesäß")
+VOLUME_BAND = (10, 20)  # harte Sätze je Muskel und Woche (Schoenfeld 2017, Pelland 2025)
+HARD_RPE = 7.0          # ≤ 3 RIR zählt als harter Satz; fehlende RPE zählt mit
 
 
 def _read_sets() -> pd.DataFrame:
@@ -153,7 +166,10 @@ def _de(x: float) -> str:
 
 
 def _targets(ex: PlanExercise) -> list[float]:
-    return [8.0] * (ex.sets - 1) + [10.0 if ex.failure_last else 9.0]
+    """RIR sinkt über die Sätze: RPE 8 → 9 … → `last_rpe`."""
+    if ex.sets == 1:
+        return [ex.last_rpe]
+    return [8.0] + [9.0] * (ex.sets - 2) + [ex.last_rpe]
 
 
 def _main_weight(weights: list[float]) -> float:
@@ -202,7 +218,7 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date) -> dict:
         e1 = max(w * (1 + min(r + (10 - (rpe or 10)), 15) / 30) for w, r, rpe in window)
         mid = (lo + hi) // 2
         weight = ex.ladder.floor(e1 / (1 + (mid + 2) / 30))
-        reps = [_reps_for(e1, weight, t, lo, hi) for t in targets]
+        reps = [_reps_for(e1, weight, targets[0], lo, hi)] * ex.sets
         return _result(ex, weight, reps, targets, "start",
                        f"Über {STALE_DAYS} Tage nicht trainiert – Start aus geschätztem 1RM ({_de(round(e1, 1))} kg).",
                        None)
@@ -214,7 +230,8 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date) -> dict:
     full = len(adj) == ex.sets
     while len(adj) < ex.sets:  # fehlende Sätze: einen weniger als der vorige
         adj.append((adj[-1] if adj else lo) - 1)
-    e1s = [w * (1 + (a + 10 - t) / 30) for a, t in zip(adj, targets)]
+    first_e1 = w * (1 + (adj[0] + 10 - targets[0]) / 30)
+    goal = math.floor(adj[0] + 1e-9)
     shown = f"{_de(w)} kg × " + "/".join(str(r) for _, r, _ in at_w)
     if any(rpe is not None for *_, rpe in at_w):
         shown += " @ " + "/".join(_de(rpe) if rpe is not None else "–" for *_, rpe in at_w)
@@ -228,20 +245,19 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date) -> dict:
     elif _plateau(ex, sessions, w, targets):
         action, new_w = "deload", ex.ladder.down(w)
         reason = "3 Einheiten ohne Fortschritt → eine Stufe leichter und neu aufbauen."
+    elif full and min(adj) >= goal:
+        action, new_w, goal = "hold", w, goal + 1
+        reason = "Alle Sätze am Ziel → eine Wdh. mehr."
     else:
         action, new_w = "hold", w
-        reason = "Gewicht halten, je Satz eine Wdh. mehr."
+        reason = "Noch nicht alle Sätze am Ziel → gleiches Ziel wiederholen."
     pause = (today - last["date"]).days
     if pause > PAUSE_DAYS and action not in ("decrease", "deload"):
         new_w = ex.ladder.down(w)
         action = "pause"
         reason = f"{pause} Tage Pause → eine Stufe leichter."
-    if action == "hold":
-        reps = [max(lo, min(hi, math.floor(a + 1e-9) + 1)) for a in adj]
-    else:
-        reps = [_reps_for(e1, new_w, t, lo, hi) for e1, t in zip(e1s, targets)]
-        for i in range(1, len(reps)):  # neues Gewicht: Sätze nie steigend
-            reps[i] = min(reps[i], reps[i - 1])
+    rep = max(lo, min(hi, goal)) if action == "hold" else _reps_for(first_e1, new_w, targets[0], lo, hi)
+    reps = [rep] * ex.sets
     last_info = {"date": last["date"].isoformat(), "summary": shown}
     return _result(ex, new_w, reps, targets, action, f"Letztes Mal {shown}. {reason}", last_info)
 
@@ -265,7 +281,7 @@ def _result(ex: PlanExercise, weight: float | None, reps: list[int], targets: li
     if ex.warmup and weight:
         sets.append({"type": "warmup", "weight_kg": ex.ladder.floor(weight * 0.6), "reps": 12, "rpe": None})
     sets += [{"type": "normal", "weight_kg": weight, "reps": r, "rpe": t} for r, t in zip(reps, targets)]
-    rir = "2 Wdh. im Tank, letzter Satz " + ("bis zum Versagen" if ex.failure_last else "1 Wdh. im Tank")
+    rir = "Gleiche Wdh. in allen Sätzen, RIR " + " → ".join(_de(10 - t) for t in targets)
     return {
         "key": ex.key, "name": ex.name, "template_id": ex.templates[0],
         "rep_range": list(ex.reps), "rest_seconds": ex.rest, "superset": ex.superset,
@@ -321,3 +337,32 @@ def next_training(today: date | None = None) -> dict:
     open_plans = [p for p in plans if p["per_week"] - p["done"] > 0]
     nxt = max(open_plans, key=lambda p: p["per_week"] - p["done"])["key"] if open_plans else None
     return {"date": today.isoformat(), "week_start": monday.isoformat(), "next": nxt, "plans": plans}
+
+
+def weekly_volume(today: date | None = None) -> dict:
+    """Harte Sätze je Muskel: diese Woche (Mo–heute) vs. Ø der 4 vollen Wochen davor + Soll laut Plan.
+    Zählt nur die Planübungen; mitbeteiligte Muskeln halb (fraktionale Zählung nach Pelland)."""
+    today = today or datetime.now().date()
+    monday = today - timedelta(days=today.weekday())
+    start = monday - timedelta(weeks=4)
+    factors = {ex.key: ex.muscles for p in PLANS for ex in p.exercises}
+    planned = dict.fromkeys(MUSCLES, 0.0)
+    for p in PLANS:
+        for ex in p.exercises:
+            for muscle, f in ex.muscles:
+                planned[muscle] += ex.sets * p.per_week * f
+    this, prev = dict.fromkeys(MUSCLES, 0.0), dict.fromkeys(MUSCLES, 0.0)
+    df = _read_sets()
+    if not df.empty:
+        day = df["started_at"].dt.date
+        hard = df[df["set_type"].isin(WORK_TYPES) & (df["rpe"].isna() | (df["rpe"] >= HARD_RPE))
+                  & (day >= start) & (day <= today)]
+        for r in hard.itertuples():
+            bucket = this if r.started_at.date() >= monday else prev
+            for muscle, f in factors[r.key]:
+                bucket[muscle] += f
+    return {
+        "week_start": monday.isoformat(), "band": list(VOLUME_BAND),
+        "muscles": [{"muscle": m, "this_week": round(this[m], 1), "avg_4w": round(prev[m] / 4, 1),
+                     "planned": round(planned[m], 1)} for m in MUSCLES],
+    }

@@ -405,6 +405,8 @@ export type TrainingPlan = {
   key: string; title: string; name: string; per_week: number; done: number;
   last_date: string | null; duration_min: number; exercises: PlanExercise[];
 };
+export type MuscleVolume = { muscle: string; this_week: number; avg_4w: number; planned: number };
+export type WeeklyVolume = { week_start: string; band: [number, number]; muscles: MuscleVolume[] };
 export type NextTraining = { date: string; week_start: string; next: string | null; plans: TrainingPlan[] };
 export type StrengthIndexPoint = { week: string; raw: number; smoothed: number; anchor: number };
 export type StrengthDriver = { exercise: string; muscle: string; pct: number };
@@ -687,6 +689,7 @@ export const api = {
   strengthIndex: (period = "3m") => get<StrengthIndex>(`/metrics/strength/index?period=${period}`),
   strengthEnergy: () => get<StrengthEnergy>(`/metrics/strength/energy`),
   strengthPlan: () => get<NextTraining>("/metrics/strength/plan"),
+  strengthVolume: () => get<WeeklyVolume>("/metrics/strength/volume"),
   writeHevyRoutines: () => post<Record<string, unknown>>("/ingest/hevy-routines"),
   // Coach
   coachReports: (limit = 10) => get<Report[]>(`/coach/reports?limit=${limit}`),

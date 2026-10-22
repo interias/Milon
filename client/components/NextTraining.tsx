@@ -14,7 +14,7 @@ const ACTION: Record<PlanExercise["action"], [string, string]> = {
   start: ["Start", "border-accent text-accent"],
   new: ["neu", "border-accent text-accent"],
 };
-const rir = (rpe: number | null) => rpe == null ? "" : rpe >= 10 ? "Versagen" : `${de(10 - rpe, 0)} RIR`;
+const rir = (rpe: number | null) => rpe == null ? "–" : de(10 - rpe, 0);
 const kg = (value: number | null) => value == null ? "– kg" : `${de(value, value % 1 ? 1 : 0)} kg`;
 
 function ExerciseRow({ ex }: { ex: PlanExercise }) {
@@ -29,8 +29,8 @@ function ExerciseRow({ ex }: { ex: PlanExercise }) {
     </div>
     <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
       <span className="font-display text-xl font-extrabold text-accent">{kg(ex.weight_kg)}</span>
-      <span className="text-sm">{work.map((set) => set.reps).join(" / ")} Wdh.</span>
-      <span className="text-xs text-muted">{work.map((set) => rir(set.rpe)).join(" · ")}</span>
+      <span className="text-sm">{new Set(work.map((set) => set.reps)).size === 1 ? `${work.length} × ${work[0]?.reps}` : work.map((set) => set.reps).join(" / ")} Wdh.</span>
+      <span className="text-xs text-muted">RIR {work.map((set) => rir(set.rpe)).join(" → ")}</span>
     </div>
     {warmup.length > 0 && <p className="mt-0.5 text-xs text-muted">Aufwärmen {warmup.map((set) => `${kg(set.weight_kg)} × ${set.reps}`).join(", ")}</p>}
     <p className="mt-1 text-xs text-muted">{ex.reason}</p>
@@ -85,7 +85,7 @@ export function NextTraining() {
         </button>)}
       </div>
     </div>
-    <p className="mt-3 text-xs text-muted">~{active.duration_min} min{active.last_date ? ` · zuletzt ${dm(active.last_date)}` : ""} · Sätze 1–2 mit 2 Wdh. im Tank, letzter Satz 1 (Isolation: bis zum Versagen)</p>
+    <p className="mt-3 text-xs text-muted">~{active.duration_min} min{active.last_date ? ` · zuletzt ${dm(active.last_date)}` : ""} · gleiche Wdh. in allen Sätzen, Reserve sinkt bis zum letzten Satz (RIR 0 = Versagen erlaubt)</p>
     <div className="mt-2 divide-y divide-line">
       {blocks.map((block) => block.length > 1
         ? <div key={block[0].key} className="py-1">
