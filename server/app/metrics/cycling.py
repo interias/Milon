@@ -466,6 +466,91 @@ def efficiency(alpha: float = 0.25) -> dict:
     return _clean(result)
 
 
+WKG_BIN = 0.25         # Klassenbreite W/kg
+WKG_WINDOW_DAYS = 42   # Zeitraum je Kurve: letzte 6 Wochen vs. die 6 davor
+WKG_SMOOTH_S = 60      # nachlaufendes Leistungsmittel ≈ Verzögerung des Pulses
+WKG_SKIP_S = 300       # Einfahren: Puls hat sich noch nicht eingeschwungen
+WKG_MIN_S = 60         # Mindest-Sekunden je Klasse
+
+
+def _wkg_hr_pairs(series: dict, weight: float) -> tuple[np.ndarray, np.ndarray]:
+    """Je Sekunde (W/kg aus nachlaufendem 60-s-Mittel, Puls); nur vollständig belegte Fenster."""
+    if not series.get("power_w") or not series.get("hr_bpm"):
+        return np.array([]), np.array([])
+    power, hr = garmin_indoor.grid(series, "power_w"), garmin_indoor.grid(series, "hr_bpm")
+    if power.size <= WKG_SKIP_S + WKG_SMOOTH_S:
+        return np.array([]), np.array([])
+    valid = ~np.isnan(power)
+    total = np.concatenate([[0.0], np.cumsum(np.where(valid, power, 0.0))])
+    count = np.concatenate([[0], np.cumsum(valid)])
+    sums, counts = total[WKG_SMOOTH_S:] - total[:-WKG_SMOOTH_S], count[WKG_SMOOTH_S:] - count[:-WKG_SMOOTH_S]
+    rolling = np.where(counts == WKG_SMOOTH_S, sums / WKG_SMOOTH_S, np.nan)  # Index i = Fenster bis Sekunde i+59
+    hr_now = hr[WKG_SMOOTH_S - 1:]
+    keep = np.arange(rolling.size) + WKG_SMOOTH_S - 1 >= WKG_SKIP_S
+    keep &= ~np.isnan(rolling) & ~np.isnan(hr_now) & (rolling > 0)
+    return rolling[keep] / weight, hr_now[keep]
+
+
+def wkg_hr(today: date | None = None) -> dict:
+    """Puls je W/kg-Klasse aus den Sekunden-Serien (Fahrten mit gültigem Puls und Leistung):
+    letzte 6 Wochen vs. die 6 davor. Rechts/unten verschobene Kurve = gleicher Puls bei mehr W/kg.
+    Reine Anzeige ohne Urteil (das liefert hr_at_power)."""
+    from . import running  # lazy: HFmax wie beim Laufen
+    today = _today(today)
+    current = eftp(today=today)
+    hr_max, _ = running._resolved_hr_max(running._runs())
+    weight_now = current["weight_kg"]
+    out: dict = {"bin": WKG_BIN, "window_days": WKG_WINDOW_DAYS, "eftp": current["value"],
+                 "weight_kg": weight_now, "wkg_ftp": current["wkg"], "hr_max": hr_max,
+                 "power_zones": [{"zone": z["zone"], "name": z["name"],
+                                  "lo_wkg": _r(z["lo_w"] / weight_now, 2),
+                                  "hi_wkg": _r(z["hi_w"] / weight_now, 2) if z["hi_w"] is not None else None}
+                                 for z in current["zones"]] if weight_now else [],
+                 "hr_zones": [{"zone": k, "name": n, "lo_bpm": round(lo * hr_max), "hi_bpm": round(min(hi, 1) * hr_max)}
+                              for k, n, lo, hi in running._ZONE_DEFS],
+                 "periods": [],
+                 "caveat": "Je Sekunde: nachlaufendes 60-s-Leistungsmittel ÷ Gewicht am Fahrttag gegen den Puls; "
+                           "Einfahren (5 min) ausgelassen. Linie = Median, Band = mittlere Hälfte. "
+                           "Hitze, Tagesform und Ermüdung sind nicht herausgerechnet — Urteil liefert "
+                           "„Puls bei Referenzleistung“."}
+    df = _hr_rides()
+    if df.empty:
+        return _clean(out)
+    df = df[df["day"] <= today]
+    weights = _weights()
+    windows = [("recent", f"letzte {WKG_WINDOW_DAYS // 7} Wochen", today - timedelta(days=WKG_WINDOW_DAYS), today),
+               ("previous", f"{WKG_WINDOW_DAYS // 7} Wochen davor", today - timedelta(days=2 * WKG_WINDOW_DAYS),
+                today - timedelta(days=WKG_WINDOW_DAYS))]
+    for key, label, start, end in windows:
+        part = df[(df["day"] > start) & (df["day"] <= end)]
+        part = _attach_series(part) if not part.empty else part
+        wkg_all, hr_all, rides = [], [], 0
+        for _, r in part.iterrows():
+            weight = _weight_at(weights, r["day"])
+            if not weight:
+                continue
+            w, h = _wkg_hr_pairs(r["series"], weight)
+            if w.size:
+                wkg_all.append(w), hr_all.append(h)
+                rides += 1
+        if not rides:
+            continue
+        w, h = np.concatenate(wkg_all), np.concatenate(hr_all)
+        idx = np.floor(w / WKG_BIN).astype(int)
+        bins = []
+        for b in np.unique(idx):
+            sel = h[idx == b]
+            if sel.size >= WKG_MIN_S:
+                q25, q50, q75 = np.percentile(sel, [25, 50, 75])
+                bins.append({"wkg": round((b + 0.5) * WKG_BIN, 3), "hr": round(float(q50), 1),
+                             "hr_lo": round(float(q25), 1), "hr_hi": round(float(q75), 1),
+                             "seconds": int(sel.size)})
+        if bins:
+            out["periods"].append({"key": key, "label": label, "from": (start + timedelta(days=1)).isoformat(),
+                                   "to": end.isoformat(), "rides": rides, "bins": bins})
+    return _clean(out)
+
+
 # ---------------- Zonen / Welten ----------------
 def zones(weeks: int = 12, today: date | None = None) -> dict:
     """Zeit in Coggan-Zonen je Woche (aus der Sekunden-Serie, eFTP am Fahrttag)."""

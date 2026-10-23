@@ -17,7 +17,7 @@ from app.api import metrics as metrics_api
 from app.api import settings as settings_api
 from app.garmin_indoor import GarminIndoorRide
 from app.ingest import garmin
-from app.metrics import body, cycling, health, route_atlas, stats
+from app.metrics import body, cycling, health, route_atlas, running, stats
 from app.models import BodyMeasurement, ExerciseSession
 
 from test_garmin_sync import FakeGarmin, activity, write_tokens
@@ -90,7 +90,7 @@ class IndoorGarmin(FakeGarmin):
 def db(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'indoor.db'}", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
-    for module in (garmin_routes, garmin_indoor, health, hero_world, route_atlas, cycling, body):
+    for module in (garmin_routes, garmin_indoor, health, hero_world, route_atlas, cycling, body, running):
         monkeypatch.setattr(module, "engine", engine)
     monkeypatch.setattr(garmin_routes.settings, "timezone", "Europe/Berlin")
     monkeypatch.setattr(cycling.settings, "bike_ftp", 0.0)
@@ -428,6 +428,37 @@ def test_series_loaded_only_for_needed_rides(db, monkeypatch):
     assert loaded == [["90"]]  # the ride outside the window is never parsed
 
 
+def test_wkg_hr_bins_seconds_and_compares_windows(db, monkeypatch):
+    monkeypatch.setattr(cycling.settings, "bike_ftp", 240.0)
+    monkeypatch.setattr(running.settings, "run_hr_max", 190.0)
+    with Session(db) as session:
+        for offset in range(100):
+            session.add(BodyMeasurement(measured_at=datetime.combine(TODAY - timedelta(days=offset), datetime.min.time()),
+                                        weight_kg=80.0, source="test"))
+        session.commit()
+    ramp = lambda s: 80.0 + 160.0 * s / 3600  # 1,0 → 3,0 W/kg
+    store(TODAY - timedelta(days=60), "60", power=160.0, seconds=3600, series_power=ramp, hr=lambda s: 100.0 + 50.0 * s / 3600)
+    store(TODAY - timedelta(days=2), "61", power=160.0, seconds=3600, series_power=ramp, hr=lambda s: 95.0 + 50.0 * s / 3600)
+    store(TODAY - timedelta(days=1), "62", power=200.0, avg_hr=None, hr=lambda s: None, hr_valid=False)
+    result = cycling.wkg_hr(today=TODAY)
+    assert result["wkg_ftp"] == 3.0 and result["power_zones"][1]["lo_wkg"] == 1.65
+    assert [z["lo_bpm"] for z in result["hr_zones"]] == [0, 133, 152, 171]
+    recent, previous = result["periods"]
+    assert (recent["key"], recent["rides"], previous["key"], previous["rides"]) == ("recent", 1, "previous", 1)
+    for period in (recent, previous):
+        wkgs = [b["wkg"] for b in period["bins"]]
+        assert wkgs == sorted(wkgs) and wkgs[0] >= 1.0 and all(b["seconds"] >= 60 for b in period["bins"])
+        hrs = [b["hr"] for b in period["bins"]]
+        assert hrs == sorted(hrs) and all(b["hr_lo"] <= b["hr"] <= b["hr_hi"] for b in period["bins"])
+    same = {b["wkg"]: b["hr"] for b in previous["bins"]}
+    assert all(b["hr"] < same[b["wkg"]] for b in recent["bins"] if b["wkg"] in same)  # fitter: lower pulse
+
+
+def test_wkg_hr_empty_without_rides(db):
+    result = cycling.wkg_hr(today=TODAY)
+    assert result["periods"] == [] and len(result["hr_zones"]) == 4
+
+
 def test_worlds_and_routes(db):
     store(TODAY, "70", title="Zwift - Tempus Fugit in Watopia")
     store(TODAY - timedelta(days=1), "71", title="Zwift - Tempus Fugit in Watopia")
@@ -462,7 +493,7 @@ def test_cycling_endpoints_are_200_and_nan_free(db, populated):
     app = FastAPI()
     app.include_router(metrics_api.router)
     http = TestClient(app)
-    for path in ("summary", "power-curve", "eftp", "hr-at-power", "efficiency", "zones", "rides", "worlds"):
+    for path in ("summary", "power-curve", "eftp", "hr-at-power", "efficiency", "zones", "rides", "worlds", "wkg-hr"):
         response = http.get(f"/metrics/cycling/{path}")
         assert response.status_code == 200, path
         assert "NaN" not in response.text and "Infinity" not in response.text
