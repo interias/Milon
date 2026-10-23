@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CycSummary, type CycCurve, type CycEftp, type CycHrAtPower, type CycEfficiency, type CycZones, type CycRide, type CycWorlds } from "@/lib/api";
+import { api, type CycSummary, type CycCurve, type CycEftp, type CycHrAtPower, type CycEfficiency, type CycZones, type CycWkgHr, type CycRide, type CycWorlds } from "@/lib/api";
 import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
 import { AreaTrend, MultiTrend } from "@/components/charts";
 import { TrendBadge } from "@/components/RunningMoreAnalyses";
-import { CurveTable, EFTP_SOURCE, Empty, LogCurve, RideRow, WeeklyZones, hasPower } from "@/components/Cycling";
+import { CurveTable, EFTP_SOURCE, Empty, LogCurve, RideRow, WeeklyZones, WkgHrChart, hasPower } from "@/components/Cycling";
 import { de, de0, dm } from "@/lib/format";
 
 const LIST_LIMIT = 20;
@@ -25,6 +25,7 @@ export default function Rad() {
   const [hrp, setHrp] = useState<CycHrAtPower | null>(null);
   const [eff, setEff] = useState<CycEfficiency | null>(null);
   const [zones, setZones] = useState<CycZones | null>(null);
+  const [wkgHr, setWkgHr] = useState<CycWkgHr | null>(null);
   const [worlds, setWorlds] = useState<CycWorlds | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [extrasError, setExtrasError] = useState(false);
@@ -39,6 +40,7 @@ export default function Rad() {
     api.cycHrAtPower().then(setHrp).catch(soft);
     api.cycEfficiency().then(setEff).catch(soft);
     api.cycZones().then(setZones).catch(soft);
+    api.cycWkgHr().then(setWkgHr).catch(soft);
     api.cycWorlds().then(setWorlds).catch(soft);
   }, []);
 
@@ -156,6 +158,14 @@ export default function Rad() {
           </> : <Loading />}
         </Card>
       </div>
+
+      <Card>
+        <CardTitle title="Puls je W/kg" sub="Welcher Puls bei welcher Leistung pro kg? Hintergrund = Leistungszonen (aktuelle eFTP), gestrichelt = Puls-Zonen — tiefer bzw. weiter rechts = fitter" />
+        {wkgHr ? <>
+          <WkgHrChart data={wkgHr} />
+          {wkgHr.caveat && <p className="mt-2 text-[11px] text-muted">{wkgHr.caveat}</p>}
+        </> : <Loading />}
+      </Card>
 
       <Card>
         <CardTitle title="Zeit in Leistungszonen" sub="Minuten je Woche, letzte 12 Wochen — Zonen nach Coggan, bezogen auf die eFTP am Fahrttag" />

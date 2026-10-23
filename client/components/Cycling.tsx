@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { CycCurve, CycRide, CycZone, CycZones } from "@/lib/api";
+import type { CycCurve, CycRide, CycWkgHr, CycZone, CycZones } from "@/lib/api";
 import { de, de0, dm } from "@/lib/format";
 
 // Leistungszonen Z1..Z7: Set per dataviz-Validator geprüft (CVD-ΔE ≥ 10, Normalsicht ≥ 16,
@@ -74,6 +74,70 @@ export function LogCurve({ lines, dots, height = 220 }: {
       <div className="ml-10 mt-2 flex flex-wrap gap-x-3 gap-y-1 sm:ml-14">
         {ls.map((l) => <span key={l.label} className="flex items-center gap-1 text-[10px] text-muted"><span className="inline-block h-0 w-3.5 border-t-2" style={{ borderColor: l.color, borderStyle: l.dash ? "dashed" : "solid" }} />{l.label}</span>)}
         {dots && dp.length > 0 && <span className="flex items-center gap-1 text-[10px] text-muted"><span className="inline-block h-2 w-2 rounded-full" style={{ background: dots.color }} />{dots.label}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---- Puls über W/kg: Leistungszonen als Hintergrund, Puls-Zonen als Linien ----
+export function WkgHrChart({ data, height = 240 }: { data: CycWkgHr; height?: number }) {
+  const recent = data.periods.find((p) => p.key === "recent"), previous = data.periods.find((p) => p.key === "previous");
+  const bins = data.periods.flatMap((p) => p.bins);
+  if (bins.length < 2) return <Empty height={height}>noch keine Fahrt mit Leistung und gültigem Puls</Empty>;
+  const xHi = Math.ceil(Math.max(...bins.map((b) => b.wkg + data.bin / 2), (data.wkg_ftp ?? 0) * 1.1) * 2) / 2;
+  const yLo = Math.floor((Math.min(...bins.map((b) => b.hr_lo)) - 5) / 10) * 10, yHi = Math.ceil((Math.max(...bins.map((b) => b.hr_hi)) + 5) / 10) * 10;
+  const x = (w: number) => (w / xHi) * 100, y = (h: number) => 100 - ((h - yLo) / (yHi - yLo || 1)) * 100;
+  const line = (bs: CycWkgHr["periods"][number]["bins"]) => bs.map((b, k) => `${k ? "L" : "M"}${x(b.wkg).toFixed(2)} ${y(b.hr).toFixed(2)}`).join(" ");
+  const band = (bs: CycWkgHr["periods"][number]["bins"]) =>
+    `${bs.map((b, k) => `${k ? "L" : "M"}${x(b.wkg).toFixed(2)} ${y(b.hr_hi).toFixed(2)}`).join(" ")} ${[...bs].reverse().map((b) => `L${x(b.wkg).toFixed(2)} ${y(b.hr_lo).toFixed(2)}`).join(" ")} Z`;
+  const hrLines = data.hr_zones.map((z) => z.lo_bpm).filter((b) => b > yLo && b < yHi);
+  const xTicks = Array.from({ length: Math.round(xHi / 0.5) + 1 }, (_, i) => i * 0.5);
+  return (
+    <div>
+      <div className="flex" style={{ height }}>
+        <div className="flex w-10 shrink-0 flex-col justify-between pr-2 text-right text-[10px] leading-none text-muted sm:w-14">
+          {[yHi, (yHi + yLo) / 2, yLo].map((t, k) => <span key={k}>{de0(t)} bpm</span>)}
+        </div>
+        <div className="relative min-w-0 flex-1">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }} aria-hidden>
+            {data.power_zones.map((z) => z.lo_wkg < xHi && (
+              <rect key={z.zone} x={x(z.lo_wkg)} width={x(Math.min(z.hi_wkg ?? xHi, xHi)) - x(z.lo_wkg)} y="0" height="100" fill={powerZoneColor(z.zone)} opacity="0.1">
+                <title>{`Z${z.zone} ${z.name}`}</title>
+              </rect>
+            ))}
+            {hrLines.map((b) => <line key={b} x1="0" x2="100" y1={y(b)} y2={y(b)} stroke="var(--color-muted)" strokeWidth="0.6" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />)}
+            {data.wkg_ftp != null && data.wkg_ftp < xHi && <line x1={x(data.wkg_ftp)} x2={x(data.wkg_ftp)} y1="0" y2="100" stroke="var(--color-ink)" strokeWidth="1" strokeDasharray="1 2" vectorEffect="non-scaling-stroke" />}
+            {previous && previous.bins.length > 1 && <path d={line(previous.bins)} fill="none" stroke="var(--color-accent-2)" strokeWidth="1.6" strokeDasharray="4 3" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+            {recent && recent.bins.length > 1 && <>
+              <path d={band(recent.bins)} fill="var(--color-accent)" opacity="0.15" />
+              <path d={line(recent.bins)} fill="none" stroke="var(--color-accent)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            </>}
+          </svg>
+          {data.hr_zones.filter((z) => z.lo_bpm > yLo && z.lo_bpm < yHi).map((z) => (
+            <span key={z.zone} className="absolute right-1 -translate-y-full text-[9px] leading-none text-muted" style={{ top: `${y(z.lo_bpm)}%` }}>Puls {z.zone} ab {z.lo_bpm}</span>
+          ))}
+          {data.wkg_ftp != null && data.wkg_ftp < xHi && <span className="absolute top-0 -translate-x-1/2 rounded bg-surface px-1 text-[9px] leading-tight text-ink" style={{ left: `${x(data.wkg_ftp)}%` }}>FTP {de(data.wkg_ftp, 2)}</span>}
+          {recent?.bins.map((b) => (
+            <span key={b.wkg} title={`${de(b.wkg - data.bin / 2, 2)}–${de(b.wkg + data.bin / 2, 2)} W/kg: Median ${de0(b.hr)} bpm (${de0(b.hr_lo)}–${de0(b.hr_hi)}) · ${fmtMin(b.seconds)}`}
+              className="absolute grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center" style={{ left: `${x(b.wkg)}%`, top: `${y(b.hr)}%` }}>
+              <span className="h-1.5 w-1.5 rounded-full ring-2 ring-surface" style={{ background: "var(--color-accent)" }} />
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="relative ml-10 mt-1 h-3 text-[10px] text-muted sm:ml-14">
+        {xTicks.map((t, k) => <span key={t} className={`absolute whitespace-nowrap ${t % 1 ? "hidden sm:block" : ""}`} style={{ left: `${x(t)}%`, transform: k === 0 ? "none" : k === xTicks.length - 1 ? "translateX(-100%)" : "translateX(-50%)" }}>{de(t, 1)}</span>)}
+      </div>
+      <p className="mt-0.5 text-right text-[10px] text-muted">Leistung in W/kg</p>
+      <div className="ml-10 mt-2 flex flex-wrap gap-x-3 gap-y-1 sm:ml-14">
+        {recent && <span className="flex items-center gap-1 text-[10px] text-muted"><span className="inline-block h-0 w-3.5 border-t-2" style={{ borderColor: "var(--color-accent)" }} />{recent.label} · {recent.rides} {recent.rides === 1 ? "Fahrt" : "Fahrten"}</span>}
+        {previous && <span className="flex items-center gap-1 text-[10px] text-muted"><span className="inline-block h-0 w-3.5 border-t-2 border-dashed" style={{ borderColor: "var(--color-accent-2)" }} />{previous.label} · {previous.rides} {previous.rides === 1 ? "Fahrt" : "Fahrten"}</span>}
+        {data.power_zones.filter((z) => z.lo_wkg < xHi).map((z) => (
+          <span key={z.zone} className="flex items-center gap-1 text-[10px] text-muted">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: powerZoneColor(z.zone), opacity: 0.45 }} />
+            Z{z.zone} {z.hi_wkg != null ? `${de(z.lo_wkg, 1)}–${de(z.hi_wkg, 1)}` : `ab ${de(z.lo_wkg, 1)}`}
+          </span>
+        ))}
       </div>
     </div>
   );

@@ -547,6 +547,14 @@ export type CycZones = {
   eftp: number | null; source: string | null; zones: CycZone[];
   weeks: { week: string; seconds: number[]; total: number; rides: number }[]; unzoned_rides: number;
 };
+export type CycWkgBin = { wkg: number; hr: number; hr_lo: number; hr_hi: number; seconds: number };
+export type CycWkgHr = {
+  bin: number; window_days: number; eftp: number | null; weight_kg: number | null; wkg_ftp: number | null; hr_max: number;
+  power_zones: { zone: number; name: string; lo_wkg: number; hi_wkg: number | null }[];
+  hr_zones: { zone: string; name: string; lo_bpm: number; hi_bpm: number }[];
+  periods: { key: "recent" | "previous"; label: string; from: string; to: string; rides: number; bins: CycWkgBin[] }[];
+  caveat?: string;
+};
 export type CycRideDetail = CycRide & {
   power_curve: { seconds: number; watts: number | null }[];
   zones: (CycZone & { seconds: number | null })[];
@@ -617,6 +625,7 @@ export const api = {
   cycEftp: (weeks = 26) => get<CycEftp>(`/metrics/cycling/eftp?weeks=${weeks}`),
   cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
   cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
+  cycWkgHr: () => get<CycWkgHr>("/metrics/cycling/wkg-hr"),
   cycZones: (weeks = 12) => get<CycZones>(`/metrics/cycling/zones?weeks=${weeks}`),
   cycRides: (limit = 20) => get<CycRide[]>(`/metrics/cycling/rides?limit=${limit}`),
   cycRide: (id: string) => get<CycRideDetail>(`/metrics/cycling/ride/${encodeURIComponent(id)}`),

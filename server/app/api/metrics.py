@@ -184,6 +184,11 @@ def cycling_efficiency() -> dict:
     return cycling.efficiency()
 
 
+@router.get("/cycling/wkg-hr")
+def cycling_wkg_hr() -> dict:
+    return cycling.wkg_hr()
+
+
 @router.get("/cycling/zones")
 def cycling_zones(weeks: int = 12) -> dict:
     return cycling.zones(weeks)
