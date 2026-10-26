@@ -94,6 +94,11 @@ TOOLS = [
         "HFmax aus dem Setting und ist nicht direkt mit dem TRIMP aus get_run_fitness_trends vergleichbar; "
         "Watt-TSS nie mit Lauflast verrechnen. Rad erhält die aerobe Basis, ersetzt aber nicht Laufökonomie "
         "und Sehnen-/Knochenbelastbarkeit."),
+    _fn("get_week_plan", "Mein Wochenplan (Kalenderwoche Mo–So, offset 0 = aktuelle, -1 = Vorwoche, 1 = nächste): "
+        "geplant vs. erledigt über Rad (Rad-Plan), Kraft (Milon OK/UK an Gym-Tagen) und Lauf, Summen, harte Einheiten "
+        "(Regel höchstens 2 Rad + Lauf), Regel-Hinweise (Beintag/6 h, Tag danach, zwei harte Tage) und je Tag die "
+        "Einheiten mit Farbe. Krankheitstage (sick) sind pausiert, kein Versäumnis. Last nie über Sportarten addieren.",
+        {"offset": {"type": "integer", "description": "Wochen relativ zur aktuellen (-52 bis 8)", "default": 0}}),
     _fn("get_run_records", "Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz "
         "(1/5/10/15/20 km = schnellstes zusammenhaengendes Fenster INNERHALB eines Laufs, nicht "
         "die Gesamtzeit) + weitere Rekorde (laengster Lauf, groesste Wochendistanz, beste aerobe "
@@ -192,6 +197,9 @@ def dispatch(name: str, args: dict):
     if name == "get_cycling_power":
         from . import rad
         return rad.power_overview()
+    if name == "get_week_plan":
+        from ..metrics import week_plan
+        return week_plan.compact(max(-52, min(8, int(args.get("offset", 0)))))
     if name == "get_run_records":
         return running.best_efforts()
     if name == "get_hero":

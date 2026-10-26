@@ -41,6 +41,8 @@ Erste Zeile genau: **Heute:** <Empfehlung in höchstens 12 Wörtern>
 - **Route:** das Verlies aus ROUTE als Vorschlag mit Name, Entfernung und Richtung.
 - **Rad-Plan:** steht RAD-PLAN HEUTE in den Fakten, nenne die geplante Einheit mit Watt bzw. Puls aus der Zeile;
   passt sie nicht zu Schlaf, Check-in oder Form, schlag eine lockerere Variante vor. Ruhetag = kurz erwähnen.
+- **Woche:** aus WOCHE BISHER ein Halbsatz zum Stand; KRAFT HEUTE mit Programm nennen (Gewichte stehen auf der
+  Wochenseite, höchstens die erste Übung zitieren); REGEL-HINWEISE und ANPASSUNG haben Vorrang vor dem Plan.
 - **Zwift:** nur wenn ZWIFT-VORSCHLAG in den Fakten steht: heute statt Lauf Zwift vorschlagen, mit Grund, Form-Zahl und
   Intensität aus der Zeile; erwähne, dass Rad Laufökonomie und Sehnenbelastbarkeit nicht ersetzt. Steht die Zeile nicht da, kein Zwift.
 Fehlen Schlafdaten, sag das in einem Halbsatz und stütze dich auf die übrigen Daten.
@@ -217,8 +219,14 @@ def _plan_lines(day: date) -> list[str]:
         line = bike_plan.briefing_line(day)
     except Exception:  # noqa: BLE001 -- kaputter Plan kürzt nur den Kontext
         log.warning("Briefing: Rad-Plan nicht lesbar", exc_info=True)
-        return []
-    return [line] if line else []
+        line = None
+    try:
+        from ..metrics import week_plan
+        week = week_plan.briefing_lines(day)
+    except Exception:  # noqa: BLE001 -- fehlende Wochenseite kürzt nur den Kontext
+        log.warning("Briefing: Wochenplan nicht lesbar", exc_info=True)
+        week = []
+    return ([line] if line else []) + week
 
 
 def _zwift_lines(w: dict | None, day: date) -> list[str]:

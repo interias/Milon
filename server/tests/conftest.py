@@ -107,3 +107,14 @@ def _no_real_walkpad_db(monkeypatch, _walkpad_engine):
     monkeypatch.setattr(walkpad, "engine", _walkpad_engine)
     monkeypatch.setattr(walkpad, "_weights", lambda: None)  # ACSM-kcal liest sonst das Gewicht aus tracker.db
     monkeypatch.setattr(settings, "walkpad_token", "")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_week_plan(request, monkeypatch):
+    """Briefing und Wochenbericht lesen die Wochenseite (viele Quellen + Wetter-Netz); außerhalb der
+    eigenen Tests nie gegen data/tracker.db oder Open-Meteo."""
+    if request.module.__name__.endswith("test_week_plan"):
+        return
+    from app.metrics import week_plan
+    monkeypatch.setattr(week_plan, "briefing_lines", lambda day: [])
+    monkeypatch.setattr(week_plan, "compact", lambda *args, **kwargs: {})

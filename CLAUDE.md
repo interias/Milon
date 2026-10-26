@@ -609,7 +609,14 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Regeln** (`apply_rules`, ersetzen auf `/woche` die Rad-Plan-Hinweise): harte Einheit + Beintraining am selben Tag → mit Zeiten „Nur X h Abstand zum Beintraining (empfohlen ≥ 6 h)“ (Robineau 2016), ohne Zeiten „mindestens 6 h Abstand, Kraft zuerst“ (Eddens 2018); Oberkörper-Gym-Tag → „Harte Einheit am Gym-Tag“; Tag nach dem Beintag; zwei harte Tage hintereinander (Vortag der Woche aus Plan/Gym-Schema); Woche: mehr als 2 harte Einheiten **Rad + Lauf zusammen**. `totals.hard_done` zählt ungeplante harte Fahrten/Läufe mit.
   - **UI:** Knopf „Planen“ auf `/woche` (diese und kommende Wochen): offene Rad-/Kraft-Einheiten ziehen & ablegen oder „verschieben auf“ (Handy), je Tag „Kraft an diesem Tag“ (kein/OK/UK); Rad-Einheiten über `PUT /bike-plan/session/{id}` (Tausch), Kraft über `/metrics/week/gym/move`. Hinweise und „hart“ am Status sofort aktualisiert. Auf 375 px ohne Überlauf.
   - **Tests** `tests/test_week_plan.py` (+5: Übersteuerung/Tausch, Plan-Label + Beintag-Hinweis, Regeln mit Zeiten/Nachbartagen, harte Läufe → Wochenhinweis, API).
-- **Etappe 3 (offen):** „Heute dran“-Kopf, Wochenbericht/Briefing beziehen sich auf die Seite.
+- **Etappe 3 (2026-10-26): Heute dran + Coach.**
+  - **`week_plan.today_focus()`** / `GET /metrics/week/today`: heutige Zeile aus `week(0)` → `status` (open/done/rest/sick), `open`/`done`-Einheiten, Regel-Hinweise, Kontext, Form und `headline` = erste Zeile des heutigen Morgenbriefings (ohne „**Heute:**“).
+  - **Anpassungen** (`adjustments`, Vorlagen, kein LLM): Gründe Schlaf < 6 h (wie Debuff „Übermüdet“), Check-in-Energie ≤ 2, Form TSB ≤ −25 → offene harte Rad-Einheit „heute lieber locker: Z2 45–60 min nach Puls … auf einen frischen Tag schieben“, ohne harte Einheit „locker bleiben“; Laufwetter-Fenster + Regenwahrscheinlichkeit < 40 % + Lauf-Variante (nicht beim Test) → „statt Rad geht auch …“. Krank → keine Anpassungen.
+  - **Briefing:** `_plan_lines` hängt `week_plan.briefing_lines(day)` an (WOCHE BISHER erledigt von geplant, KRAFT HEUTE mit Gewichten, REGEL-HINWEISE, ANPASSUNG) + Anweisung „Woche“ (Hinweise/Anpassung haben Vorrang vor dem Plan).
+  - **Wochenbericht:** Faktenzeile `WOCHENPLAN` = `week_plan.compact(0, today=Sonntag)` + Punkt „Plan“ (geplant vs. erledigt, verpasst, Hinweise; krank ≠ verpasst).
+  - **Coach-Tool + MCP `get_week_plan(offset)`** (`compact`: Summen, Hinweise, je Tag Einheiten mit Farbe/Status, ohne Gewichte/Serien; offset −52…8). MCP-Tools jetzt 38.
+  - **UI:** `TodayHero` oben auf `/woche` (Status, Briefing-Überschrift, ↻-Anpassungen, offene Einheiten, „heute schon erledigt“ aufklappbar, Schlaf/Energie/Form); Übersicht-Wochenkarte mit Zeile „Heute: …“.
+  - **Tests** `tests/test_week_plan.py` (+5). `conftest.py` ersetzt `week_plan.briefing_lines`/`compact` außerhalb von `test_week_plan` durch Leerwerte (sonst echte DB + Open-Meteo in Briefing-/Wochenbericht-Tests).
 
 
 ## Laufband / Walking-Pad (2026-10-26)

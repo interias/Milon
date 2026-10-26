@@ -645,6 +645,12 @@ export type WeekPlan = {
   hard_sets: { done: number; planned: number } | null;
   form: { date: string; tsb: number; ctl: number; atl: number } | null;
 };
+export type WeekToday = {
+  date: string; weekday: string; status: "open" | "done" | "rest" | "sick"; headline: string | null;
+  open: WeekItem[]; done: WeekItem[]; adjustments: string[]; warnings: string[];
+  context: WeekDay["context"]; form: WeekPlan["form"];
+  week: { totals: WeekPlan["totals"]; warnings: string[]; plan: WeekPlan["plan"] };
+};
 export type CycRideDetail = CycRide & {
   power_curve: { seconds: number; watts: number | null }[];
   zones: (CycZone & { seconds: number | null })[];
@@ -742,6 +748,7 @@ export const api = {
   cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
   cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
   week: (offset = 0) => get<WeekPlan>(`/metrics/week?offset=${offset}`),
+  weekToday: () => get<WeekToday>("/metrics/week/today"),
   weekGym: (day: string, program: "ok" | "uk" | null) => send<{ day: string; program: string | null }>("PUT", "/metrics/week/gym", { day, program }),
   weekGymMove: (fromDay: string, toDay: string) => send<{ from: string | null; to: string | null }>("POST", "/metrics/week/gym/move", { from_day: fromDay, to_day: toDay }),
   bikePlan: () => get<BikePlanOverview>("/bike-plan"),

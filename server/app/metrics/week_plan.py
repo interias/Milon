@@ -391,3 +391,112 @@ def _hard_sets(volume: dict | None) -> dict | None:
     done = sum(m.get("this_week") or 0 for m in muscles)
     planned = sum(m.get("planned") or 0 for m in muscles)
     return {"done": round(done, 1), "planned": round(planned, 1)} if planned else None
+
+
+# ---------------- Heute dran (Etappe 3) ----------------
+LOW_SLEEP_H = 6.0       # wie der Debuff „Übermüdet“
+LOW_ENERGY = 2          # Check-in ≤ 2 = „Erschöpft“
+TIRED_TSB = -25         # Form wie coach/rad.intensity_for_form: ≤ −25 → Z1/Ruhetag
+RUN_WEATHER_RAIN = 40   # Lauf-Variante nur bei Regenwahrscheinlichkeit < 40 %
+
+
+def _briefing_headline(day: date) -> str | None:
+    """Erste Zeile des heutigen Morgenbriefings ohne „**Heute:**“."""
+    from ..coach import briefing
+    report = briefing.report_for(day)
+    if not report or not report.content:
+        return None
+    first = report.content.strip().splitlines()[0]
+    return first.replace("**Heute:**", "").replace("**", "").strip() or None
+
+
+def adjustments(day: dict, form: dict | None) -> list[str]:
+    """Vorlagen statt LLM: harte Einheit bei Müdigkeit locker fahren, bei gutem Wetter die Lauf-Variante."""
+    ctx, out = day["context"], []
+    reasons = []
+    if ctx.get("sleep_h") is not None and ctx["sleep_h"] < LOW_SLEEP_H:
+        reasons.append(f"nur {ctx['sleep_h']:g} h Schlaf".replace(".", ","))
+    if ctx.get("energy") is not None and ctx["energy"] <= LOW_ENERGY:
+        reasons.append(f"Energie {ctx['energy']}/5")
+    if form and form.get("tsb") is not None and form["tsb"] <= TIRED_TSB:
+        reasons.append(f"Form {form['tsb']:.0f}")
+    open_items = [it for it in day["items"] if it["planned"] and it["color"] == "open"]
+    for it in open_items:
+        if it["type"] == "bike" and it.get("hard") and reasons:
+            out.append(f"{it['title']} heute lieber locker: Z2 45–60 min nach Puls ({', '.join(reasons)}); "
+                       "die harte Einheit auf einen frischen Tag schieben.")
+        weather = ctx.get("weather") or {}
+        if (it["type"] == "bike" and it.get("run_alternative") and it.get("kind") != "test" and weather.get("run")
+                and (weather.get("rain_prob") or 0) < RUN_WEATHER_RAIN):
+            run = weather["run"]
+            out.append(f"Gutes Laufwetter {run['start'][11:16]}–{run['end'][11:16]}: statt Rad geht auch "
+                       f"„{it['run_alternative']}“.")
+    if reasons and not any(it.get("hard") for it in open_items) and open_items:
+        out.append(f"Heute eher müde ({', '.join(reasons)}): locker bleiben, Puls-Deckel ernst nehmen.")
+    return out
+
+
+def today_focus(today: date | None = None) -> dict:
+    """„Heute dran“: offene und erledigte Einheiten von heute, Anpassungen, Kontext, Briefing-Überschrift."""
+    today = _today(today)
+    w = week(0, today=today)
+    day = next(d for d in w["days"] if d["date"] == today.isoformat())
+    planned = [it for it in day["items"] if it["planned"]]
+    open_items = [it for it in planned if it["color"] == "open"]
+    done = [it for it in day["items"] if it not in open_items]
+    if day["context"]["sick"]:
+        status = "sick"
+    elif not planned:
+        status = "rest"
+    elif not open_items:
+        status = "done"
+    else:
+        status = "open"
+    return {
+        "date": today.isoformat(), "weekday": day["weekday"], "status": status,
+        "headline": _safe(lambda: _briefing_headline(today), None),
+        "open": open_items, "done": done, "adjustments": [] if status == "sick" else adjustments(day, w["form"]),
+        "warnings": sorted({x for it in open_items for x in it.get("warnings") or []}),
+        "context": day["context"], "form": w["form"],
+        "week": {"totals": w["totals"], "warnings": w["warnings"], "plan": w["plan"]},
+    }
+
+
+def _item_text(it: dict) -> str:
+    if it["type"] == "bike":
+        return f"{it['title']} ({', '.join(x for x in (f'{it['duration_min']:g} min' if it.get('duration_min') else None, it.get('target')) if x)})"
+    if it["type"] == "gym":
+        return it["title"] + (f": {'; '.join(it['prescription'][:4])}" if it.get("prescription") else "")
+    return it["title"]
+
+
+def briefing_lines(day: date) -> list[str]:
+    """Faktenzeilen fürs Morgenbriefing aus der Wochenseite: Stand der Woche, Kraft heute, Regel-Hinweise."""
+    f = today_focus(day)
+    t = f["week"]["totals"]
+    lines = [f"WOCHE BISHER (erledigt bis heute von geplant Mo–So): Rad {t['bike_done_min']} von {t['bike_planned_min']} min, "
+             f"Kraft {t['gym_matched']} von {t['gym_planned']} nach Plan, harte Einheiten {t['hard_done']} von {t['hard_planned']} "
+             f"(Regel höchstens {MAX_HARD}), verpasst {t['missed']}."]
+    gym = [it for it in f["open"] if it["type"] == "gym"]
+    if gym:
+        lines.append("KRAFT HEUTE: " + _item_text(gym[0]) + ".")
+    notes = f["warnings"] + f["week"]["warnings"]
+    if notes:
+        lines.append("REGEL-HINWEISE: " + "; ".join(notes) + ".")
+    if f["adjustments"]:
+        lines.append("ANPASSUNG (aus Schlaf/Check-in/Form/Wetter): " + " ".join(f["adjustments"]))
+    return lines
+
+
+def compact(offset: int = 0, today: date | None = None) -> dict:
+    """Wochenplan für Coach/MCP: Summen, Hinweise, je Tag die Einheiten mit Status (ohne Gewichte/Serien)."""
+    w = week(offset, today=today)
+    keep = ("type", "title", "color", "status", "duration_min", "target", "hard", "warnings", "km", "minutes")
+    return {"from": w["from"], "to": w["to"], "plan": w["plan"], "totals": w["totals"], "hard_sets": w["hard_sets"],
+            "form": w["form"], "warnings": w["warnings"],
+            "days": [{"date": d["date"], "weekday": d["weekday"], "sick": d["context"]["sick"],
+                      "sleep_h": d["context"]["sleep_h"],
+                      "items": [{k: it.get(k) for k in keep if it.get(k) not in (None, [], "")} for it in d["items"]]}
+                     for d in w["days"]],
+            "hinweis": "color: green=im Soll, yellow/orange=teilweise/daneben, red=verpasst, grey=ungeplant, "
+                       "sick=Krankheitstag (pausiert, kein Versäumnis), open=offen. Last nie über Sportarten addieren."}
