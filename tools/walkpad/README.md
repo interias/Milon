@@ -1,8 +1,14 @@
 # Walking-Pad-Recorder
 
 Läuft auf dem Windows-PC, nicht in Docker, denn Docker Desktop hat kein Bluetooth. Er verbindet sich mit dem Pad
-(FTMS-Dienst `0x1826`, getestet mit Sportstech sWalk Lite) und hört nur mit (Treadmill Data `0x2ACD`). Er schreibt nie an den
-Control Point. Jede beendete Session schickt er an Milon (`POST /api/walkpad/sessions`).
+(FTMS-Dienst `0x1826`, getestet mit Sportstech sWalk Lite), liest Treadmill Data (`0x2ACD`) und schickt jede beendete
+Session an Milon (`POST /api/walkpad/sessions`).
+
+**Fernbedienung** (Milon → Seite „Laufband“): Der Recorder holt Befehle per Long-Poll bei Milon ab und schreibt sie an den
+FTMS Control Point (`0x2AD9`): Start, Pause, Stopp, Tempo 1,0–6,0 km/h. Den echten Zustand liest er aus dem Fitness Machine
+Status (`0x2ADA`). Befehle, die älter als 3 s sind, werden verworfen. Das Höchsttempo stellst du in den Einstellungen ein.
+Eine Totmannschaltung gibt es nicht: Reißt die Verbindung ab, läuft das Band im zuletzt gesetzten Tempo weiter.
+`WALKPAD_REMOTE=0` schaltet das Schreiben ganz ab.
 
 - **Ende einer Session:** Zähler-Reset am Pad, 5 min Stillstand oder 3 min ohne Verbindung. Kürzer als 2 min oder 100 m wird verworfen.
 - **Pause ohne Reset (> 5 min):** Danach beginnt eine neue Session, die nur den Teil nach der Pause zählt.

@@ -5,10 +5,10 @@ import hmac
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from .. import walkpad
+from .. import walkpad, walkpad_control
 from ..config import settings
 from ..ingest import garmin
 
@@ -17,6 +17,19 @@ router = APIRouter(prefix="/walkpad", tags=["walkpad"])
 
 class InclineInput(BaseModel):
     incline_pct: float = Field(ge=0, le=15)
+
+
+class ControlInput(BaseModel):
+    action: str = Field(pattern="^(start|pause|stop|speed|faster|slower)$")
+    kmh: float | None = Field(default=None, ge=0, le=10)
+    step: float | None = None
+    confirm: bool = False
+
+
+class ResultInput(BaseModel):
+    id: int
+    ok: bool
+    message: str = ""
 
 
 class ManualInput(BaseModel):
@@ -44,6 +57,38 @@ def post_session(background: BackgroundTasks, payload: dict[str, Any] = Body(...
     if created and session["garmin_status"] is None:
         background.add_task(garmin.upload_walkpad)
     return {"created": created, "session": session}
+
+
+# ---------------- remote control (UI ↔ server ↔ recorder) ----------------
+@router.get("/control")
+def control_state() -> dict:
+    return walkpad_control.state()
+
+
+@router.post("/control")
+def control_command(body: ControlInput) -> dict:
+    try:
+        cmd = walkpad_control.enqueue(body.action, kmh=body.kmh, step=body.step, confirm=body.confirm)
+    except walkpad_control.ControlError as e:
+        raise HTTPException(e.status, str(e)) from None
+    return {"queued": cmd, "state": walkpad_control.state()}
+
+
+@router.get("/control/next", dependencies=[Depends(recorder_token)])
+def control_next(wait: float = 20.0):
+    cmd = walkpad_control.next_command(wait)
+    return cmd if cmd is not None else Response(status_code=204)
+
+
+@router.post("/control/state", dependencies=[Depends(recorder_token)])
+def control_report(payload: dict[str, Any] = Body(...)) -> dict:
+    return walkpad_control.report_state(payload)
+
+
+@router.post("/control/result", dependencies=[Depends(recorder_token)])
+def control_result(body: ResultInput) -> dict:
+    walkpad_control.report_result(body.id, body.ok, body.message)
+    return {"ok": True}
 
 
 @router.post("/manual")

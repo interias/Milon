@@ -65,6 +65,7 @@ def _current() -> dict:
         "walkpad_stride_m": settings.walkpad_stride_m,
         "walkpad_incline_pct": settings.walkpad_incline_pct,
         "walkpad_garmin_upload": settings.walkpad_garmin_upload,
+        "walkpad_max_speed_kmh": settings.walkpad_max_speed_kmh,
         "weather_places": [item["place"] for item in weather.places()],
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
@@ -99,6 +100,7 @@ class SettingsIn(BaseModel):
     walkpad_stride_m: float | None = None
     walkpad_incline_pct: float | None = None
     walkpad_garmin_upload: bool | None = None
+    walkpad_max_speed_kmh: float | None = None
     weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
@@ -124,6 +126,8 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Schrittlänge muss zwischen 0,2 und 1,5 m liegen.")
     if body.walkpad_incline_pct is not None and not 0 <= body.walkpad_incline_pct <= 15:
         raise HTTPException(status_code=422, detail="Steigung muss zwischen 0 und 15 % liegen.")
+    if body.walkpad_max_speed_kmh is not None and not 1 <= body.walkpad_max_speed_kmh <= 6:
+        raise HTTPException(status_code=422, detail="Höchsttempo muss zwischen 1 und 6 km/h liegen.")
 
 
 @router.put("")
@@ -179,6 +183,9 @@ def update_settings(body: SettingsIn) -> dict:
     if body.walkpad_garmin_upload is not None:
         settings.walkpad_garmin_upload = body.walkpad_garmin_upload
         env_updates["WALKPAD_GARMIN_UPLOAD"] = "true" if body.walkpad_garmin_upload else "false"
+    if body.walkpad_max_speed_kmh is not None:
+        settings.walkpad_max_speed_kmh = round(body.walkpad_max_speed_kmh, 1)
+        env_updates["WALKPAD_MAX_SPEED_KMH"] = str(settings.walkpad_max_speed_kmh)
 
     if body.weather_places is not None:
         names = [name.strip() for name in body.weather_places if name.strip()]
