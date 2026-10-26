@@ -35,6 +35,8 @@ Erste Zeile genau: **Woche:** <Fazit in höchstens 12 Wörtern>
 - **Kraft:** Einheiten, Tonnage und Stärke-Index.
 - **Ernährung:** Protein und Energie mit den erfassten Tagen; Einträge belegen keine vollständige Tageserfassung.
 - **Schlaf:** Schlafzeit der Woche und bekannte Nächte.
+- **Plan:** nur wenn WOCHENPLAN vorliegt: geplant vs. erledigt (Rad-Minuten, Kraft-Einheiten, harte Einheiten),
+  verpasste Einheiten und Regel-Hinweise in höchstens zwei Sätzen; Krankheitstage (sick) nicht als verpasst werten.
 - **Rad & Form:** nur wenn AUSDAUER-/FORM-/RAD-Zeilen vorliegen: Lauf/Rad-Anteil der Last, Form-Verlauf der Woche,
   Rad-Urteile (nur bei signifikantem Urteil als Trend; Rad ersetzt Laufökonomie und Sehnenbelastbarkeit nicht). Höchstens zwei Sätze.
 **Für die kommende Woche:** Höchstens drei Vorschläge für die kommende Woche als nummerierte Liste, jeder konkret
@@ -117,6 +119,12 @@ def _week_lines(first: date, last: date) -> list[str]:
     except Exception:  # noqa: BLE001
         log.warning("Wochenbericht: Fitness-Trends nicht verfügbar", exc_info=True)
     lines += rad.week_lines(first, last)
+    try:
+        from ..metrics import week_plan
+        lines.append("WOCHENPLAN (geplant vs. erledigt, Farben siehe hinweis): "
+                     + json.dumps(week_plan.compact(0, today=last), ensure_ascii=False, default=str))
+    except Exception:  # noqa: BLE001
+        log.warning("Wochenbericht: Wochenplan nicht verfügbar", exc_info=True)
     return lines
 
 

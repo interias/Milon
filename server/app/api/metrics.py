@@ -204,6 +204,12 @@ class WeekGymMove(BaseModel):
     to_day: date
 
 
+@router.get("/week/today")
+def week_today() -> dict:
+    """Heute dran: offene/erledigte Einheiten von heute, Anpassungen, Kontext, Briefing-Überschrift."""
+    return week_plan.today_focus()
+
+
 @router.put("/week/gym")
 def week_gym(body: WeekGymInput) -> dict:
     """Kraft-Tag setzen (ok/uk) oder löschen (null); im Rad-Plan als Gym-Label, sonst eigene Übersteuerung."""

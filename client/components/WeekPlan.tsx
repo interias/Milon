@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { api, bikeZwoUrl, type WeekColor, type WeekDay, type WeekItem, type WeekPlan } from "@/lib/api";
+import { api, bikeZwoUrl, type WeekColor, type WeekDay, type WeekItem, type WeekPlan, type WeekToday } from "@/lib/api";
 import { de, de0, dm } from "@/lib/format";
 import { ExecutionLine, Warnings } from "@/components/BikePlan";
 
@@ -153,13 +153,49 @@ export function WeekLegend() {
   );
 }
 
-// Kompakte Zeile für die Übersicht.
-export function WeekLine({ data }: { data: WeekPlan }) {
-  const t = data.totals;
+// ---- Heute dran (Kopf der Wochenseite, angelehnt an TrainerRoad TrainNow) ----
+const TODAY_STATUS: Record<WeekToday["status"], string> = {
+  open: "offen", done: "alles erledigt ✓", rest: "Ruhetag", sick: "krank — Plan pausiert",
+};
+
+export function TodayHero({ data }: { data: WeekToday }) {
   return (
+    <section aria-label="Heute dran" className="mb-4 grid gap-3 rounded-lg border border-accent bg-surface p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">Heute dran <span className="font-normal text-muted">· {data.weekday} {dm(data.date)}</span></h2>
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${data.status === "done" ? "border-good text-good" : data.status === "sick" ? "border-[#5b3f8c] text-[#5b3f8c]" : "border-line text-muted"}`}>{TODAY_STATUS[data.status]}</span>
+      </div>
+      {data.headline && <p className="text-sm"><span className="text-muted">Briefing:</span> {data.headline}</p>}
+      {data.adjustments.length > 0 && (
+        <ul className="grid gap-1">{data.adjustments.map((a) => <li key={a} className="rounded border border-accent/30 bg-accent/5 px-2 py-1 text-xs">↻ {a}</li>)}</ul>
+      )}
+      {data.open.length > 0 && <div className="grid gap-1.5 md:grid-cols-2">{data.open.map((it, i) => <Item key={i} it={it} />)}</div>}
+      {data.done.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted">Heute schon erledigt ({data.done.length})</summary>
+          <div className="mt-1.5 grid gap-1.5 md:grid-cols-2">{data.done.map((it, i) => <Item key={i} it={it} />)}</div>
+        </details>
+      )}
+      <p className="text-[11px] text-muted">
+        {[data.context.sleep_h != null ? `Schlaf ${de(data.context.sleep_h, 1)} h` : null,
+          data.context.energy != null ? `Energie ${data.context.energy}/5` : null,
+          data.form ? `Form ${de0(data.form.tsb)}` : null].filter(Boolean).join(" · ") || "Noch kein Schlaf/Check-in für heute"}
+      </p>
+    </section>
+  );
+}
+
+// Kompakte Zeile für die Übersicht.
+export function WeekLine({ data, today }: { data: WeekPlan; today?: WeekToday | null }) {
+  const t = data.totals;
+  const todo = today?.open.map((it) => it.title).join(" · ");
+  return (
+    <div className="grid gap-0.5">
+    {today && <p className="text-sm"><span className="font-semibold">Heute:</span> <span className="text-muted">{today.status === "open" ? todo : TODAY_STATUS[today.status]}{today.adjustments.length ? " · ↻ Anpassung vorgeschlagen" : ""}</span></p>}
     <p className="text-sm">
       <span className="font-semibold">Diese Woche:</span>{" "}
       <span className="text-muted">Rad {de0(t.bike_done_min)}/{de0(t.bike_planned_min)} min · Kraft {t.gym_matched}/{t.gym_planned} · harte Einheiten {t.hard_done}/{t.hard_planned}{t.run_km ? ` · Lauf ${de(t.run_km, 1)} km` : ""}</span>
     </p>
+    </div>
   );
 }

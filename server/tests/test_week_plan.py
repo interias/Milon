@@ -193,3 +193,71 @@ def test_week_gym_api(db):
     moved = http.post("/metrics/week/gym/move", json={"from_day": day, "to_day": (START + timedelta(days=10)).isoformat()})
     assert moved.json() == {"from": None, "to": "uk"}
     assert http.post("/metrics/week/gym/move", json={"from_day": day, "to_day": day}).status_code == 422
+
+
+# ---------------- Etappe 3: Heute dran, Briefing, Wochenbericht, Coach ----------------
+def _day_ctx(items, sleep_h=None, energy=None, weather=None):
+    return {"items": items, "context": {"sleep_h": sleep_h, "energy": energy, "sick": False, "weather": weather}}
+
+
+HARD_OPEN = {"type": "bike", "planned": True, "color": "open", "hard": True, "kind": "hard", "title": "VO2max 4 × 4",
+             "run_alternative": "Lauf 4×4 min"}
+Z2_OPEN = {"type": "bike", "planned": True, "color": "open", "hard": False, "kind": "z2", "title": "Z2",
+           "run_alternative": "Lauf locker 60 min"}
+GOOD_WEATHER = {"rain_prob": 10, "run": {"start": "2025-06-11T07:20", "end": "2025-06-11T08:20", "clothing": "kurz"}}
+
+
+def test_adjustments_tired_and_weather():
+    tired = week_plan.adjustments(_day_ctx([HARD_OPEN], sleep_h=5.2, energy=2), {"tsb": -30})
+    assert tired == ["VO2max 4 × 4 heute lieber locker: Z2 45–60 min nach Puls (nur 5,2 h Schlaf, Energie 2/5, Form -30); "
+                     "die harte Einheit auf einen frischen Tag schieben."]
+    fresh = week_plan.adjustments(_day_ctx([Z2_OPEN], sleep_h=8, weather=GOOD_WEATHER), {"tsb": 5})
+    assert fresh == ["Gutes Laufwetter 07:20–08:20: statt Rad geht auch „Lauf locker 60 min“."]
+    rainy = dict(GOOD_WEATHER, rain_prob=70)
+    assert week_plan.adjustments(_day_ctx([Z2_OPEN], weather=rainy), None) == []
+    assert week_plan.adjustments(_day_ctx([Z2_OPEN], energy=1), None) == [
+        "Heute eher müde (Energie 1/5): locker bleiben, Puls-Deckel ernst nehmen."]
+
+
+def test_today_focus_status_and_lines(db):
+    bike_plan.import_plan(json.dumps(plan_json()).encode())
+    f = week_plan.today_focus(TODAY)                        # Mi Woche 2: Z2 offen, im Plan ohne Gym
+    assert f["status"] == "open" and [i["title"] for i in f["open"]] == ["Z2"] and f["headline"] is None
+    week_plan.set_gym(TODAY, "uk")
+    lines = week_plan.briefing_lines(TODAY)
+    assert lines[0].startswith("WOCHE BISHER (erledigt bis heute von geplant Mo–So): Rad 0 von")
+    assert lines[1].startswith("KRAFT HEUTE: Milon UK")
+    store(TODAY, "8301", power=120.0, seconds=2400)
+    with Session(db) as s:
+        s.add(Workout(external_id="w9", title="Milon UK", started_at=datetime.combine(TODAY, datetime.min.time()) + timedelta(hours=18)))
+        s.commit()
+    assert week_plan.today_focus(TODAY)["status"] == "done"
+    assert week_plan.today_focus(START + timedelta(days=12))["status"] == "open"   # Sa: harte Einheit offen
+
+
+def test_today_focus_sick_and_rest(db):
+    with Session(db) as s:
+        s.add(CheckIn(day=TODAY, sick=True, updated_at=datetime.now()))
+        s.commit()
+    f = week_plan.today_focus(TODAY)
+    assert f["status"] == "sick" and f["adjustments"] == []
+    assert week_plan.today_focus(START + timedelta(days=10))["status"] == "rest"     # Do ohne Plan und ohne Gym
+
+
+def test_compact_and_tools(db):
+    from app.coach import tools
+    from app.mcp import server as mcp_server
+    bike_plan.import_plan(json.dumps(plan_json()).encode())
+    c = week_plan.compact(0, today=TODAY)
+    assert len(c["days"]) == 7 and "totals" in c and "hinweis" in c
+    assert all("prescription" not in it and "execution" not in it for d in c["days"] for it in d["items"])
+    assert "get_week_plan" in [t["function"]["name"] for t in tools.TOOLS]
+    assert len(tools.dispatch("get_week_plan", {"offset": 99})["days"]) == 7   # auf 8 Wochen begrenzt
+    assert len(mcp_server.get_week_plan(-1)["days"]) == 7
+
+
+def test_today_api(db):
+    app = FastAPI()
+    app.include_router(metrics_api.router)
+    r = TestClient(app).get("/metrics/week/today")
+    assert r.status_code == 200 and r.json()["status"] in ("open", "done", "rest", "sick")

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type WeekPlan } from "@/lib/api";
+import { api, type WeekPlan, type WeekToday } from "@/lib/api";
 import { Kpi, Loading, ApiError, PageTitle } from "@/components/ui";
 import { Warnings } from "@/components/BikePlan";
-import { WeekDays, WeekLegend } from "@/components/WeekPlan";
+import { TodayHero, WeekDays, WeekLegend } from "@/components/WeekPlan";
 import { WeeklyReview } from "@/components/WeeklyReview";
 import { de, de0, dm } from "@/lib/format";
 
@@ -17,6 +17,8 @@ export default function Woche() {
   const [err, setErr] = useState<string | null>(null);
   const [planning, setPlanning] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [today, setToday] = useState<WeekToday | null>(null);
+  useEffect(() => { api.weekToday().then(setToday).catch(() => setToday(null)); }, [revision]);
 
   useEffect(() => {
     let alive = true;
@@ -32,6 +34,7 @@ export default function Woche() {
 
   return <>
     <PageTitle title="Mein Wochenplan" sub={sub} />
+    {today && <TodayHero data={today} />}
 
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <button type="button" onClick={() => setOffset(offset - 1)} disabled={offset <= -52} aria-label="Woche zurück" className="rounded-md border border-line px-2 py-1 text-sm">‹</button>
