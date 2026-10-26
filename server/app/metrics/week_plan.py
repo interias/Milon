@@ -14,8 +14,10 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import json
+
 import pandas as pd
-from sqlmodel import Session, select
+from sqlmodel import Field, Session, SQLModel, select
 
 from .. import bike_plan
 from ..config import settings
@@ -26,6 +28,18 @@ WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 DEFAULT_GYM = {0: "ok", 2: "uk", 4: "ok"}  # außerhalb eines Rad-Plans
 PROGRAM_TITLE = {"ok": "Milon OK", "uk": "Milon UK"}
 MAX_HARD = 2
+GYM_LABEL = {"ok": "Gym Oberkörper", "uk": "Gym Beine"}
+HARD_RUN_SHARE = 0.80   # Lauf gilt als hart ab Ø-Puls ≥ 80 % HFmax (Z3+ wie running._ZONE_DEFS)
+HARD_RIDE_IF = 0.85     # Fahrt gilt als hart ab IF 0,85 (NP/eFTP)
+LEG_GAP_H = 6.0         # harte Ausdauer und Beintraining: mindestens 6 h Abstand (Robineau 2016)
+
+
+class WeekGym(SQLModel, table=True):
+    """Kraft-Tag außerhalb eines Rad-Plans: übersteuert das Standard-Schema (program 'ok'|'uk'|'none')."""
+    __tablename__ = "week_gym"
+
+    day: date = Field(primary_key=True)
+    program: str
 
 
 def _today(today: date | None) -> date:
@@ -57,6 +71,48 @@ def _safe(fn, default):
         return default
 
 
+def _overrides(first: date, last: date) -> dict[str, str]:
+    with Session(engine) as db:
+        rows = db.exec(select(WeekGym).where(WeekGym.day >= first, WeekGym.day <= last)).all()
+    return {r.day.isoformat(): r.program for r in rows}
+
+
+def gym_program(day: date) -> str | None:
+    """Geplantes Kraftprogramm eines Tages: Rad-Plan (falls aktiv) > eigene Übersteuerung > Standard-Schema."""
+    plan = bike_plan.active_plan()
+    if plan and plan.start <= day <= plan.end:
+        weeks = json.loads(plan.weeks_json)
+        return program_of(bike_plan._gym_map(weeks, bike_plan._sessions(plan.id)).get(day.isoformat()))
+    override = _overrides(day, day).get(day.isoformat())
+    if override is not None:
+        return None if override == "none" else override
+    return DEFAULT_GYM.get(day.weekday())
+
+
+def set_gym(day: date, program: str | None) -> None:
+    """Kraft-Tag setzen/löschen: im Rad-Plan als Gym-Label, sonst als eigene Übersteuerung."""
+    if program not in ("ok", "uk", None):
+        raise ValueError("Programm muss ok, uk oder leer sein.")
+    plan = bike_plan.active_plan()
+    if plan and plan.start <= day <= plan.end:
+        bike_plan.set_gym(plan.id, day, GYM_LABEL.get(program) if program else None)
+        return
+    with Session(engine) as db:
+        row = db.get(WeekGym, day) or WeekGym(day=day, program="none")
+        row.program = program or "none"
+        db.add(row)
+        db.commit()
+
+
+def move_gym(src: date, dst: date) -> None:
+    """Kraft-Tag verschieben; liegt am Ziel schon einer, tauschen die beiden."""
+    a, b = gym_program(src), gym_program(dst)
+    if a is None:
+        raise ValueError("Am Ausgangstag ist kein Krafttraining geplant.")
+    set_gym(dst, a)
+    set_gym(src, b)
+
+
 def _workouts(first: date, last: date) -> list[dict]:
     """Hevy-Workouts der Woche mit Programm (ok/uk, falls Planübungen erkennbar)."""
     from . import strength_plan
@@ -67,7 +123,8 @@ def _workouts(first: date, last: date) -> list[dict]:
     kinds = _safe(lambda: strength_plan._classify(strength_plan._read_sets()), {})
     return [{"id": w.id, "day": w.started_at.date(), "title": w.title or "Krafttraining",
              "minutes": round((w.ended_at - w.started_at).total_seconds() / 60) if w.ended_at else None,
-             "program": kinds.get(w.id)} for w in rows if w.started_at]
+             "program": kinds.get(w.id), "start": w.started_at.isoformat(),
+             "end": (w.ended_at or w.started_at + timedelta(hours=1)).isoformat()} for w in rows if w.started_at]
 
 
 def _prescription(plans: dict, key: str) -> list[str]:
@@ -87,7 +144,7 @@ def _prescription(plans: dict, key: str) -> list[str]:
 
 def week(offset: int = 0, today: date | None = None) -> dict:
     """Kalenderwoche `offset` relativ zur aktuellen (−1 = Vorwoche, +1 = nächste)."""
-    from . import endurance, running, sleep, strength_plan
+    from . import cycling, endurance, running, sleep, strength_plan
     from .. import checkins, weather
     today = _today(today)
     first = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
@@ -108,6 +165,11 @@ def week(offset: int = 0, today: date | None = None) -> dict:
         for r in indoor[(indoor["day"] >= first) & (indoor["day"] <= last)].itertuples():
             indoor_ids[(r.day, pd.Timestamp(r.started_at))] = str(r.activity_id)
     runs = _safe(running._runs, pd.DataFrame())
+    hr_max = _safe(lambda: running._resolved_hr_max(runs)[0], 180.0)
+    intensity = _safe(lambda: {str(a): i for a, i in cycling._with_load(cycling.indoor_rides())[["activity_id", "intensity"]]
+                               .itertuples(index=False) if pd.notna(i)}, {})
+    overrides = _safe(lambda: _overrides(first - timedelta(days=1), last), {})
+    bike_all = {s["date"]: s for w in plan.get("weeks") or [] for s in w["sessions"]}
     if not runs.empty:
         runs = runs[(runs["started_at"].dt.date >= first) & (runs["started_at"].dt.date <= last)].copy()
         runs["day"] = runs["started_at"].dt.date
@@ -157,8 +219,9 @@ def week(offset: int = 0, today: date | None = None) -> dict:
                           "optional": s["optional"], "color": color, "status": s["status"],
                           "duration_min": s["duration_min"], "ratio": round(ratio, 2) if ratio else None,
                           "target": _bike_target(s), "ride": s["ride"], "run": s["run"], "execution": s["execution"],
-                          "run_alternative": s["run_alternative"], "warnings": s.get("warnings") or [],
-                          "href": "/rad/plan", "zwo": s["id"] if s["zwo"] else None})
+                          "run_alternative": s["run_alternative"], "warnings": [],
+                          "href": "/rad/plan", "zwo": s["id"] if s["zwo"] else None, "session_id": s["id"],
+                          "hard": hard and color not in ("red", "sick", "skipped")})
             if not s["optional"] or s["status"] in ("done", "run"):
                 totals["bike_planned"] += 0 if s["optional"] else 1
                 totals["bike_planned_min"] += 0 if s["optional"] else (s["duration_min"] or 0)
@@ -167,7 +230,7 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             totals["hard_done"] += hard and s["status"] in ("done", "run")
             totals["missed"] += color == "red"
         # Kraft (Soll aus Gym-Tagen)
-        program = program_of(plan_gym.get(key)) if key in in_plan else DEFAULT_GYM.get(d.weekday())
+        program = _program_for(d, plan_gym, in_plan, overrides)
         if program:
             done = [w for w in workouts if w["day"] == d]
             hit = next((w for w in done if w["program"] == program), None) or (done[0] if done else None)
@@ -176,7 +239,7 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             color = ("green" if hit["program"] in (program, None) else "yellow") if hit \
                 else ("sick" if sick and (past or is_today) else "red" if past else "open")
             items.append({"type": "gym", "planned": True, "title": PROGRAM_TITLE[program], "program": program,
-                          "label": plan_gym.get(key), "color": color, "done": hit,
+                          "label": plan_gym.get(key), "color": color, "done": hit, "day": key,
                           "prescription": _prescription(plans, program) if not past and not hit else [],
                           "href": "/kraft"})
             totals["gym_planned"] += 1
@@ -187,19 +250,26 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             rid = indoor_ids.get((d, pd.Timestamp(r.started_at)))
             totals["bike_done"] += 1
             totals["bike_done_min"] += float(r.minutes)
+            start = pd.Timestamp(r.started_at)
+            times = {"start": start.isoformat(), "end": (start + pd.Timedelta(minutes=float(r.minutes))).isoformat()}
             if rid is not None and rid == used_ride:
+                items[0].update(times)  # geplante Rad-Einheit steht immer zuerst
                 continue
-            items.append({"type": "ride", "planned": False, "title": r.title, "color": "grey",
-                          "minutes": round(float(r.minutes)), "href": f"/rad/{rid}" if rid else "/gesundheit"})
+            hard = (intensity.get(rid) or 0) >= HARD_RIDE_IF
+            items.append({"type": "ride", "planned": False, "title": r.title, "color": "grey", "hard": hard,
+                          "minutes": round(float(r.minutes)), "href": f"/rad/{rid}" if rid else "/gesundheit", **times})
         day_runs = runs[runs["day"] == d].sort_values("dur_min", ascending=False) if not runs.empty else runs
         for i, r in enumerate(day_runs.itertuples() if not day_runs.empty else []):
             totals["runs"] += 1
             totals["run_km"] += float(r.distance_km)
+            times = {"start": pd.Timestamp(r.started_at).isoformat(), "end": pd.Timestamp(r.ended_at).isoformat()}
             if used_run and i == 0:
+                items[0].update(times)
                 continue
-            items.append({"type": "run", "planned": False, "title": "Lauf", "color": "grey",
+            hard = bool(pd.notna(r.avg_hr) and r.avg_hr >= HARD_RUN_SHARE * hr_max)
+            items.append({"type": "run", "planned": False, "title": "Lauf", "color": "grey", "hard": hard,
                           "km": round(float(r.distance_km), 1), "minutes": round(float(r.dur_min)),
-                          "avg_hr": round(float(r.avg_hr)) if pd.notna(r.avg_hr) else None, "href": "/laufen"})
+                          "avg_hr": round(float(r.avg_hr)) if pd.notna(r.avg_hr) else None, "href": "/laufen", **times})
         for w in workouts:
             if w["day"] != d:
                 continue
@@ -207,7 +277,8 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             if w["id"] in used_workouts:
                 continue
             items.append({"type": "strength", "planned": False, "title": w["title"], "color": "grey",
-                          "program": w["program"], "minutes": w["minutes"], "href": "/kraft"})
+                          "program": w["program"], "minutes": w["minutes"], "href": "/kraft",
+                          "start": w["start"], "end": w["end"]})
         night = main_sleep.get(d)
         entry = entries.get(key) or {}
         out_days.append({
@@ -221,8 +292,15 @@ def week(offset: int = 0, today: date | None = None) -> dict:
     totals["bike_planned_min"] = round(totals["bike_planned_min"])
     totals["bike_done_min"] = round(totals["bike_done_min"])
     totals["run_km"] = round(totals["run_km"], 1)
-    week_warnings = [w for wk in plan.get("weeks") or [] for w in (wk.get("warnings") or [])
-                     if wk["start"] <= last.isoformat() and wk["end"] >= first.isoformat()]
+    before = first - timedelta(days=1)
+    prev = bike_all.get(before.isoformat())
+    prev_gym = {dd["date"]: dd["gym"] for wk in plan.get("weeks") or [] for dd in wk.get("days") or []}
+    prev_in_plan = bool(plan.get("plan")) and plan["plan"]["start"] <= before.isoformat() <= plan["plan"]["end"]
+    prev_leg = _program_for(before, prev_gym, {before.isoformat()} if prev_in_plan else set(), overrides) == "uk"
+    hard_count = apply_rules(out_days, prev_hard=bool(prev and prev["kind"] in bike_plan.HARD_KINDS), prev_leg=prev_leg)
+    totals["hard_done"] += sum(1 for dd in out_days for it in dd["items"] if not it["planned"] and it.get("hard"))
+    week_warnings = [f"{hard_count} harte Einheiten (Rad + Lauf, Regel: höchstens {MAX_HARD} pro Woche)"] \
+        if hard_count > MAX_HARD else []
     return {
         "offset": offset, "from": first.isoformat(), "to": last.isoformat(), "today": today.isoformat(),
         "iso_week": first.isocalendar().week,
@@ -236,6 +314,53 @@ def week(offset: int = 0, today: date | None = None) -> dict:
         "days": out_days, "totals": totals, "max_hard": MAX_HARD,
         "hard_sets": _hard_sets(volume), "form": form, "warnings": week_warnings,
     }
+
+
+def _program_for(d: date, plan_gym: dict, in_plan: set, overrides: dict) -> str | None:
+    key = d.isoformat()
+    if key in in_plan:
+        return program_of(plan_gym.get(key))
+    if key in overrides:
+        return None if overrides[key] == "none" else overrides[key]
+    return DEFAULT_GYM.get(d.weekday())
+
+
+def _gap_hours(a: dict, b: dict) -> float | None:
+    if not all(x.get(k) for x in (a, b) for k in ("start", "end")):
+        return None
+    sa, ea = datetime.fromisoformat(a["start"]), datetime.fromisoformat(a["end"])
+    sb, eb = datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"])
+    return max(0.0, (max(sa, sb) - min(ea, eb)).total_seconds() / 3600)
+
+
+def apply_rules(days: list[dict], prev_hard: bool = False, prev_leg: bool = False) -> int:
+    """Regeln über Rad, Lauf und Kraft als Hinweise an harten Einheiten; liefert die Zahl harter Einheiten.
+    Beintraining und harte Ausdauer: ≥ 6 h Abstand (Robineau 2016), sonst Kraft zuerst (Eddens 2018);
+    harte Einheit nicht am Tag nach dem Beintag; keine zwei harten Tage hintereinander; Gym-Tag = Plan-Regel."""
+    count = 0
+    for day in days:
+        hard = [it for it in day["items"] if it.get("hard")]
+        gym = [it for it in day["items"] if it["type"] in ("gym", "strength") and it["color"] not in ("sick", "red")]
+        legs = [it for it in gym if it.get("program") == "uk" or (it.get("done") or {}).get("program") == "uk"]
+        timed = [it if it["type"] == "strength" else it["done"] for it in legs
+                 if it["type"] == "strength" or it.get("done")]
+        for it in hard:
+            notes = it.setdefault("warnings", [])
+            if legs:
+                gaps = [g for g in (_gap_hours(it, leg) for leg in timed) if g is not None]
+                if not gaps:
+                    notes.append("Harte Einheit am Beintag: mindestens 6 h Abstand, Kraft zuerst")
+                elif min(gaps) < LEG_GAP_H:
+                    notes.append(f"Nur {min(gaps):.1f} h Abstand zum Beintraining (empfohlen ≥ 6 h)".replace(".", ","))
+            elif gym:
+                notes.append("Harte Einheit am Gym-Tag")
+            if prev_leg:
+                notes.append("Tag nach dem Beintag — Beine noch nicht erholt")
+            if prev_hard:
+                notes.append("Zwei harte Tage hintereinander")
+        count += len(hard)
+        prev_hard, prev_leg = bool(hard), bool(legs)
+    return count
 
 
 def _bike_target(s: dict) -> str | None:

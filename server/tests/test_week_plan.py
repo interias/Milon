@@ -117,3 +117,79 @@ def test_api(db):
         r = http.get(f"/metrics/week?offset={offset}")
         assert r.status_code == 200 and len(r.json()["days"]) == 7 and "NaN" not in r.text
     assert http.get("/metrics/week?offset=20").status_code == 422
+
+
+# ---------------- Etappe 2: Kraft-Tage planen + Regeln über alle Sportarten ----------------
+def test_gym_override_outside_plan_and_swap(db):
+    mo, tu, we = START + timedelta(days=7), START + timedelta(days=8), START + timedelta(days=9)
+    week_plan.set_gym(tu, "uk")
+    assert week_plan.gym_program(tu) == "uk"
+    week_plan.move_gym(mo, we)                       # Mo OK → Mi (dort UK) = Tausch
+    assert (week_plan.gym_program(mo), week_plan.gym_program(we)) == ("uk", "ok")
+    week_plan.set_gym(START + timedelta(days=11), None)  # Fr ausdrücklich ohne Kraft
+    assert week_plan.gym_program(START + timedelta(days=11)) is None
+    titles = [[i["title"] for i in d["items"]] for d in _week()["days"]]
+    assert titles[0] == ["Milon UK"] and titles[1] == ["Milon UK"] and titles[4] == []
+    with pytest.raises(ValueError, match="kein Krafttraining"):
+        week_plan.move_gym(START + timedelta(days=12), mo)
+
+
+def test_gym_inside_plan_writes_plan_label(db):
+    bike_plan.import_plan(json.dumps(plan_json()).encode())
+    week_plan.set_gym(START + timedelta(days=12), "uk")  # Sa Woche 2 = harte Einheit, liegt noch vor uns
+    di = _day(_week(), START + timedelta(days=12))
+    assert ("gym", "Milon UK") in [(i["type"], i["title"]) for i in di["items"]]
+    bike = next(i for i in di["items"] if i["type"] == "bike")
+    assert bike["hard"] and bike["warnings"] == ["Harte Einheit am Beintag: mindestens 6 h Abstand, Kraft zuerst"]
+
+
+def _it(kind, *, hard=False, program=None, start=None, minutes=60, color="open", done=None):
+    out = {"type": kind, "planned": kind in ("bike", "gym"), "hard": hard, "program": program, "color": color, "done": done}
+    if start:
+        s = datetime(2025, 6, 2, *start)
+        out.update(start=s.isoformat(), end=(s + timedelta(minutes=minutes)).isoformat())
+    return out
+
+
+def test_rules_gap_order_and_neighbours():
+    days = [
+        {"items": [_it("ride", hard=True, start=(8, 0)), _it("strength", program="uk", start=(11, 0))]},   # 2 h Abstand
+        {"items": [_it("run", hard=True, start=(7, 0)), _it("strength", program="uk", start=(18, 0))]},    # 10 h
+        {"items": [_it("bike", hard=True)]},                                                              # Tag nach Bein
+        {"items": [_it("bike", hard=True), _it("gym", program="ok")]},                                   # hart+hart, Gym
+    ]
+    count = week_plan.apply_rules(days)
+    assert count == 4
+    assert days[0]["items"][0]["warnings"] == ["Nur 2,0 h Abstand zum Beintraining (empfohlen ≥ 6 h)"]
+    assert days[1]["items"][0]["warnings"] == ["Tag nach dem Beintag — Beine noch nicht erholt", "Zwei harte Tage hintereinander"]
+    assert days[2]["items"][0]["warnings"] == ["Tag nach dem Beintag — Beine noch nicht erholt", "Zwei harte Tage hintereinander"]
+    assert days[3]["items"][0]["warnings"] == ["Harte Einheit am Gym-Tag", "Zwei harte Tage hintereinander"]
+
+
+def test_hard_runs_count_in_week_warning(db, monkeypatch):
+    monkeypatch.setattr(running.settings, "run_hr_max", 180.0)
+    with Session(db) as s:
+        for i in range(3):                           # drei harte Läufe (Ø 150 ≥ 144 = 80 % von 180)
+            day = START + timedelta(days=7 + 2 * i)
+            s.add(ExerciseSession(source="health_connect", external_id=f"hr{i}", exercise_type=running.RUN,
+                                  started_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=7),
+                                  ended_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=7, minutes=40),
+                                  distance_km=8.0, avg_hr=150))
+        s.commit()
+    w = _week()
+    assert w["totals"]["hard_done"] == 3
+    assert w["warnings"] == ["3 harte Einheiten (Rad + Lauf, Regel: höchstens 2 pro Woche)"]
+    run = next(i for i in _day(w, START + timedelta(days=9))["items"] if i["type"] == "run")
+    assert run["hard"] and "Harte Einheit am Beintag: mindestens 6 h Abstand, Kraft zuerst" in run["warnings"]
+
+
+def test_week_gym_api(db):
+    app = FastAPI()
+    app.include_router(metrics_api.router)
+    http = TestClient(app)
+    day = (START + timedelta(days=8)).isoformat()
+    assert http.put("/metrics/week/gym", json={"day": day, "program": "uk"}).json() == {"day": day, "program": "uk"}
+    assert http.put("/metrics/week/gym", json={"day": day, "program": "beine"}).status_code == 422
+    moved = http.post("/metrics/week/gym/move", json={"from_day": day, "to_day": (START + timedelta(days=10)).isoformat()})
+    assert moved.json() == {"from": None, "to": "uk"}
+    assert http.post("/metrics/week/gym/move", json={"from_day": day, "to_day": day}).status_code == 422
