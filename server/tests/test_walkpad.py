@@ -43,6 +43,7 @@ def db(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "walkpad_stride_m", 0.65)
     monkeypatch.setattr(settings, "walkpad_incline_pct", 0.0)
     monkeypatch.setattr(settings, "walkpad_garmin_upload", True)
+    monkeypatch.setattr(walkpad, "_weights", lambda: pd.Series(dtype=float))  # no weight → pad kcal only
     yield engine
     engine.dispose()
 
@@ -243,3 +244,44 @@ def test_hero_counts_pad_minutes_as_everyday_and_drops_mirror(db, monkeypatch, t
         ses.commit()
     minutes = hero._other_minutes()
     assert minutes[date(2026, 10, 20)] == pytest.approx(30 + 20, abs=0.5)
+
+
+def test_acsm_energy_incline_share():
+    e = walkpad.energy(3033, 52 * 60, 6, 80)  # 3.5 km/h, 6 %, 80 kg
+    flat = walkpad.energy(3033, 52 * 60, 0, 80)
+    assert e["kcal_flat"] == flat["kcal"] and flat["kcal_incline"] == 0
+    assert e["kcal"] / flat["kcal"] == pytest.approx(1.68, abs=0.01)  # +68 % gross
+    assert (e["kcal"] - 3.5 * 80 * 52 / 200) / (flat["kcal"] - 3.5 * 80 * 52 / 200) == pytest.approx(2.08, abs=0.03)
+    assert walkpad.energy(3033, 3120, 6, None)["kcal"] is None
+
+
+def test_manual_entry_then_recorder_replaces_it(db, monkeypatch):
+    monkeypatch.setattr(walkpad, "_weights", lambda: pd.Series([80.0], index=[pd.Timestamp("2026-10-01")]))
+    m = walkpad.add_manual(datetime(2026, 10, 20, 9, 0), 52, 3.5)
+    assert m["source"] == "manual" and m["incline_pct"] == 0 and m["distance_km"] == pytest.approx(3.03, abs=0.01)
+    assert m["kcal"] and m["kcal_pad"] is None
+    six = walkpad.add_manual(datetime(2026, 10, 20, 18, 0), 52, 3.5, incline_pct=6)
+    assert six["elevation_m"] == 182 and six["kcal_incline"] > 0
+    with pytest.raises(ValueError):
+        walkpad.add_manual(datetime(2026, 10, 20, 9, 30), 10, 3.5)  # overlaps
+    with Session(db) as ses:  # manual one already in Garmin
+        row = ses.get(walkpad.WalkpadSession, m["id"])
+        row.garmin_status, row.garmin_activity_id = "uploaded", "99"
+        ses.add(row)
+        ses.commit()
+    rec, created = walkpad.ingest(recorded())  # 09:00–09:30 recorder session
+    assert created and rec["garmin_status"] == "uploaded" and rec["garmin_activity_id"] == "99"
+    assert walkpad.detail(m["id"]) is None
+    assert walkpad.delete_manual(rec["id"]) is False and walkpad.delete_manual(six["id"]) is True
+
+
+def test_manual_api(db, monkeypatch):
+    from app.ingest import garmin
+    from app.main import app
+    monkeypatch.setattr(garmin, "upload_walkpad", lambda: None)
+    http = TestClient(app)
+    r = http.post("/walkpad/manual", json={"started_at": "2026-10-20T09:30:00", "minutes": 52, "speed_kmh": 3.5, "incline_pct": 6})
+    assert r.status_code == 200 and r.json()["source"] == "manual"
+    assert http.post("/walkpad/manual", json={"started_at": "2026-10-20T09:40:00", "minutes": 10, "speed_kmh": 3.5}).status_code == 422
+    assert http.delete(f"/walkpad/sessions/{r.json()['id']}").status_code == 200
+    assert http.delete("/walkpad/sessions/nope").status_code == 404

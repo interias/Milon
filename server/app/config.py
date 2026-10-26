@@ -91,10 +91,11 @@ class Settings(BaseSettings):
 
     # Walking pad under the desk (host recorder tools/walkpad → POST /walkpad/sessions, header X-Walkpad-Token).
     # Empty token = endpoint off (403). Stride turns pad distance into steps (applied on read, calibratable);
-    # incline is the manual tilt stored with each new session (the pad does not report it).
+    # incline is the manual tilt stored with each new session (the pad does not report it; the user keeps
+    # the 6 % flap up, 0 = folded away).
     walkpad_token: str = ""
     walkpad_stride_m: float = Field(default=0.65, gt=0.2, le=1.5, allow_inf_nan=False)
-    walkpad_incline_pct: float = Field(default=0.0, ge=0, le=15, allow_inf_nan=False)
+    walkpad_incline_pct: float = Field(default=6.0, ge=0, le=15, allow_inf_nan=False)
     walkpad_garmin_upload: bool = True
 
     # Maximalpuls für die Lauf-Puls-Zonen (%HFmax). Fester Wert ist robuster als die

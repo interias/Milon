@@ -630,11 +630,12 @@ export type CycWorlds = {
 
 export type WalkpadSessionRow = {
   id: string; started_at: string; date: string; ended_at: string; minutes: number; distance_km: number;
-  avg_speed_kmh: number | null; max_speed_kmh: number | null; kcal: number | null; avg_hr: number | null;
+  avg_speed_kmh: number | null; max_speed_kmh: number | null; avg_hr: number | null;
+  kcal: number | null; kcal_flat: number | null; kcal_incline: number | null; kcal_pad: number | null; weight_kg: number | null; source: "recorder" | "manual";
   incline_pct: number; elevation_m: number; steps: number; watch_steps: number | null; extra_steps: number;
   steps_provisional: boolean; garmin_status: string | null; garmin_activity_id: string | null;
 };
-export type WalkpadTotals = { sessions: number; minutes: number; km: number; steps: number; extra_steps: number; kcal: number; elevation_m: number };
+export type WalkpadTotals = { sessions: number; minutes: number; km: number; steps: number; extra_steps: number; kcal: number; kcal_incline: number; kcal_pad: number; elevation_m: number };
 export type WalkpadOverview = {
   today: WalkpadTotals; week: WalkpadTotals; weeks: { week: string; minutes: number; km: number; steps: number; sessions: number }[];
   recent: WalkpadSessionRow[]; total_sessions: number; stride_m: number; incline_pct: number; garmin_upload: boolean; recorder_enabled: boolean;
@@ -673,6 +674,8 @@ export const api = {
   healthSteps: (days = 30) => get<StepsTrendPoint[]>(`/metrics/health/steps?days=${days}`),
   healthStepsWeekly: (weeks = 12) => get<StepsWeek[]>(`/metrics/health/steps-weekly?weeks=${weeks}`),
   walkpad: (weeks = 12) => get<WalkpadOverview>(`/walkpad?weeks=${weeks}`),
+  walkpadManual: (body: { started_at: string; minutes: number; speed_kmh: number; incline_pct: number }) => send<WalkpadSessionRow>("POST", "/walkpad/manual", body),
+  walkpadDelete: (id: string) => send<{ deleted: string }>("DELETE", `/walkpad/sessions/${encodeURIComponent(id)}`),
   walkpadIncline: (id: string, incline_pct: number) => put<WalkpadSessionRow>(`/walkpad/sessions/${encodeURIComponent(id)}/incline`, { incline_pct }),
   healthCycling: (weeks = 12) => get<CyclingWeek[]>(`/metrics/health/cycling?weeks=${weeks}`),
   healthCyclingRecent: (limit = 8) => get<CyclingRide[]>(`/metrics/health/cycling-recent?limit=${limit}`),

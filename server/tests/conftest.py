@@ -105,4 +105,5 @@ def _no_real_walkpad_db(monkeypatch, _walkpad_engine):
     """Jeder Garmin-Sync (gemockter Client) lädt Laufband-Walks hoch und liest Uhr-Schritte; nie aus data/tracker.db."""
     from app import walkpad
     monkeypatch.setattr(walkpad, "engine", _walkpad_engine)
+    monkeypatch.setattr(walkpad, "_weights", lambda: None)  # ACSM-kcal liest sonst das Gewicht aus tracker.db
     monkeypatch.setattr(settings, "walkpad_token", "")

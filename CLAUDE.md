@@ -615,4 +615,7 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - Duplikat → `duplicate`; Fehler bis zu 5 Versuche. Schalter `WALKPAD_GARMIN_UPLOAD`.
   - Ändert Garmins Tagesschritte nicht. Der Lauf-/Rad-Pull sieht Walking nie.
 - **Heldenreise:** Pad-Minuten zählen als Alltag (`_other_minutes`). HC-Spiegel derselben Session werden über `walkpad.windows` verworfen.
+- **Manuelle Walks** (Quelle `manual`, `POST /walkpad/manual {started_at lokal, minutes, speed_kmh, incline_pct?}`, `DELETE /walkpad/sessions/{id}` nur für manuelle): konstantes Tempo; eine überlappende Recorder-Session ersetzt sie (und übernimmt einen schon erfolgten Garmin-Upload). Überlappende manuelle Einträge → 422.
+- **Steigung:** Default **6 %** (Klappe ist beim User immer oben; „6 Grad“ meint laut Datenblatt 6 %), je Session 0/6 %.
+- **kcal = ACSM-Gehformel** VO2 = 3,5 + 0,1·v + 1,8·v·grade (v m/min) × 7-Tage-Gewicht (`cycling._weights`) × 5 kcal/l → `kcal`, `kcal_flat`, `kcal_incline` (Mehrverbrauch durch Steigung; 3,5 km/h @ 6 % ≈ +68 % brutto). Pad-kcal (FTMS, ohne Steigung) nur als `kcal_pad`. FIT-Upload nimmt die ACSM-kcal.
 - **UI:** Karte „Laufband“ auf `/gesundheit` (`components/WalkpadCard.tsx`); Einstellungen → Laufband (Schrittlänge, Steigung, Upload). Tests: `tests/test_walkpad.py` mit synthetischen FTMS-Paketen.
