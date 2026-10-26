@@ -616,6 +616,31 @@ export type BikeCheckpoints = {
   metrics?: { key: string; name: string; unit: string; better: string; target: string | null; how: string | null; derived: boolean; pace: boolean; auto: boolean;
     values: Record<string, BikeCell>; now: BikeCell; delta: number | null; verdict: "up" | "down" | "eq" | null }[];
 };
+// ---- Mein Wochenplan (/metrics/week) ----
+export type WeekColor = "green" | "yellow" | "orange" | "red" | "grey" | "open" | "skipped" | "sick";
+export type WeekItem = {
+  type: "bike" | "gym" | "ride" | "run" | "strength"; planned: boolean; title: string; color: WeekColor; href?: string;
+  kind?: string; optional?: boolean; status?: BikeSessionStatus; duration_min?: number | null; ratio?: number | null; target?: string | null;
+  ride?: BikeSession["ride"]; run?: BikeSession["run"]; execution?: BikeExecution | null; run_alternative?: string | null;
+  warnings?: string[]; zwo?: number | null; program?: "ok" | "uk" | null; label?: string | null;
+  done?: { title: string; minutes: number | null; program: string | null } | null; prescription?: string[];
+  minutes?: number | null; km?: number; avg_hr?: number | null;
+};
+export type WeekDay = {
+  date: string; weekday: string; today: boolean; past: boolean; items: WeekItem[];
+  context: { sleep_h: number | null; energy: number | null; sick: boolean;
+    weather: { temp_max: number | null; temp_min: number | null; rain_prob: number | null; label: string | null; icon: string | null;
+      run: { start: string; end: string; clothing: string | null } | null } | null };
+};
+export type WeekPlan = {
+  offset: number; from: string; to: string; today: string; iso_week: number;
+  plan: { name: string; week: number | null; phase: string | null; goal: string | null } | null;
+  days: WeekDay[]; max_hard: number; warnings: string[];
+  totals: { bike_planned_min: number; bike_planned: number; bike_done_min: number; bike_done: number; bike_matched: number;
+    gym_planned: number; gym_done: number; gym_matched: number; run_km: number; runs: number; hard_planned: number; hard_done: number; missed: number };
+  hard_sets: { done: number; planned: number } | null;
+  form: { date: string; tsb: number; ctl: number; atl: number } | null;
+};
 export type CycRideDetail = CycRide & {
   power_curve: { seconds: number; watts: number | null }[];
   zones: (CycZone & { seconds: number | null })[];
@@ -712,6 +737,7 @@ export const api = {
   cycEftp: (weeks = 26) => get<CycEftp>(`/metrics/cycling/eftp?weeks=${weeks}`),
   cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
   cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
+  week: (offset = 0) => get<WeekPlan>(`/metrics/week?offset=${offset}`),
   bikePlan: () => get<BikePlanOverview>("/bike-plan"),
   bikePlanImport: async (file: File): Promise<{ id: string; name: string; weeks: number; sessions: number }> => {
     const form = new FormData();

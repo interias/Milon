@@ -16,6 +16,7 @@ function latestSync(state: { last_sync: string | null }[]): string | null {
 
 const NAV = [
   { href: "/", label: "Übersicht" },
+  { href: "/woche", label: "Woche" },
   { href: "/koerper", label: "Körper" },
   { href: "/ernaehrung", label: "Ernährung" },
   { href: "/gesundheit", label: "Gesundheit" },
@@ -32,6 +33,7 @@ const NAV = [
 // Inline-SVG-Icons (lucide-Pfade, erben die Textfarbe via currentColor — keine Icon-Lib nötig).
 const ICON: Record<string, React.ReactNode> = {
   "/": <><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></>,
+  "/woche": <><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   "/koerper": <><circle cx="12" cy="5" r="1" /><path d="m9 20 3-6 3 6" /><path d="m6 8 6 2 6-2" /><path d="M12 10v4" /></>,
   "/ernaehrung": <><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" /></>,
   "/gesundheit": <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
