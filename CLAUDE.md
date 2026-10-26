@@ -628,6 +628,10 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - Sofort als Background-Task nach dem Ingest (`garmin.upload_walkpad`, eigener Login über `_logged_in()`), sonst in der Sync-Kategorie `walkpad`.
   - Duplikat → `duplicate`; Fehler bis zu 5 Versuche. Schalter `WALKPAD_GARMIN_UPLOAD`.
   - Ändert Garmins Tagesschritte nicht. Der Lauf-/Rad-Pull sieht Walking nie.
+- **Verbrauch (TDEE) mit Walks (2026-10-26):** Das adaptive TDEE (Zufuhr − Δ Gewicht × 7.700) enthält die Walks schon → **nie addieren**.
+  - `body._today_with_walks` (Felder in `adaptive_tdee`): `walk_kcal_avg` = Ø Walk-Aktivkcal über die 28 Kalendertage, die `tdee_avg` speisen (bis `from_date`); `tdee_base` = TDEE − Ø; `tdee_today` = Basis + Walk-kcal von heute; `intake_today`.
+  - Im Mittel unverändert, aber Walk-Tage zeigen sich sofort statt erst nach 2–4 Wochen.
+  - Anzeige in der Karte „Energiebilanz“ (Körper kompakt, Ernährung voll mit „Bilanz heute bisher“) und als Zusatz in der Coach-Snapshot-Zeile.
 - **Heldenreise:** Pad-Minuten zählen als Alltag (`_other_minutes`). HC-Spiegel derselben Session werden über `walkpad.windows` verworfen.
 - **Manuelle Walks** (Quelle `manual`, `POST /walkpad/manual {started_at lokal, minutes, speed_kmh, incline_pct?}`, `DELETE /walkpad/sessions/{id}` nur für manuelle): konstantes Tempo; eine überlappende Recorder-Session ersetzt sie (und übernimmt einen schon erfolgten Garmin-Upload). Überlappende manuelle Einträge → 422.
 - **Steigung:** Default **6 %** (Klappe ist beim User immer oben; „6 Grad“ meint laut Datenblatt 6 %), je Session 0/6 %.

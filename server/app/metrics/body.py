@@ -2,9 +2,13 @@
 Reine Funktionen über die DB (kein Web/LLM). Speisen REST + Coach + MCP."""
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import numpy as np
 import pandas as pd
 
+from ..config import settings
 from ..db import engine
 
 KCAL_PER_KG = 7700  # Energiegehalt 1 kg Körpermasse (Faustwert)
@@ -96,6 +100,35 @@ def body_fat_band(days: int = 180) -> dict:
             "window_days": 28, "minimum_days": 7, "note": note}
 
 
+def _walk_kcal() -> dict:
+    try:
+        from .. import walkpad
+        return walkpad.active_kcal_by_day()
+    except Exception:  # noqa: BLE001 -- walking pad is optional; TDEE stands without it
+        return {}
+
+
+def _today_with_walks(tdee: float, until: date, window_days: int, smooth_days: int,
+                      today: date | None = None) -> dict:
+    """Day-resolved expenditure without double counting: the adaptive TDEE already contains the walks
+    of its window (it is inferred from intake and weight), so their mean is taken out and today's
+    walks are put back — same mean, but walk days show up at once instead of weeks later."""
+    walk = _walk_kcal()
+    today = today or datetime.now(ZoneInfo(settings.timezone)).date()
+    span = window_days + smooth_days  # calendar days that feed tdee_avg at `until`
+    walk_avg = sum(v for d, v in walk.items() if until - timedelta(days=span) < d <= until) / span
+    walk_today = walk.get(today, 0.0)
+    try:
+        intake = _intake_daily()
+        eaten = intake.get(pd.Timestamp(today)) if not intake.empty else None
+    except Exception:  # noqa: BLE001 -- today's intake is optional context
+        eaten = None
+    base = tdee - walk_avg
+    return {"today": today.isoformat(), "walk_kcal_avg": round(walk_avg), "tdee_base": round(base),
+            "walk_kcal_today": round(walk_today), "tdee_today": round(base + walk_today),
+            "intake_today": round(float(eaten)) if eaten is not None and pd.notna(eaten) else None}
+
+
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
     """TDEE and intake averaged over identical calendar-dated estimates."""
     trend = tdee_trend(window_days=window_days, days=400, smooth_days=smooth_days)
@@ -124,6 +157,7 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
         "estimate_days": len(recent),
         # Coverage marker, not a physiological validity threshold.
         "provisional": len(recent) < max(1, (smooth_days + 1) // 2),
+        **_today_with_walks(tdee, date.fromisoformat(trend[-1]["date"]), window_days, smooth_days),
     }
 
 

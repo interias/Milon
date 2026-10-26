@@ -286,3 +286,18 @@ def test_manual_api(db, monkeypatch):
     assert http.post("/walkpad/manual", json={"started_at": "2026-10-20T09:40:00", "minutes": 10, "speed_kmh": 3.5}).status_code == 422
     assert http.delete(f"/walkpad/sessions/{r.json()['id']}").status_code == 200
     assert http.delete("/walkpad/sessions/nope").status_code == 404
+
+
+def test_tdee_today_takes_window_walks_out_and_today_in(monkeypatch):
+    from app.metrics import body
+    walks = {date(2026, 10, d): 210.0 for d in range(1, 15)}  # 14 walk days inside the 28-day window
+    walks[date(2026, 10, 26)] = 232.0                           # today, after the TDEE's last weight day
+    monkeypatch.setattr(body, "_walk_kcal", lambda: walks)
+    monkeypatch.setattr(body, "_intake_daily", lambda: pd.Series([1800.0], index=[pd.Timestamp("2026-10-26")]))
+    out = body._today_with_walks(3000, date(2026, 10, 21), 14, 14, today=date(2026, 10, 26))
+    assert out["walk_kcal_avg"] == 105 and out["tdee_base"] == 2895     # 14 × 210 / 28 days
+    assert out["walk_kcal_today"] == 232 and out["tdee_today"] == 3127 and out["intake_today"] == 1800
+    rest = body._today_with_walks(3000, date(2026, 10, 21), 14, 14, today=date(2026, 10, 27))
+    assert rest["tdee_today"] == 2895  # walk-free day: below the adaptive mean
+    monkeypatch.setattr(body, "_walk_kcal", lambda: {})
+    assert body._today_with_walks(3000, date(2026, 10, 21), 14, 14, today=date(2026, 10, 26))["tdee_today"] == 3000

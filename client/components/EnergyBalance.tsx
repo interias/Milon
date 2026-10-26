@@ -27,6 +27,7 @@ export function EnergyBalance({ compact = false, className = "mt-4" }: { compact
     return () => { active = false; };
   }, [details]);
   const balance = data?.deficit_per_day;
+  const walks = !!(data?.walk_kcal_avg || data?.walk_kcal_today);
   return <Card className={className}>
     <div id={compact ? undefined : "energiebilanz"} className="scroll-mt-20">
       <CardTitle title="Energiebilanz" sub={compact ? undefined : "Aus Gewicht und protokollierter Ernährung geschätzt"} />
@@ -36,6 +37,12 @@ export function EnergyBalance({ compact = false, className = "mt-4" }: { compact
           {!compact && <p><span className="text-xs text-muted">Erfasste Zufuhr Ø </span><strong>{de0(data.avg_intake)} kcal/Tag</strong></p>}
           {balance != null && <p><span className="text-xs text-muted">{balance >= 0 ? "Geschätztes Defizit" : "Geschätzter Überschuss"} </span><strong>{de0(Math.abs(balance))} kcal/Tag</strong></p>}
         </div>
+        {walks && <div className={`mt-3 border-t border-line pt-3 ${compact ? "text-sm" : ""}`}>
+          <p><span className="text-xs text-muted">Verbrauch heute inkl. Laufband </span><strong>{de0(data.tdee_today)} kcal</strong>
+            <span className="text-xs text-muted"> = Basis {de0(data.tdee_base)} + Laufband heute {de0(data.walk_kcal_today)}</span></p>
+          {!compact && data.intake_today != null && <p className="mt-1"><span className="text-xs text-muted">Bilanz heute bisher </span><strong>{de0(Math.abs((data.tdee_today ?? 0) - data.intake_today))} kcal {(data.tdee_today ?? 0) >= data.intake_today ? "Defizit" : "Überschuss"}</strong><span className="text-xs text-muted"> (gegessen {de0(data.intake_today)} kcal)</span></p>}
+          <p className="mt-1 text-xs text-muted">Laufband im Schätzfenster Ø {de0(data.walk_kcal_avg)} kcal/Tag – steckt im TDEE schon drin und wird für die Basis abgezogen, damit nichts doppelt zählt.</p>
+        </div>}
         <p className="mt-2 text-xs text-muted">{data.from_date ? `Stand ${dm(data.from_date)} · ` : ""}{data.estimate_days != null ? `${data.estimate_days} Schätztage in ${data.smooth_days ?? 14} Tagen${data.provisional ? " · vorläufig" : ""}` : "Modellschätzung, keine direkte Messung."}</p>
       </> : <p className="text-xs text-muted" role="status">{error ? "Energiebilanz konnte nicht geladen werden." : data ? data.reason ?? "Noch keine Schätzung verfügbar." : "Energiebilanz wird geladen …"}</p>}
       {compact ? <Link className="mt-3 inline-block text-xs font-semibold text-accent" href="/ernaehrung#energiebilanz">Energiebilanz unter Ernährung ansehen →</Link> : <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Energieverlauf & Details</button>}
