@@ -175,3 +175,56 @@ def test_api_token_and_flow(monkeypatch):
     assert http.get("/walkpad/control/next?wait=0", headers=h).status_code == 204
     http.post("/walkpad/control/result", json={"id": cmd["id"], "ok": True, "message": "ok"}, headers=h)
     assert http.get("/walkpad/control").json()["last_result"]["id"] == cmd["id"]
+
+
+class CountdownPad(SimPad):
+    """Like the sWalk: ignores speed while stopped, starts at 1.0 km/h after a countdown."""
+
+    def __init__(self, countdown=0.3):
+        super().__init__()
+        self.countdown, self.belt = countdown, 0.0
+
+    async def write(self, payload: bytes) -> None:
+        await super().write(payload)
+        if payload[0] == fc.OP_START:
+            asyncio.get_running_loop().call_later(self.countdown, lambda: setattr(self, "belt", 1.0))
+        if payload[0] == fc.OP_SET_SPEED and self.belt > 0:
+            self.belt = self.speed
+        if payload[0] == fc.OP_STOP_PAUSE:
+            self.belt = 0.0
+
+
+def run_live(pad, *steps):
+    """Commands with real time; ("sleep", s) entries wait between them."""
+    async def go():
+        control = fc.PadControl(pad.write, speed=lambda: pad.belt)
+        pad.control = control
+        for step in steps:
+            if step[0] == "sleep":
+                await asyncio.sleep(step[1])
+            else:
+                await control.run({**step[1], "issued_at": fc.time.time()})
+        if control.follow_up:
+            await asyncio.wait_for(control.follow_up, 3)
+    asyncio.run(go())
+
+
+def test_start_with_wished_speed_sets_it_once_the_belt_moves():
+    pad = CountdownPad()
+    run_live(pad, ("cmd", {"action": "start", "kmh": 2.0}))
+    assert pad.writes[-1] == struct.pack("<BH", 2, 200) and pad.belt == 2.0
+
+
+def test_stop_during_countdown_cancels_the_wished_speed():
+    pad = CountdownPad(countdown=0.3)
+    run_live(pad, ("cmd", {"action": "start", "kmh": 4.0}), ("sleep", 0.1), ("cmd", {"action": "stop"}), ("sleep", 0.6))
+    assert pad.writes[-1] == b"\x08\x01"
+    assert struct.pack("<BH", 2, 400) not in pad.writes  # never sped up after the stop
+
+
+def test_server_start_speed_is_clamped(monkeypatch):
+    online(0, "stopped")
+    monkeypatch.setattr(settings, "walkpad_max_speed_kmh", 4.0)
+    assert wc.enqueue("start", kmh=5.5, confirm=True)["kmh"] == 4.0
+    assert wc.enqueue("start", confirm=True)["kmh"] is None
+    assert wc.enqueue("stop", kmh=3)["kmh"] is None

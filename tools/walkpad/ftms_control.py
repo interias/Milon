@@ -2,7 +2,11 @@
 
 The pad is under a desk, so the rules are strict: commands older than MAX_AGE_S are dropped, speed is
 clamped to the pad range and the configured maximum, a missing or failed response is reported, never
-retried with a faster speed. Incline cannot be controlled (manual flap; feature bit 3 is off)."""
+retried with a faster speed. Incline cannot be controlled (manual flap; feature bit 3 is off).
+
+The sWalk ignores a speed set while stopped and always starts at 1.0 km/h after a ~3 s countdown, so
+"start at X" is a start plus a follow-up: once the belt moves, X is set. The follow-up runs on its
+own and any newer command (stop!) cancels it — a stop never waits behind the countdown."""
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +15,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 MAX_AGE_S = 3.0
+START_WAIT_S = 10.0      # countdown + spin-up; the follow-up speed is dropped after this
 RESPONSE_TIMEOUT_S = 3.0
 MIN_KMH, PAD_MAX_KMH = 1.0, 6.0
 
@@ -56,10 +61,11 @@ class PadControl:
     """Writes Control Point opcodes and waits for the indicated response (0x80, op, result)."""
 
     def __init__(self, write: Callable[[bytes], Awaitable[None]], max_kmh: float = PAD_MAX_KMH,
-                 clock: Callable[[], float] = time.time) -> None:
-        self.write, self.max_kmh, self.clock = write, max_kmh, clock
+                 clock: Callable[[], float] = time.time, speed: Callable[[], float | None] | None = None) -> None:
+        self.write, self.max_kmh, self.clock, self.speed = write, max_kmh, clock, speed
         self.has_control = False
         self._pending: tuple[int, asyncio.Future] | None = None
+        self.follow_up: asyncio.Task | None = None
 
     def on_indication(self, data: bytes) -> None:
         if len(data) >= 3 and data[0] == OP_RESPONSE and self._pending and self._pending[0] == data[1]:
@@ -85,8 +91,23 @@ class PadControl:
             self.has_control = await self._send(bytes([OP_REQUEST_CONTROL])) == 0x01
         return self.has_control
 
+    def cancel_follow_up(self) -> None:
+        if self.follow_up is not None and not self.follow_up.done():
+            self.follow_up.cancel()
+        self.follow_up = None
+
+    async def _speed_when_running(self, kmh: float) -> None:
+        """Set the wished speed as soon as the belt moves; give up after START_WAIT_S."""
+        deadline = self.clock() + START_WAIT_S
+        while self.clock() < deadline:
+            if (self.speed() or 0) > 0:
+                await self._send(encode("speed", kmh, self.max_kmh))
+                return
+            await asyncio.sleep(0.2)
+
     async def run(self, cmd: dict) -> dict:
         """Execute one command {action, kmh?, issued_at}; returns {ok, message}."""
+        self.cancel_follow_up()  # any newer command wins over a pending "start at X"
         if self.clock() - float(cmd.get("issued_at") or 0) > MAX_AGE_S:
             return {"ok": False, "message": "verworfen (älter als 3 s)"}
         try:
@@ -103,4 +124,6 @@ class PadControl:
                     result = await self._send(payload)
         except asyncio.TimeoutError:
             return {"ok": False, "message": "keine Antwort vom Pad"}
+        if result == 0x01 and cmd["action"] == "start" and cmd.get("kmh") and self.speed is not None:
+            self.follow_up = asyncio.create_task(self._speed_when_running(float(cmd["kmh"])))
         return {"ok": result == 0x01, "message": RESULTS.get(result, f"Code {result}")}

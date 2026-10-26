@@ -160,7 +160,8 @@ async def run() -> None:
                 await client.start_notify(TREADMILL_DATA, on_data)
                 poller = None
                 if remote:
-                    control = PadControl(lambda payload: client.write_gatt_char(CONTROL_POINT, payload, response=True))
+                    control = PadControl(lambda payload: client.write_gatt_char(CONTROL_POINT, payload, response=True),
+                                         speed=lambda: pad["speed_kmh"])
 
                     def on_status(_, data: bytearray) -> None:
                         update = parse_status(bytes(data))
@@ -180,6 +181,7 @@ async def run() -> None:
                         await report()
                 if poller:
                     poller.cancel()
+                    control.cancel_follow_up()
             log.info("disconnected")
         except Exception as e:  # noqa: BLE001 -- pad switched off, taken by the phone app, …
             log.info("connection failed: %s", e)

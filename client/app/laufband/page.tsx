@@ -30,6 +30,8 @@ export default function Laufband() {
   const ready = !!st?.connected;
   const status = st?.status ? STATUS[st.status] ?? st.status : "unbekannt";
   const result = st?.last_result;
+  const wished = parseFloat(kmh.replace(",", "."));
+  const startKmh = Math.min(Math.max(Number.isNaN(wished) ? 1 : wished, st?.min_kmh ?? 1), st?.max_kmh ?? 6);
 
   return <div className="pb-32">
     <PageTitle title="Laufband" sub="Fernbedienung über den Recorder am PC · Steigung nur von Hand" />
@@ -54,11 +56,12 @@ export default function Laufband() {
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         {confirmStart
-          ? <button type="button" disabled={!ready} className={`${BTN} border-accent bg-accent text-white`} onClick={() => { setConfirmStart(false); send({ action: "start", confirm: true }); }}>Band startet – wirklich?</button>
-          : <button type="button" disabled={!ready} className={BTN} onClick={() => setConfirmStart(true)}>Start</button>}
+          ? <button type="button" disabled={!ready} className={`${BTN} border-accent bg-accent text-white`} onClick={() => { setConfirmStart(false); send({ action: "start", confirm: true, kmh: startKmh }); }}>Band startet – wirklich?</button>
+          : <button type="button" disabled={!ready} className={BTN} onClick={() => setConfirmStart(true)}>Start mit {de(startKmh, 1)} km/h</button>}
         <button type="button" disabled={!ready} className={BTN} onClick={() => { setConfirmStart(false); send({ action: "pause" }); }}>Pause</button>
       </div>
       {confirmStart && <button type="button" className="mt-2 text-xs text-muted underline underline-offset-4" onClick={() => setConfirmStart(false)}>Abbrechen</button>}
+      <p className="mt-2 text-[11px] text-muted">Das Pad startet nach ~3 s Countdown mit 1,0 km/h; das Wunschtempo (Feld oben) setzt der Recorder, sobald das Band läuft.</p>
 
       {error && <p className="mt-3 text-sm text-bad">{error}</p>}
       {result && <p className={`mt-3 text-xs ${result.ok ? "text-muted" : "text-bad"}`}>Letzter Befehl: {result.ok ? "ausgeführt" : result.message}</p>}

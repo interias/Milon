@@ -83,8 +83,12 @@ def enqueue(action: str, kmh: float | None = None, step: float | None = None, co
         if kmh is None:
             raise ControlError("Tempo fehlt.", 422)
         kmh = _clamp(kmh)
-    elif action not in ("start", "pause", "stop"):
+    elif action == "start":
+        kmh = _clamp(kmh) if kmh is not None else None  # pad starts at 1.0; the recorder sets this once it runs
+    elif action not in ("pause", "stop"):
         raise ControlError("Unbekannte Aktion.", 422)
+    else:
+        kmh = None
     cmd = {"id": next(_ids), "action": action, "kmh": kmh, "issued_at": now}
     with _cond:
         if action == "stop":
@@ -93,7 +97,7 @@ def enqueue(action: str, kmh: float | None = None, step: float | None = None, co
             for old in [c for c in _queue if c["action"] == action]:
                 _queue.remove(old)  # only the newest speed/start/pause counts
         _queue.append(cmd)
-        if action == "speed":  # optimistic target so quick ±taps add up; the pad's status overwrites it
+        if kmh is not None:  # optimistic target so quick ±taps add up; the pad's status overwrites it
             _state["target_kmh"] = kmh
         _cond.notify_all()
     return cmd
