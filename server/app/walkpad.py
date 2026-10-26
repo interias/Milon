@@ -12,8 +12,10 @@ Finished sessions are uploaded to Garmin Connect as an indoor-walking FIT activi
 Garmin's daily steps, which come from wellness monitoring only).
 
 Energy: ACSM walking equation VO2 = 3.5 + 0.1·v + 1.8·v·grade (ml/kg/min, v in m/min) with the
-7-day weight, 5 kcal per litre O2 — the grade term is the extra cost of the incline. The pad's own
-kcal (FTMS expended energy, no incline) is shown only as a second value.
+7-day weight, 5 kcal per litre O2 — the grade term is the extra cost of the incline. Milon shows
+active kcal only (net, without the 3.5 resting term; user decision). The FIT upload carries the gross
+value: Garmin treats activity calories as total and subtracts resting itself, so net would be
+counted short. The pad's own kcal (FTMS expended energy, no incline) is shown only as a second value.
 Manual entries (source "manual") are replaced by a recorder session that overlaps them."""
 from __future__ import annotations
 
@@ -250,16 +252,18 @@ def _weights():
 
 
 def energy(distance_m: float, moving_s: float, incline_pct: float, weight_kg: float | None) -> dict:
-    """ACSM walking equation: gross kcal, the share caused by the incline, and the flat-ground value."""
+    """ACSM walking equation: active kcal (net), its flat-ground part and the incline's extra cost;
+    kcal_gross adds the resting term for the Garmin upload."""
     if not weight_kg or moving_s <= 0:
-        return {"kcal": None, "kcal_flat": None, "kcal_incline": None, "weight_kg": None}
+        return {"kcal": None, "kcal_flat": None, "kcal_incline": None, "kcal_gross": None, "weight_kg": None}
     minutes = moving_s / 60
     v = distance_m / minutes  # m/min
     per_ml = weight_kg * minutes / 1000 * KCAL_PER_L_O2
-    flat = (3.5 + 0.1 * v) * per_ml
+    flat = 0.1 * v * per_ml
     incline = 1.8 * v * incline_pct / 100 * per_ml
+    rest = 3.5 * per_ml
     return {"kcal": round(flat + incline), "kcal_flat": round(flat), "kcal_incline": round(incline),
-            "weight_kg": round(weight_kg, 1)}
+            "kcal_gross": round(rest + flat + incline), "weight_kg": round(weight_kg, 1)}
 
 
 def _row(r: WalkpadSession, weights=None) -> dict:
@@ -399,7 +403,7 @@ def fit_activity_bytes(row: WalkpadSession) -> bytes:
     elapsed_ms = round((row.ended_at_utc - row.started_at_utc) * 1000)
     timer_ms = round(row.moving_s * 1000)
     dist_cm = round(row.distance_m * 100)
-    kcal = round(_row(row)["kcal"] or row.kcal or 0)  # ACSM incl. incline; pad value as fallback
+    kcal = round(_row(row)["kcal_gross"] or row.kcal or 0)  # Garmin wants total kcal; pad value as fallback
     cycles = steps_of(row.distance_m) // 2  # walking/running: total_cycles counts strides (2 steps)
     avg = round((row.avg_speed_kmh or 0) / 3.6 * 1000)
     mx = round((row.max_speed_kmh or row.avg_speed_kmh or 0) / 3.6 * 1000)

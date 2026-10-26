@@ -657,7 +657,7 @@ export type CycWorlds = {
 export type WalkpadSessionRow = {
   id: string; started_at: string; date: string; ended_at: string; minutes: number; distance_km: number;
   avg_speed_kmh: number | null; max_speed_kmh: number | null; avg_hr: number | null;
-  kcal: number | null; kcal_flat: number | null; kcal_incline: number | null; kcal_pad: number | null; weight_kg: number | null; source: "recorder" | "manual";
+  kcal: number | null; kcal_flat: number | null; kcal_incline: number | null; kcal_gross: number | null; kcal_pad: number | null; weight_kg: number | null; source: "recorder" | "manual";
   incline_pct: number; elevation_m: number; steps: number; watch_steps: number | null; extra_steps: number;
   steps_provisional: boolean; garmin_status: string | null; garmin_activity_id: string | null;
 };
