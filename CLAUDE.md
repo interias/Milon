@@ -633,5 +633,7 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     - Erst Request Control (`0x00`), dann Opcode; die Antwort kommt als Indication `80 op result`. `0x05` → einmal neu anfordern, solange der Befehl frisch ist.
     - Status `0x2ADA` → running/paused/stopped/target. `WALKPAD_REMOTE=0` = nur lesen.
     - URL standardmäßig `127.0.0.1`: `localhost` kostet unter Windows mit urllib ~2 s IPv6-Versuch und reißt so die 3-s-Grenze.
+  - **Am echten Pad getestet (2026-10-26):** Befehle in ~0,1 s quittiert. Das sWalk **ignoriert ein Tempo, das im Stand gesetzt wird**, und startet nach ~3 s Countdown immer mit 1,0 km/h; Stopp bremst in ~4 s auf 0. Ein Zieltempo meldet es nicht (kein `0x05`-Status).
+    → **Start mit Wunschtempo:** `start` nimmt `kmh` mit (begrenzt). Der Recorder setzt es per Folgeaufgabe, sobald das Band läuft (max. 10 s); jeder neuere Befehl (Stopp) bricht sie ab.
   - **UI** `/laufband` (Nav nach Gesundheit): Tempo groß, ±0,1/±0,5, Tempo setzen, Start zweistufig, Pause, großer STOPP fest unten. Tests `tests/test_walkpad_control.py` mit simuliertem FTMS-Pad.
 - **UI:** Karte „Laufband“ auf `/gesundheit` (`components/WalkpadCard.tsx`); Einstellungen → Laufband (Schrittlänge, Steigung, Upload). Tests: `tests/test_walkpad.py` mit synthetischen FTMS-Paketen.
