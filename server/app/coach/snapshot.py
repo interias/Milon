@@ -81,7 +81,10 @@ def snapshot_text() -> str:
         f"Adaptives TDEE ~{t.get('tdee')} kcal (Ø-Intake {t.get('avg_intake')}, "
         f"Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}, "
         f"{t.get('estimate_days')} Schätztage in {t.get('smooth_days')} Kalendertagen"
-        + (", vorläufig" if t.get("provisional") else "") + ").",
+        + (", vorläufig" if t.get("provisional") else "") + ")."
+        + (f" Laufband (aktive kcal, im TDEE schon enthalten): Ø {t.get('walk_kcal_avg')} kcal/Tag im Schätzfenster, "
+           f"heute {t.get('walk_kcal_today')} kcal → Verbrauch heute ~{t.get('tdee_today')} kcal."
+           if t.get("walk_kcal_avg") or t.get("walk_kcal_today") else ""),
         "",
         f"LAUFEN: letzte erfasste Woche ({cur_week}) {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "

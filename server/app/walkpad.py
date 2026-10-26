@@ -336,6 +336,19 @@ def with_extra_steps(df, con):
     return df.sort_values("day").reset_index(drop=True)
 
 
+def active_kcal_by_day() -> dict[date, float]:
+    """Active (net) ACSM kcal of all walks per local day; days without a weight have none."""
+    weights = _weights()
+    with Session(engine) as db:
+        rows = list(db.exec(select(WalkpadSession)))
+    out: dict[date, float] = {}
+    for r in rows:
+        kcal = _row(r, weights)["kcal"]
+        if kcal:
+            out[r.started_at.date()] = out.get(r.started_at.date(), 0.0) + kcal
+    return out
+
+
 def minutes_by_day(con) -> dict[date, float]:
     out: dict[date, float] = {}
     for started, _, _, moving, _, _ in _rows(con):

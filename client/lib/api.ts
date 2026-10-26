@@ -184,6 +184,9 @@ export type Tdee = {
   estimate_days?: number; smooth_days?: number; provisional?: boolean;
   tdee: number | null; avg_intake?: number; weight_change_kg?: number;
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
+  // Laufband (aktive kcal): im TDEE schon enthalten → Basis ohne Walks + heutige Walks
+  today?: string; walk_kcal_avg?: number; tdee_base?: number; walk_kcal_today?: number; tdee_today?: number;
+  intake_today?: number | null;
 };
 export type RunWeekOverview = {
   week_start: string; previous_week_start: string;
