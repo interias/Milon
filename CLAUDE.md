@@ -597,3 +597,22 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Morgenbriefing:** Faktenzeile `RAD-PLAN HEUTE (Woche n, Phase): …` (`bike_plan.briefing_line`: Titel, Dauer, Puls-Band, Hauptblock „4× VO2max 4 min bei 207–218 W“, FTP, Lauf-Variante; Ruhetag ausdrücklich) + Anweisung „Rad-Plan“ in `briefing.INSTRUCTIONS`. `conftest.py` isoliert `bike_plan.engine`.
 - **Offen:** Plan-Generator (Etappe 3, Grilling vorher); gemeinsame Wochenseite für Rad/Kraft/Lauf (Plan in Arbeit).
 
+
+## Laufband / Walking-Pad (2026-10-26)
+- **Gerät:** Sportstech sWalk Lite (BLE-Name `sWalk Lite-682`, FTMS `0x1826`). Treadmill Data `0x2ACD` mit ~1 Hz, Flags `0x0584`: Tempo, Gesamtdistanz, Energie, Puls (0 = kein Kontakt), verstrichene Zeit. **Keine Schritte, keine Steigung.** Tempo 1–6 km/h. Nur eine BLE-Verbindung gleichzeitig: Solange der Recorder verbunden ist, sperrt das die Sportstech-App.
+- **Recorder `tools/walkpad/`** (Windows-Host, `bleak`, nicht in Docker): nur lesend, nie Control Point `0x2AD9`.
+  - `ftms.py` = Parser + `SessionTracker`. Die Zähler des Pads sind die Summen; verbindet er sich mitten im Walk, datiert er den Start zurück.
+  - Session-Ende: Zähler-Reset, 5 min Stillstand oder 3 min ohne Paket. Eine Pause ohne Reset ergibt eine neue Session mit Basis-Abzug. < 2 min / < 100 m wird verworfen.
+  - Spool unter `%LOCALAPPDATA%\milon-walkpad\`; `POST /api/walkpad/sessions` mit Header `X-Walkpad-Token`.
+- **Server `app/walkpad.py`**, Tabelle `walkpad_sessions`:
+  - **Token:** `WALKPAD_TOKEN` (leer = 403, falsch = 401).
+  - **Ingest:** idempotent über die Recorder-ID, Plausibilitätsprüfung (422).
+  - **Schritte** = Distanz ÷ `WALKPAD_STRIDE_M` (Default 0,65, wird beim Lesen angewendet, also auch rückwirkend). Zur Tagessumme kommt nur `max(0, Pad − Uhr im Fenster)` hinzu; die Uhr-Schritte stammen aus Garmins 15-min-Buckets (`get_steps_data`, gewichtet nach Überlappung). Der Abgleich läuft frühestens 15 min nach dem Walk und wird 24 h lang aufgefrischt; bis dahin gilt der Wert als „vorläufig“.
+  - `with_extra_steps()` wirkt in `health._steps`, `activity` (Übersicht/Heatmap) und `hero._steps`.
+  - **Steigung:** `WALKPAD_INCLINE_PCT` je neue Session, in der UI pro Session 0/6 % umschaltbar. Die Höhenmeter dienen nur der Anzeige.
+- **Garmin-Upload** (User-Entscheid): Jede Session geht als FIT-Aktivität „walking / indoor_walking“ (Encoder mit `_Writer` aus `hero_export`) per `upload_activity` hoch.
+  - Sofort als Background-Task nach dem Ingest (`garmin.upload_walkpad`, eigener Login über `_logged_in()`), sonst in der Sync-Kategorie `walkpad`.
+  - Duplikat → `duplicate`; Fehler bis zu 5 Versuche. Schalter `WALKPAD_GARMIN_UPLOAD`.
+  - Ändert Garmins Tagesschritte nicht. Der Lauf-/Rad-Pull sieht Walking nie.
+- **Heldenreise:** Pad-Minuten zählen als Alltag (`_other_minutes`). HC-Spiegel derselben Session werden über `walkpad.windows` verworfen.
+- **UI:** Karte „Laufband“ auf `/gesundheit` (`components/WalkpadCard.tsx`); Einstellungen → Laufband (Schrittlänge, Steigung, Upload). Tests: `tests/test_walkpad.py` mit synthetischen FTMS-Paketen.

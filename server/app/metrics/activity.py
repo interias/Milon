@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..config import settings
 from ..db import engine
+from .. import walkpad
 from . import endurance, running, strength
 
 RUN = 33
@@ -28,6 +29,7 @@ def overview(now: datetime | None = None) -> dict:
             con, parse_dates=["started_at"],
         )
         steps = pd.read_sql("SELECT day, steps FROM steps_daily", con, parse_dates=["day"])
+        steps = walkpad.with_extra_steps(steps, con)
 
     # Both HC and Hevy imports store naive local wall times.
     def selected(frame: pd.DataFrame, column: str, start: date, end: pd.Timestamp) -> pd.DataFrame:
@@ -113,6 +115,7 @@ def consistency(days: int = 140, step_goal: int = 10000) -> dict:
         wo = pd.read_sql("SELECT started_at FROM workouts WHERE started_at IS NOT NULL", con, parse_dates=["started_at"])
         runs = pd.read_sql(f"SELECT started_at FROM exercise_sessions WHERE exercise_type={RUN}", con, parse_dates=["started_at"])
         steps = pd.read_sql("SELECT day, steps FROM steps_daily", con, parse_dates=["day"])
+        steps = walkpad.with_extra_steps(steps, con)
 
     trained: set[date] = set()
     for df in (wo, runs):

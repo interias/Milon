@@ -292,7 +292,7 @@ def _pull_rides(api, full: bool, indoor: dict | None = None) -> dict:
 
 
 def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
-    from .. import garmin_activity, garmin_daily, garmin_indoor, garmin_weather, garmin_load
+    from .. import garmin_activity, garmin_daily, garmin_indoor, garmin_weather, garmin_load, walkpad
 
     outcomes = {}
     indoor: dict = {"items": [], "complete": False}
@@ -305,6 +305,8 @@ def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = F
         ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
         ("weather", lambda: garmin_weather.sync_weather(api, activities, full=full)),
         ("running_tolerance", lambda: garmin_load.sync_tolerance(api, full=full, force=force_daily)),
+        # Optional: upload pad walks as FIT, read watch steps inside their windows.
+        ("walkpad", lambda: walkpad.sync_garmin(api)),
     ):
         try:
             outcomes[name] = pull()
@@ -338,6 +340,23 @@ def _pull_all(api, full: bool, force_daily: bool = False) -> dict:
     return result
 
 
+@contextmanager
+def _logged_in():
+    """Garmin client from the stored session; refreshed tokens are written back afterwards."""
+    api = None
+    try:
+        tokens = _load_tokens()
+        api = _new_client()
+        with _private_library_logs():
+            api.login(tokenstore=json.dumps(tokens))
+            yield api
+    finally:
+        if api is not None:
+            tokens = {key: getattr(api.client, key, None) for key in TOKEN_KEYS}
+            if _valid_tokens(tokens):
+                _persist_tokens(tokens)
+
+
 def import_garmin(full: bool = False, force_daily: bool = False) -> dict:
     """Bounded initial/backfill sync; later pulls inspect the latest 30 running activities."""
     if not configured():
@@ -345,22 +364,28 @@ def import_garmin(full: bool = False, force_daily: bool = False) -> dict:
                 "no_route": 0, "checked": 0, "errors": 0, "history_limited": False}
     if not _import_lock.acquire(blocking=False):
         raise GarminSyncError("Ein Garmin-Import läuft bereits.")
-    api = None
     try:
         try:
-            tokens = _load_tokens()
-            api = _new_client()
-            with _private_library_logs():
-                api.login(tokenstore=json.dumps(tokens))
+            with _logged_in() as api:
                 return _pull_all(api, full, force_daily=force_daily)
         except GarminSyncError:
             raise
         except Exception:
             raise GarminSyncError("Garmin-Import fehlgeschlagen; Verbindung oder Anmeldung prüfen.") from None
-        finally:
-            if api is not None:
-                tokens = {key: getattr(api.client, key, None) for key in TOKEN_KEYS}
-                if _valid_tokens(tokens):
-                    _persist_tokens(tokens)
+    finally:
+        _import_lock.release()
+
+
+def upload_walkpad() -> dict | None:
+    """Upload a freshly recorded pad walk right away; a running sync (or the next one) handles it otherwise."""
+    from .. import walkpad
+
+    if not configured() or not settings.walkpad_garmin_upload or not _import_lock.acquire(blocking=False):
+        return None
+    try:
+        with _logged_in() as api:
+            return walkpad.sync_garmin(api)
+    except Exception:  # noqa: BLE001 -- the 15-minute sync retries; never leak payloads
+        return None
     finally:
         _import_lock.release()

@@ -88,3 +88,21 @@ def _no_real_indoor_db(monkeypatch, _indoor_engine):
     nie data/tracker.db öffnen. Tests mit eigener DB setzen garmin_indoor.engine danach selbst."""
     from app import garmin_indoor
     monkeypatch.setattr(garmin_indoor, "engine", _indoor_engine)
+
+
+@pytest.fixture(scope="session")
+def _walkpad_engine(tmp_path_factory):
+    from app import walkpad  # noqa: F401 -- registriert walkpad_sessions vor create_all
+    engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('walkpad') / 'walkpad.db'}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_walkpad_db(monkeypatch, _walkpad_engine):
+    """Jeder Garmin-Sync (gemockter Client) lädt Laufband-Walks hoch und liest Uhr-Schritte; nie aus data/tracker.db."""
+    from app import walkpad
+    monkeypatch.setattr(walkpad, "engine", _walkpad_engine)
+    monkeypatch.setattr(settings, "walkpad_token", "")

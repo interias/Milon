@@ -28,7 +28,11 @@ def _read(sql: str, **kw) -> pd.DataFrame:
 
 # ---------------- Schritte ----------------
 def _steps() -> pd.DataFrame:
+    from .. import walkpad
+
     df = _read("SELECT day, steps, source FROM steps_daily ORDER BY day", parse_dates=["day"])
+    with engine.connect() as con:
+        df = walkpad.with_extra_steps(df, con)  # pad steps the wrist missed (arms rest on the desk)
     return df.sort_values("day") if not df.empty else df
 
 

@@ -62,6 +62,9 @@ def _current() -> dict:
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
         "bike_ftp": settings.bike_ftp,
+        "walkpad_stride_m": settings.walkpad_stride_m,
+        "walkpad_incline_pct": settings.walkpad_incline_pct,
+        "walkpad_garmin_upload": settings.walkpad_garmin_upload,
         "weather_places": [item["place"] for item in weather.places()],
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
@@ -93,6 +96,9 @@ class SettingsIn(BaseModel):
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
     bike_ftp: float | None = None  # 0 = automatisch (eFTP)
+    walkpad_stride_m: float | None = None
+    walkpad_incline_pct: float | None = None
+    walkpad_garmin_upload: bool | None = None
     weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
@@ -114,6 +120,10 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Budget muss eine Zahl ≥ 0 sein (0 = kein Limit).")
     if body.bike_ftp is not None and not 0 <= body.bike_ftp <= 1000:
         raise HTTPException(status_code=422, detail="FTP muss zwischen 0 und 1000 W liegen (0 = automatisch).")
+    if body.walkpad_stride_m is not None and not 0.2 < body.walkpad_stride_m <= 1.5:
+        raise HTTPException(status_code=422, detail="Schrittlänge muss zwischen 0,2 und 1,5 m liegen.")
+    if body.walkpad_incline_pct is not None and not 0 <= body.walkpad_incline_pct <= 15:
+        raise HTTPException(status_code=422, detail="Steigung muss zwischen 0 und 15 % liegen.")
 
 
 @router.put("")
@@ -158,6 +168,17 @@ def update_settings(body: SettingsIn) -> dict:
     if body.bike_ftp is not None:
         settings.bike_ftp = body.bike_ftp
         env_updates["BIKE_FTP"] = str(body.bike_ftp)
+
+    # Laufband: Schrittlänge wirkt auf alle Walks (beim Lesen), Steigung nur auf neue Sessions.
+    if body.walkpad_stride_m is not None:
+        settings.walkpad_stride_m = body.walkpad_stride_m
+        env_updates["WALKPAD_STRIDE_M"] = str(body.walkpad_stride_m)
+    if body.walkpad_incline_pct is not None:
+        settings.walkpad_incline_pct = body.walkpad_incline_pct
+        env_updates["WALKPAD_INCLINE_PCT"] = str(body.walkpad_incline_pct)
+    if body.walkpad_garmin_upload is not None:
+        settings.walkpad_garmin_upload = body.walkpad_garmin_upload
+        env_updates["WALKPAD_GARMIN_UPLOAD"] = "true" if body.walkpad_garmin_upload else "false"
 
     if body.weather_places is not None:
         names = [name.strip() for name in body.weather_places if name.strip()]
