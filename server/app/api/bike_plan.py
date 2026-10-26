@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
@@ -21,6 +22,16 @@ class CheckpointInput(BaseModel):
     key: str = Field(min_length=1, max_length=20)
     value: float | None = None
     estimated: bool = False
+
+
+class SessionInput(BaseModel):
+    day: date | None = None
+    copy_from: int | None = None
+
+
+class GymInput(BaseModel):
+    day: date
+    label: str | None = Field(default=None, max_length=40)
 
 
 def _active():
@@ -76,6 +87,49 @@ def checkpoints() -> dict:
 def set_checkpoint(body: CheckpointInput) -> dict:
     bike_plan.set_checkpoint(_active().id, body.checkpoint, body.key, body.value, body.estimated)
     return bike_plan.checkpoints()
+
+
+@router.put("/session/{session_id}")
+def update_session(session_id: int, changes: dict[str, Any]) -> dict:
+    """Editor: beliebige Teilmenge aus day, title, kind, optional, steering, hr_min, hr_max, steps,
+    duration_min, run_alternative, note, zwift_workout. Neuer Tag auf belegtem Tag = Tausch."""
+    try:
+        bike_plan.update_session(session_id, changes)
+    except KeyError as exc:
+        raise HTTPException(404, "Einheit unbekannt") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return bike_plan.overview()
+
+
+@router.post("/session")
+def create_session(body: SessionInput) -> dict:
+    """Neue Einheit an einem freien Tag, leer (Z2-Vorlage) oder als Kopie einer bestehenden."""
+    if body.day is None:
+        raise HTTPException(422, "Tag fehlt")
+    try:
+        bike_plan.create_session(_active().id, body.day, body.copy_from)
+    except bike_plan.Conflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return bike_plan.overview()
+
+
+@router.delete("/session/{session_id}")
+def delete_session(session_id: int) -> dict:
+    if not bike_plan.delete_session(session_id):
+        raise HTTPException(404, "Einheit unbekannt")
+    return bike_plan.overview()
+
+
+@router.put("/gym")
+def set_gym(body: GymInput) -> dict:
+    try:
+        bike_plan.set_gym(_active().id, body.day, body.label)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return bike_plan.overview()
 
 
 @router.get("/session/{session_id}.zwo")

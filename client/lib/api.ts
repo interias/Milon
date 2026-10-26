@@ -29,6 +29,18 @@ async function put<T>(path: string, body?: unknown): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+// Wie put/post, aber mit der Server-Meldung (detail) als Fehlertext — für Formulare mit 409/422.
+async function send<T>(method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) {
+    const detail = await r.json().then((j) => j?.detail).catch(() => null);
+    throw new Error(typeof detail === "string" ? detail : `${path} → ${r.status}`);
+  }
+  return r.json() as Promise<T>;
+}
+
 // URL eines Fortschritts-Fotos (statisch vom Backend ausgeliefert).
 export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename}`;
 // Zwift-Workout (.zwo) einer Plan-Einheit, über den /api-Proxy.
@@ -569,12 +581,16 @@ export type BikeSession = {
   id: number; date: string; weekday: string; week: number; gym: string | null; title: string; kind: string; optional: boolean;
   steering: string | null; hr: [number | null, number | null] | null; duration_min: number | null; steps: BikeStep[];
   run_alternative: string | null; note: string | null; zwift_workout: string | null; ftp: number; zwo: boolean;
-  status: BikeSessionStatus; execution: BikeExecution | null;
+  status: BikeSessionStatus; execution: BikeExecution | null; warnings?: string[];
   ride: { activity_id: string; title: string | null; minutes: number; np: number | null; avg_power: number | null; avg_hr: number | null } | null;
   run: { minutes: number; km: number | null; avg_hr: number | null } | null;
 };
 export type BikeFtpEntry = { date: string; watts: number; source: "plan" | "ramp" | "manual"; id: string | number | null };
-export type BikeWeek = { week: number; start: string; end: string; phase: string | null; goal: string | null; current: boolean; sessions: BikeSession[] };
+export type BikeWeek = {
+  week: number; start: string; end: string; phase: string | null; goal: string | null; current: boolean; sessions: BikeSession[];
+  days?: { date: string; weekday: string; gym: string | null; hevy: string | null }[]; warnings?: string[];
+};
+export type BikeStepInput = { label: string; duration_min: number | null; power_pct: [number, number] | null; cadence: [number | null, number | null] | null };
 export type BikePlanOverview = {
   plan: { id: string; name: string; start: string; end: string; imported_at: string } | null;
   today?: string;
@@ -690,6 +706,10 @@ export const api = {
     const r = await fetch(`${BASE}/bike-plan/ftp/${id}`, { method: "DELETE" });
     if (!r.ok) throw new Error(`/bike-plan/ftp/${id} → ${r.status}`);
   },
+  bikePlanSessionUpdate: (id: number, changes: Record<string, unknown>) => send<BikePlanOverview>("PUT", `/bike-plan/session/${id}`, changes),
+  bikePlanSessionCreate: (day: string, copyFrom?: number | null) => send<BikePlanOverview>("POST", "/bike-plan/session", { day, copy_from: copyFrom ?? null }),
+  bikePlanSessionDelete: (id: number) => send<BikePlanOverview>("DELETE", `/bike-plan/session/${id}`),
+  bikePlanGym: (day: string, label: string | null) => send<BikePlanOverview>("PUT", "/bike-plan/gym", { day, label }),
   bikePlanCheckpoints: () => get<BikeCheckpoints>("/bike-plan/checkpoints"),
   bikePlanCheckpointSet: (body: { checkpoint: string; key: string; value: number | null; estimated?: boolean }) =>
     put<BikeCheckpoints>("/bike-plan/checkpoints", body),

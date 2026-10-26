@@ -39,6 +39,8 @@ Erste Zeile genau: **Heute:** <Empfehlung in höchstens 12 Wörtern>
 - **Empfehlung:** Lauf, Kraft oder Ruhe mit Intensität und Dauer; stütze sie auf Fitness-Trends, Belastung und Check-in.
 - **Laufwetter:** das Fenster ab Sonnenaufgang mit Kleidung aus LAUFWETTER übernehmen, nicht neu berechnen.
 - **Route:** das Verlies aus ROUTE als Vorschlag mit Name, Entfernung und Richtung.
+- **Rad-Plan:** steht RAD-PLAN HEUTE in den Fakten, nenne die geplante Einheit mit Watt bzw. Puls aus der Zeile;
+  passt sie nicht zu Schlaf, Check-in oder Form, schlag eine lockerere Variante vor. Ruhetag = kurz erwähnen.
 - **Zwift:** nur wenn ZWIFT-VORSCHLAG in den Fakten steht: heute statt Lauf Zwift vorschlagen, mit Grund, Form-Zahl und
   Intensität aus der Zeile; erwähne, dass Rad Laufökonomie und Sehnenbelastbarkeit nicht ersetzt. Steht die Zeile nicht da, kein Zwift.
 Fehlen Schlafdaten, sag das in einem Halbsatz und stütze dich auf die übrigen Daten.
@@ -208,6 +210,17 @@ def _context_lines(day: date) -> list[str]:
     return lines
 
 
+def _plan_lines(day: date) -> list[str]:
+    """Einheit des Tages aus dem aktiven Rad-Plan (falls einer läuft)."""
+    from .. import bike_plan
+    try:
+        line = bike_plan.briefing_line(day)
+    except Exception:  # noqa: BLE001 -- kaputter Plan kürzt nur den Kontext
+        log.warning("Briefing: Rad-Plan nicht lesbar", exc_info=True)
+        return []
+    return [line] if line else []
+
+
 def _zwift_lines(w: dict | None, day: date) -> list[str]:
     """Form-Zahl (immer, wenn bekannt) und ZWIFT-VORSCHLAG (nur bei schlechtem Laufwetter)."""
     lines = []
@@ -226,7 +239,7 @@ def _zwift_lines(w: dict | None, day: date) -> list[str]:
 def build_messages(now: datetime, night: dict | None, w: dict | None, dungeon: dict | None,
                    snap: str, context: list[str]) -> list[dict]:
     facts = [f"JETZT: {now:%Y-%m-%d %H:%M} ({settings.timezone})", _sleep_line(night, now), *context,
-             _weather_line(w), *_zwift_lines(w, now.date()), _route_line(dungeon)]
+             _weather_line(w), *_plan_lines(now.date()), *_zwift_lines(w, now.date()), _route_line(dungeon)]
     return [{"role": "system", "content": prompts.system_prompt()},
             {"role": "system", "content": f"Aktueller Datensnapshot:\n{snap}"},  # letzter System-Block = Cache-Breakpoint
             {"role": "user", "content": INSTRUCTIONS + "\n\n" + "\n".join(facts)}]

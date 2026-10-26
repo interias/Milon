@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, type BikeCheckpoints, type BikePlanOverview } from "@/lib/api";
 import { Card, CardTitle, Loading, ApiError, PageTitle } from "@/components/ui";
-import { CheckpointTable, FTP_SOURCE, SessionCard } from "@/components/BikePlan";
+import { CheckpointTable, FTP_SOURCE, SessionCard, Warnings } from "@/components/BikePlan";
+import { WeekEditor } from "@/components/BikePlanEditor";
 import { de, de0, dm } from "@/lib/format";
 
 function ImportCard({ onDone, replace }: { onDone: () => void; replace?: boolean }) {
@@ -39,6 +40,7 @@ export default function RadPlan() {
   const [err, setErr] = useState<string | null>(null);
   const [ftpInput, setFtpInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [edit, setEdit] = useState(false);
 
   const load = () => {
     api.bikePlan().then(setData).catch((e) => setErr(String(e)));
@@ -109,18 +111,30 @@ export default function RadPlan() {
     </div>
 
     <section aria-label="Wochen" className="mt-4 grid gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Wochen</h2>
+        <button type="button" onClick={() => setEdit(!edit)} aria-pressed={edit}
+          className={`rounded-md border px-3 py-1 text-xs font-semibold ${edit ? "border-accent bg-accent text-white" : "border-accent text-accent"}`}>
+          {edit ? "Fertig" : "Bearbeiten"}
+        </button>
+      </div>
+      {edit && <p className="text-[11px] text-muted">Einheiten auf einen anderen Tag ziehen (belegter Tag = tauschen), bearbeiten, löschen oder an Ruhetagen neu anlegen. Gym-Tage je Tag festlegen; Krafttrainings aus Hevy zählen für die Regeln automatisch mit.</p>}
       {weeks.map((w) => {
         const done = w.sessions.filter((s) => s.status === "done" || s.status === "run").length;
         return (
-          <details key={w.week} open={w.current} className="rounded-lg border border-line bg-surface">
+          <details key={w.week} open={w.current || undefined} className="rounded-lg border border-line bg-surface">
             <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3">
               <span className="text-base font-semibold">Woche {w.week}</span>
               {w.phase && <span className="rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">{w.phase}</span>}
               {w.current && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">aktuell</span>}
               <span className="min-w-0 flex-1 text-xs text-muted">{w.goal}</span>
               <span className="text-[11px] tabular-nums text-muted">{dm(w.start)}–{dm(w.end)} · {done}/{w.sessions.length} · {de0(w.sessions.reduce((a, s) => a + (s.duration_min ?? 0), 0))} min</span>
+              {(w.warnings?.length || w.sessions.some((s) => s.warnings?.length)) ? <span className="text-[11px] font-semibold text-warn">⚠ Regel</span> : null}
             </summary>
-            <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2 xl:grid-cols-3">{w.sessions.map((s) => <SessionCard key={s.id} s={s} />)}</div>
+            {edit ? <WeekEditor week={w} data={data} onData={setData} /> : <>
+              {w.warnings?.length ? <div className="px-3 pb-2"><Warnings items={w.warnings} /></div> : null}
+              <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2 xl:grid-cols-3">{w.sessions.map((s) => <SessionCard key={s.id} s={s} />)}</div>
+            </>}
           </details>
         );
       })}

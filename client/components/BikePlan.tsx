@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api, bikeZwoUrl, type BikeCheckpoints, type BikeExecution, type BikePlanOverview, type BikeSession, type BikeSessionStatus, type BikeStep } from "@/lib/api";
 import { de, de0, dm, dur } from "@/lib/format";
 import { powerZoneColor } from "@/components/Cycling";
@@ -73,7 +73,16 @@ export function ExecutionLine({ ex }: { ex: BikeExecution | null }) {
   );
 }
 
-export function SessionCard({ s, open = false }: { s: BikeSession; open?: boolean }) {
+export function Warnings({ items }: { items?: string[] }) {
+  if (!items?.length) return null;
+  return (
+    <ul className="grid gap-1">
+      {items.map((w) => <li key={w} className="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-[11px] font-medium text-warn">⚠ {w}</li>)}
+    </ul>
+  );
+}
+
+export function SessionCard({ s, open = false, actions }: { s: BikeSession; open?: boolean; actions?: ReactNode }) {
   return (
     <div className={`grid content-start gap-2 rounded-lg border bg-surface p-3 ${s.optional ? "border-dashed" : ""} ${s.kind === "hard" || s.kind === "test" ? "border-[color-mix(in_srgb,var(--color-bad)_35%,var(--color-line))]" : "border-line"}`}>
       <div className="flex items-start justify-between gap-2">
@@ -84,6 +93,7 @@ export function SessionCard({ s, open = false }: { s: BikeSession; open?: boolea
         </div>
         <StatusChip status={s.status} />
       </div>
+      <Warnings items={s.warnings} />
       <StepProfile steps={s.steps} />
       <details open={open}>
         <summary className="cursor-pointer text-[11px] text-muted">Schritte · Watt bei FTP {de0(s.ftp)} W</summary>
@@ -109,6 +119,7 @@ export function SessionCard({ s, open = false }: { s: BikeSession; open?: boolea
       {s.run_alternative && s.status !== "done" && s.status !== "run" && <p className="text-[11px] text-muted">Lauf-Variante: {s.run_alternative}</p>}
       {s.note && <p className="text-[11px] text-muted">{s.note}</p>}
       {s.zwo && <a href={bikeZwoUrl(s.id)} download className="justify-self-start text-[11px] font-semibold text-accent underline underline-offset-4">Zwift-Workout (.zwo)</a>}
+      {actions}
     </div>
   );
 }

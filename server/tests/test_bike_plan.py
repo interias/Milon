@@ -242,3 +242,116 @@ def test_api(db):
     assert zwo.status_code == 200 and "attachment" in zwo.headers["content-disposition"]
     assert http.get("/bike-plan/session/999999.zwo").status_code == 404
     assert http.delete(f"/bike-plan/{created.json()['id']}").json() == {"deleted": created.json()["id"]}
+
+
+# ---------------- Editor + Regeln (Etappe 2) ----------------
+def _sid(day: date) -> int:
+    return _find(_overview(), day)["id"]
+
+
+def test_move_swaps_and_gym_stays_with_the_day(db):
+    plan_id = _import()["id"]
+    bike_plan.set_gym(plan_id, START + timedelta(days=11), "Gym Oberkörper")   # Fr Woche 2
+    hard = _sid(START + timedelta(days=12))                                     # Sa: hart
+    bike_plan.update_session(hard, {"day": (START + timedelta(days=9)).isoformat()})  # auf Mi (belegt) → Tausch
+    ov = _overview()
+    assert _find(ov, START + timedelta(days=9))["title"] == "Sweet Spot 2 × 8"
+    assert _find(ov, START + timedelta(days=12))["title"] == "Z2"
+    bike_plan.update_session(hard, {"day": (START + timedelta(days=11)).isoformat()})  # auf Fr (frei, Gym)
+    fr = _find(_overview(), START + timedelta(days=11))
+    assert fr["gym"] == "Gym Oberkörper" and fr["warnings"] == ["Harte Einheit am Gym-Tag (Gym Oberkörper)"]
+    with pytest.raises(ValueError, match="außerhalb"):
+        bike_plan.update_session(hard, {"day": (START + timedelta(days=30)).isoformat()})
+
+
+def test_legacy_gym_is_materialized_before_moving(db):
+    data = plan_json()
+    data["plan"][0]["days"][0]["gym"] = "Gym Oberkörper"     # Mo Woche 1, Gym nur an der Einheit
+    plan_id = _import(data)["id"]
+    with Session(db) as s:                                  # Plan wie aus der ersten Fassung: ohne gym in den Wochen
+        plan = s.get(bike_plan.BikePlan, plan_id)
+        plan.weeks_json = json.dumps([{k: v for k, v in w.items() if k != "gym"} for w in json.loads(plan.weeks_json)])
+        s.add(plan)
+        s.commit()
+    assert _find(_overview(), START)["gym"] == "Gym Oberkörper"
+    bike_plan.update_session(_sid(START + timedelta(days=1)), {"day": START.isoformat()})  # Di (hart) ↔ Mo
+    mo = _find(_overview(), START)
+    assert mo["kind"] == "hard" and mo["gym"] == "Gym Oberkörper" and mo["warnings"]
+
+
+def test_rules_leg_day_back_to_back_and_three_hard(db):
+    plan_id = _import()["id"]
+    bike_plan.set_gym(plan_id, START, "Gym Beine")                                   # Mo Beine → Di hart
+    bike_plan.create_session(plan_id, START + timedelta(days=4), copy_from=_sid(START + timedelta(days=1)))  # Fr hart
+    bike_plan.update_session(_sid(START + timedelta(days=2)), {"kind": "hard"})       # Mi hart
+    ov = _overview()
+    di, mi = _find(ov, START + timedelta(days=1)), _find(ov, START + timedelta(days=2))
+    assert "Tag nach dem Beintag — Beine noch nicht erholt" in di["warnings"]
+    assert "Zwei harte Tage hintereinander" in mi["warnings"]
+    assert ov["weeks"][0]["warnings"] == ["3 harte Einheiten (Regel: höchstens 2 pro Woche)"]
+
+
+def test_hevy_workout_counts_as_gym_day(db):
+    from app.models import Workout
+    _import()
+    with Session(db) as s:
+        s.add(Workout(external_id="h1", title="Milon UK", started_at=datetime.combine(START, datetime.min.time()) + timedelta(hours=18)))
+        s.commit()
+    ov = _overview()
+    assert ov["weeks"][0]["days"][0]["hevy"] == "Milon UK"
+    assert "Tag nach dem Beintag — Beine noch nicht erholt" in _find(ov, START + timedelta(days=1))["warnings"]
+
+
+def test_edit_fields_steps_and_validation(db):
+    sid = _import() and _sid(START)
+    bike_plan.update_session(sid, {"title": "Tempo", "kind": "hard", "steering": "power_erg", "steps": [
+        {"label": "Einrollen", "duration_min": 10, "power_pct": [40, 50]},
+        {"label": "Tempo", "duration_min": 20, "power_pct": [76, 87], "cadence": [90, None]}]})
+    s = _find(_overview(), START)
+    assert (s["title"], s["kind"], s["duration_min"], s["steps"][1]["watts"]) == ("Tempo", "hard", 30, [152, 174])
+    for bad, msg in [({"steps": []}, "1–60"), ({"steps": [{"label": "", "duration_min": 5}]}, "Bezeichnung"),
+                     ({"steps": [{"label": "x", "power_pct": [90, 80]}]}, "≤"), ({"kind": "sprint"}, "Art"),
+                     ({"title": " "}, "Titel"), ({"hr_min": 130, "hr_max": 120, "steering": "heart_rate"}, "Puls")]:
+        with pytest.raises(ValueError, match=msg):
+            bike_plan.update_session(sid, bad)
+
+
+def test_create_copy_conflict_delete(db):
+    plan_id = _import()["id"]
+    sat = START + timedelta(days=5)
+    new = bike_plan.create_session(plan_id, sat, copy_from=_sid(START + timedelta(days=1)))
+    s = _find(_overview(), sat)
+    assert s["id"] == new and s["title"] == "Sweet Spot 2 × 8" and s["week"] == 1
+    with pytest.raises(bike_plan.Conflict):
+        bike_plan.create_session(plan_id, sat)
+    blank = bike_plan.create_session(plan_id, START + timedelta(days=6))
+    assert _find(_overview(), START + timedelta(days=6))["steering"] == "heart_rate" and blank
+    assert bike_plan.delete_session(new) and not bike_plan.delete_session(new)
+
+
+def test_briefing_line(db):
+    _import()
+    line = bike_plan.briefing_line(START + timedelta(days=1))
+    assert line.startswith("RAD-PLAN HEUTE (Woche 1, Eingewöhnung): Sweet Spot 2 × 8")
+    assert "2× Sweet Spot 8 min bei 176–184 W" in line and "FTP 200 W" in line
+    assert "nach Puls 115–125 bpm" in bike_plan.briefing_line(START)
+    assert bike_plan.briefing_line(START + timedelta(days=5)).endswith("keine Einheit (Ruhetag).")
+    assert bike_plan.briefing_line(START - timedelta(days=1)) is None
+
+
+def test_editor_api(db):
+    app = FastAPI()
+    app.include_router(bike_plan_api.router)
+    http = TestClient(app)
+    http.post("/bike-plan", files={"file": ("p.json", json.dumps(plan_json()).encode())})
+    sid = http.get("/bike-plan").json()["weeks"][0]["sessions"][0]["id"]
+    assert http.put(f"/bike-plan/session/{sid}", json={"title": "Neu"}).json()["weeks"][0]["sessions"][0]["title"] == "Neu"
+    assert http.put(f"/bike-plan/session/{sid}", json={"kind": "sprint"}).status_code == 422
+    assert http.put("/bike-plan/session/999999", json={"title": "x"}).status_code == 404
+    sat = (START + timedelta(days=5)).isoformat()
+    assert http.post("/bike-plan/session", json={"day": sat}).status_code == 200
+    assert http.post("/bike-plan/session", json={"day": sat}).status_code == 409
+    gym = http.put("/bike-plan/gym", json={"day": sat, "label": "Gym Beine"}).json()
+    assert next(d for d in gym["weeks"][0]["days"] if d["date"] == sat)["gym"] == "Gym Beine"
+    assert http.delete(f"/bike-plan/session/{sid}").status_code == 200
+    assert http.delete(f"/bike-plan/session/{sid}").status_code == 404

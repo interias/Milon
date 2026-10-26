@@ -144,8 +144,9 @@ def import_plan(content: bytes) -> dict:
             number, start, end = int(w["week"]), date.fromisoformat(w["start"]), date.fromisoformat(w["end"])
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("Jede Woche braucht week, start und end (JJJJ-MM-TT).") from exc
+        gym = {d["date"]: str(d["gym"]) for d in w.get("days") or [] if d.get("gym") and d.get("date")}
         weeks.append({"week": number, "start": start.isoformat(), "end": end.isoformat(),
-                      "phase": w.get("phase"), "goal": w.get("goal")})
+                      "phase": w.get("phase"), "goal": w.get("goal"), "gym": gym})
         for d in w.get("days") or []:
             s = d.get("session")
             if not s:
@@ -249,6 +250,230 @@ def delete_manual_ftp(entry_id: int) -> bool:
 def _watts(step: dict, ftp: float) -> list[int] | None:
     pct = step.get("power_pct")
     return [_r(pct[0] * ftp / 100), _r(pct[1] * ftp / 100)] if pct else None
+
+
+# ---------------- Editor ----------------
+KINDS = ("z2", "z2_optional", "hard", "test")
+STEERINGS = ("heart_rate", "power_erg")
+HARD_KINDS = ("hard", "test")
+DEFAULT_STEPS = [{"label": "Einrollen", "duration_min": 5, "power_pct": [40, 50], "cadence": [85, 90]},
+                 {"label": "Z2", "duration_min": 50, "power_pct": [55, 64], "cadence": [85, 90]},
+                 {"label": "Ausrollen", "duration_min": 5, "power_pct": [40, 50], "cadence": [85, 90]}]
+
+
+class Conflict(ValueError):
+    """Tag schon belegt."""
+
+
+def _num(value, lo: float, hi: float, what: str) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{what}: keine Zahl.") from exc
+    if not (lo <= number <= hi) or not math.isfinite(number):
+        raise ValueError(f"{what}: erlaubt {lo:g}–{hi:g}.")
+    return number
+
+
+def clean_steps(raw) -> list[dict]:
+    """Schritte aus dem Editor prüfen: Bezeichnung, Dauer (min), Leistung in % FTP, Trittfrequenz."""
+    if not isinstance(raw, list) or not 1 <= len(raw) <= 60:
+        raise ValueError("Eine Einheit braucht 1–60 Schritte.")
+    out = []
+    for i, step in enumerate(raw, 1):
+        label = str((step or {}).get("label") or "").strip()[:60]
+        if not label:
+            raise ValueError(f"Schritt {i}: Bezeichnung fehlt.")
+        pct = step.get("power_pct")
+        if pct is not None:
+            if not isinstance(pct, list) or len(pct) != 2:
+                raise ValueError(f"Schritt {i}: Leistung als [von, bis] in % FTP.")
+            pct = [_num(pct[0], 0, 250, f"Schritt {i} Leistung"), _num(pct[1], 0, 250, f"Schritt {i} Leistung")]
+            if None in pct or pct[0] > pct[1]:
+                raise ValueError(f"Schritt {i}: Leistung „von“ muss ≤ „bis“ sein.")
+        cad = step.get("cadence") or [None, None]
+        cad = [_num(cad[0], 30, 150, f"Schritt {i} Trittfrequenz"), _num(cad[1] if len(cad) > 1 else None, 30, 150, f"Schritt {i} Trittfrequenz")]
+        out.append({"label": label, "duration_min": _num(step.get("duration_min"), 0.25, 600, f"Schritt {i} Dauer"),
+                    "power_pct": pct, "cadence": cad if any(c is not None for c in cad) else None})
+    return out
+
+
+def _week_of(plan: BikePlan, day: date) -> int:
+    return (day - plan.start).days // 7 + 1
+
+
+def _total(steps: list[dict]) -> float | None:
+    return sum(st["duration_min"] for st in steps) if all(st.get("duration_min") for st in steps) else None
+
+
+def update_session(session_id: int, changes: dict) -> None:
+    """Felder ändern; ein neuer Tag auf einem belegten Tag tauscht die beiden Einheiten."""
+    with Session(engine) as db:
+        s = db.get(BikePlanSession, session_id)
+        if s is None:
+            raise KeyError(session_id)
+        plan = db.get(BikePlan, s.plan_id)
+        _ensure_gym(db, plan)
+        if "title" in changes:
+            title = str(changes["title"] or "").strip()[:80]
+            if not title:
+                raise ValueError("Titel fehlt.")
+            s.title = title
+        if "kind" in changes:
+            if changes["kind"] not in KINDS:
+                raise ValueError("Unbekannte Art.")
+            s.kind = changes["kind"]
+            s.optional = changes["kind"] == "z2_optional" or bool(changes.get("optional", s.optional))
+        if "optional" in changes:
+            s.optional = bool(changes["optional"])
+        if "steering" in changes:
+            if changes["steering"] not in (*STEERINGS, None):
+                raise ValueError("Unbekannte Steuerung.")
+            s.steering = changes["steering"]
+        for key in ("hr_min", "hr_max"):
+            if key in changes:
+                setattr(s, key, _num(changes[key], 60, 220, "Puls"))
+        if s.hr_min and s.hr_max and s.hr_min > s.hr_max:
+            raise ValueError("Puls „von“ muss ≤ „bis“ sein.")
+        if "steps" in changes:
+            steps = clean_steps(changes["steps"])
+            s.steps_json = json.dumps(steps)
+            s.duration_min = _total(steps) or s.duration_min
+        if "duration_min" in changes and _total(json.loads(s.steps_json)) is None:
+            s.duration_min = _num(changes["duration_min"], 1, 600, "Dauer")
+        for key in ("run_alternative", "note", "zwift_workout"):
+            if key in changes:
+                setattr(s, key, (str(changes[key]).strip()[:300] or None) if changes[key] is not None else None)
+        if changes.get("day"):
+            day = date.fromisoformat(str(changes["day"]))
+            if not plan.start <= day <= plan.end:
+                raise ValueError("Der Tag liegt außerhalb des Plans.")
+            if day != s.day:
+                other = db.exec(select(BikePlanSession).where(BikePlanSession.plan_id == s.plan_id,
+                                                              BikePlanSession.day == day)).first()
+                if other is not None:
+                    other.day, other.week = s.day, _week_of(plan, s.day)
+                    db.add(other)
+                s.day, s.week = day, _week_of(plan, day)
+        db.add(s)
+        db.commit()
+
+
+def create_session(plan_id: str, day: date, copy_from: int | None = None) -> int:
+    with Session(engine) as db:
+        plan = db.get(BikePlan, plan_id)
+        if plan is None:
+            raise KeyError(plan_id)
+        if not plan.start <= day <= plan.end:
+            raise ValueError("Der Tag liegt außerhalb des Plans.")
+        if db.exec(select(BikePlanSession).where(BikePlanSession.plan_id == plan_id, BikePlanSession.day == day)).first():
+            raise Conflict("An diesem Tag gibt es schon eine Einheit.")
+        src = db.get(BikePlanSession, copy_from) if copy_from else None
+        if src is not None and src.plan_id == plan_id:
+            fields = src.model_dump(exclude={"id", "day", "week", "gym"})
+        else:
+            fields = {"plan_id": plan_id, "title": "Z2", "kind": "z2", "steering": "heart_rate", "hr_min": 115,
+                      "hr_max": 125, "duration_min": 60, "steps_json": json.dumps(DEFAULT_STEPS)}
+        new = BikePlanSession(**fields, day=day, week=_week_of(plan, day))
+        db.add(new)
+        db.commit()
+        db.refresh(new)
+        return new.id
+
+
+def delete_session(session_id: int) -> bool:
+    with Session(engine) as db:
+        s = db.get(BikePlanSession, session_id)
+        if s is None:
+            return False
+        _ensure_gym(db, db.get(BikePlan, s.plan_id))
+        db.delete(s)
+        db.commit()
+    return True
+
+
+def set_gym(plan_id: str, day: date, label: str | None) -> None:
+    """Gym-Tag setzen oder löschen (Plan-Seite; echte Krafttrainings kommen zusätzlich aus Hevy)."""
+    label = (label or "").strip()[:40] or None
+    with Session(engine) as db:
+        plan = db.get(BikePlan, plan_id)
+        if plan is None:
+            raise KeyError(plan_id)
+        weeks = json.loads(plan.weeks_json)
+        sessions = db.exec(select(BikePlanSession).where(BikePlanSession.plan_id == plan_id)).all()
+        for w in weeks:
+            if w["start"] <= day.isoformat() <= w["end"]:
+                gym = w.get("gym") if "gym" in w else _legacy_gym(w, sessions)
+                gym.pop(day.isoformat(), None)
+                if label:
+                    gym[day.isoformat()] = label
+                w["gym"] = gym
+                break
+        else:
+            raise ValueError("Der Tag liegt außerhalb des Plans.")
+        for s in sessions:
+            if s.day == day:
+                s.gym = label
+                db.add(s)
+        plan.weeks_json = json.dumps(weeks)
+        db.add(plan)
+        db.commit()
+
+
+def _ensure_gym(db: Session, plan: BikePlan) -> None:
+    """Gym-Tage aus der ersten Fassung (an der Einheit) einmalig an den Tag schreiben, bevor
+    Einheiten verschoben oder gelöscht werden — sonst wanderte das Gym mit der Einheit."""
+    weeks = json.loads(plan.weeks_json)
+    if all("gym" in w for w in weeks):
+        return
+    sessions = db.exec(select(BikePlanSession).where(BikePlanSession.plan_id == plan.id)).all()
+    for w in weeks:
+        w.setdefault("gym", _legacy_gym(w, sessions))
+    plan.weeks_json = json.dumps(weeks)
+    db.add(plan)
+
+
+def _legacy_gym(week: dict, sessions) -> dict:
+    """Pläne aus der ersten Fassung kennen Gym nur an Tagen mit Einheit."""
+    return {s.day.isoformat(): s.gym for s in sessions
+            if s.gym and week["start"] <= s.day.isoformat() <= week["end"]}
+
+
+def _gym_map(weeks: list[dict], sessions) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for w in weeks:
+        out.update(w["gym"] if "gym" in w else _legacy_gym(w, sessions))
+    return out
+
+
+def _hevy_days(start: date, end: date) -> dict[str, str]:
+    """Tatsächliche Krafttrainings (Hevy) je Tag im Planzeitraum."""
+    from .models import Workout
+    with Session(engine) as db:
+        rows = db.exec(select(Workout).where(Workout.started_at >= datetime.combine(start, datetime.min.time()),
+                                             Workout.started_at < datetime.combine(end + timedelta(days=1),
+                                                                                   datetime.min.time()))).all()
+    return {w.started_at.date().isoformat(): (w.title or "Krafttraining") for w in rows if w.started_at}
+
+
+def _warnings(sessions: list[dict], gym: dict[str, str], hevy: dict[str, str], hard_days: set[str]) -> None:
+    """Regeln des Plans als Hinweise an Einheit (hart am Gym-Tag, Tag nach Beintag, zwei harte Tage
+    hintereinander) und Woche (mehr als 2 harte Einheiten)."""
+    for s in sessions:
+        s["warnings"] = []
+        if s["kind"] not in HARD_KINDS:
+            continue
+        today_gym = hevy.get(s["date"]) or gym.get(s["date"])
+        before = (date.fromisoformat(s["date"]) - timedelta(days=1)).isoformat()
+        prev_gym = hevy.get(before) or gym.get(before) or ""
+        if today_gym:
+            s["warnings"].append(f"Harte Einheit am Gym-Tag ({today_gym})")
+        if "bein" in prev_gym.lower() or "leg" in prev_gym.lower() or "uk" in prev_gym.lower().split():
+            s["warnings"].append("Tag nach dem Beintag — Beine noch nicht erholt")
+        if before in hard_days:
+            s["warnings"].append("Zwei harte Tage hintereinander")
 
 
 # ---------------- Ausführung aus der Sekunden-Serie ----------------
@@ -404,6 +629,20 @@ def overview(today: date | None = None) -> dict:
         execution = _execution(s, ride, series.get(str(ride["activity_id"]), {}), history, ftp["watts"]) \
             if status == "done" else None
         by_week.setdefault(s.week, []).append(_session_dict(s, ftp, status, ride, run, execution))
+    gym, hevy = _gym_map(weeks, sessions), _hevy_days(plan.start, min(plan.end, today))
+    hard_days = {s.day.isoformat() for s in sessions if s.kind in HARD_KINDS}
+    for w in weeks:
+        w.pop("gym", None)
+        start = date.fromisoformat(w["start"])
+        w["days"] = [{"date": d.isoformat(), "weekday": WEEKDAYS[d.weekday()], "gym": gym.get(d.isoformat()),
+                      "hevy": hevy.get(d.isoformat())}
+                     for d in (start + timedelta(days=i) for i in range(7)) if d.isoformat() <= w["end"]]
+        week_sessions = by_week.get(w["week"], [])
+        for x in week_sessions:
+            x["gym"] = gym.get(x["date"])
+        _warnings(week_sessions, gym, hevy, hard_days)
+        hard = sum(x["kind"] in HARD_KINDS for x in week_sessions)
+        w["warnings"] = [f"{hard} harte Einheiten (Regel: höchstens 2 pro Woche)"] if hard > 2 else []
     weight = cycling._weight_at(cycling._weights(), today)
     zones = [{"zone": z.get("zone"), "from_pct": z.get("from_pct"), "to_pct": z.get("to_pct"),
               "watts": [_r(z.get("from_pct", 0) * current["watts"] / 100),
@@ -426,6 +665,38 @@ def overview(today: date | None = None) -> dict:
         "background": {k: meta.get(k) for k in ("weekly_template", "in_ride_rules", "zwift", "expectations",
                                                 "evidence", "open_points")},
     }
+
+
+def briefing_line(day: date) -> str | None:
+    """Faktenzeile fürs Morgenbriefing: Einheit des Tages mit Watt bei Plan-FTP bzw. Puls-Ziel."""
+    plan = active_plan()
+    if plan is None or not plan.start <= day <= plan.end:
+        return None
+    with Session(engine) as db:
+        s = db.exec(select(BikePlanSession).where(BikePlanSession.plan_id == plan.id,
+                                                  BikePlanSession.day == day)).first()
+    week = next((w for w in json.loads(plan.weeks_json) if w["start"] <= day.isoformat() <= w["end"]), {})
+    head = f"RAD-PLAN HEUTE (Woche {week.get('week', '?')}, {week.get('phase') or '-'}): "
+    if s is None:
+        return head + "keine Einheit (Ruhetag)."
+    ftp = ftp_at(ftp_history(plan), day)["watts"]
+    main = [st for st in json.loads(s.steps_json) if st.get("power_pct") and st.get("duration_min")
+            and sum(st["power_pct"]) / 2 >= 55]
+    parts = [f"{s.title}{' (optional)' if s.optional else ''}, {_r(s.duration_min)} min"]
+    if s.steering == "heart_rate" and (s.hr_min or s.hr_max):
+        parts.append(f"nach Puls {_r(s.hr_min) or ''}–{_r(s.hr_max)} bpm")
+    if main:
+        big = max(main, key=lambda st: sum(st["power_pct"]))
+        reps = sum(1 for st in main if st["power_pct"] == big["power_pct"] and st["label"] == big["label"])
+        w = _watts(big, ftp)
+        parts.append(f"{reps}× {big['label']} {_r(big['duration_min'])} min bei {w[0]}–{w[1]} W" if reps > 1
+                     else f"{big['label']} {w[0]}–{w[1]} W")
+    parts.append(f"FTP {int(ftp)} W")
+    if s.kind == "test":
+        parts.append("Ramp-Test, ausgeruht")
+    if s.run_alternative:
+        parts.append(f"Lauf-Variante: {s.run_alternative}")
+    return head + "; ".join(parts) + "."
 
 
 # ---------------- .zwo-Export ----------------
