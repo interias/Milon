@@ -247,11 +247,12 @@ def test_hero_counts_pad_minutes_as_everyday_and_drops_mirror(db, monkeypatch, t
 
 
 def test_acsm_energy_incline_share():
-    e = walkpad.energy(3033, 52 * 60, 6, 80)  # 3.5 km/h, 6 %, 80 kg
-    flat = walkpad.energy(3033, 52 * 60, 0, 80)
+    e = walkpad.energy(3033, 52 * 60, 6, 73.7)  # the walk of 2026-10-26: 3.5 km/h, 6 %, 73.7 kg
+    flat = walkpad.energy(3033, 52 * 60, 0, 73.7)
+    assert e["kcal"] == 232 and e["kcal_gross"] == 300  # active only; gross keeps the resting 3.5 ml/kg/min
     assert e["kcal_flat"] == flat["kcal"] and flat["kcal_incline"] == 0
-    assert e["kcal"] / flat["kcal"] == pytest.approx(1.68, abs=0.01)  # +68 % gross
-    assert (e["kcal"] - 3.5 * 80 * 52 / 200) / (flat["kcal"] - 3.5 * 80 * 52 / 200) == pytest.approx(2.08, abs=0.03)
+    assert e["kcal_incline"] / e["kcal_flat"] == pytest.approx(1.08, abs=0.01)  # incline doubles the active cost
+    assert e["kcal_gross"] / flat["kcal_gross"] == pytest.approx(1.68, abs=0.01)
     assert walkpad.energy(3033, 3120, 6, None)["kcal"] is None
 
 

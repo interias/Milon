@@ -104,7 +104,7 @@ export function WalkpadCard() {
     <ManualForm incline={data.incline_pct} onSaved={load} />
     <p className="mt-3 text-xs text-muted">
       Schritte geschätzt aus Distanz ÷ {de(data.stride_m, 2)} m Schrittlänge. Zu den Tagesschritten zählt nur, was die Uhr im selben Zeitfenster nicht schon gezählt hat.
-      {" "}kcal nach der ACSM-Gehformel mit deinem 7-Tage-Gewicht (inkl. Steigung); der Pad-Wert rechnet ohne Steigung.
+      {" "}kcal = Aktivkalorien ohne Grundumsatz, nach der ACSM-Gehformel mit deinem 7-Tage-Gewicht (inkl. Steigung); der Pad-Wert rechnet ohne Steigung.
       {data.garmin_upload ? " Jeder Walk geht als „Gehen (Indoor)“ zu Garmin Connect – Garmins Tagesschritte ändert das nicht." : ""}
     </p>
   </Card>;
