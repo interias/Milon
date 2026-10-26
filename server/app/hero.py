@@ -261,15 +261,27 @@ def _other_minutes() -> dict[date, float]:
                parse_dates=["started_at", "ended_at"])
     # HC-Spiegel einer Indoor-Fahrt (Garmin Connect → HC) sind keine Alltagsbewegung: die Fahrt gibt Rad-EP.
     df = health._drop_overlapping(df.dropna(subset=["started_at"]), health._indoor_windows())
+    from . import walkpad
+    with engine.connect() as con:
+        # Laufband-Walks zählen als Alltag; ihre HC-Spiegel (Garmin-Upload → HC) nicht zusätzlich.
+        pad = pd.DataFrame(walkpad.windows(con), columns=["started_at", "ended_at"])
+        pad_minutes = walkpad.minutes_by_day(con)
+    df = health._drop_overlapping(df, pad)
     out: dict[date, float] = {}
     for s, e in zip(df["started_at"], df["ended_at"]):
         if pd.notna(s) and pd.notna(e):
             out[s.date()] = out.get(s.date(), 0.0) + max(0.0, min(120.0, (e - s).total_seconds() / 60))
+    for d, minutes in pad_minutes.items():
+        out[d] = out.get(d, 0.0) + min(240.0, minutes)
     return out
 
 
 def _steps() -> dict[date, int]:
+    from . import walkpad
+
     df = _read("SELECT day, steps FROM steps_daily", parse_dates=["day"])
+    with engine.connect() as con:
+        df = walkpad.with_extra_steps(df, con)
     return {d.date(): int(s) for d, s in zip(df["day"], df["steps"]) if pd.notna(s)}
 
 

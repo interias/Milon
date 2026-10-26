@@ -10,6 +10,7 @@ import { SleepPanel } from "@/components/SleepPanel";
 import { GarminRecovery } from "@/components/GarminRecovery";
 import { GarminNights } from "@/components/GarminNights";
 import { SourceStatus } from "@/components/SourceStatus";
+import { WalkpadCard } from "@/components/WalkpadCard";
 import { de, de0, dm } from "@/lib/format";
 
 export default function Gesundheit() {
@@ -59,6 +60,7 @@ export default function Gesundheit() {
         {cycling.last_ride ? <p className="mt-3 text-sm">Letzte Fahrt: {de(cycling.last_ride.km, 1)} km · {cycling.last_ride.dur_min} min · {new Date(cycling.last_ride.date).toLocaleDateString("de-DE")}</p> : <p className="mt-3 text-xs text-muted">Noch keine geeignete Fahrt erfasst.</p>}
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
+    <WalkpadCard />
     <SleepPanel />
     <GarminNights />
     <GarminRecovery />

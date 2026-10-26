@@ -49,12 +49,19 @@ export default function Einstellungen() {
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
   const [ftp, setFtp] = useState("");
+  const [stride, setStride] = useState("");
+  const [padIncline, setPadIncline] = useState("");
+  const [padUpload, setPadUpload] = useState(true);
   const [places, setPlaces] = useState<string[]>([]);
   const [newPlace, setNewPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  function setPad(d: AppSettings) {
+    setStride(String(d.walkpad_stride_m ?? "")); setPadIncline(String(d.walkpad_incline_pct ?? "")); setPadUpload(d.walkpad_garmin_upload ?? true);
+  }
 
   function applyLlm(d: AppSettings) {
     setProvider(d.llm_provider); setAModel(d.anthropic_model); setEffort(d.anthropic_effort);
@@ -63,7 +70,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setFtp(String(d.bike_ftp ?? "")); setPlaces(d.weather_places ?? []); })
+      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setFtp(String(d.bike_ftp ?? "")); setPad(d); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -83,6 +90,11 @@ export default function Einstellungen() {
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
       const watts = parseFloat(ftp);
       if (!Number.isNaN(watts) && watts >= 0 && watts !== s.bike_ftp) body.bike_ftp = watts;
+      const strideM = parseFloat(stride.replace(",", "."));
+      if (!Number.isNaN(strideM) && strideM !== s.walkpad_stride_m) body.walkpad_stride_m = strideM;
+      const inc = parseFloat(padIncline.replace(",", "."));
+      if (!Number.isNaN(inc) && inc !== s.walkpad_incline_pct) body.walkpad_incline_pct = inc;
+      if (padUpload !== s.walkpad_garmin_upload) body.walkpad_garmin_upload = padUpload;
       const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
       if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
@@ -96,6 +108,7 @@ export default function Einstellungen() {
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
       setFtp(String(updated.bike_ftp ?? ""));
+      setPad(updated);
       setPlaces(updated.weather_places ?? []);
       setNewPlace("");
       setSecrets({});
@@ -227,6 +240,27 @@ export default function Einstellungen() {
           <p className="mt-2 text-[11px] text-muted">
             <strong>0</strong> = automatisch: eFTP aus deinen Fahrten (95 % der besten 20 min der letzten 90 Tage),
             ohne brauchbare Fahrt Garmins FTP. Solange nur lockere Fahrten vorliegen (Wert unter 85 % der Garmin-FTP), gilt Garmins FTP als Untergrenze. Ein fester Wert übersteuert die Schätzung.
+          </p>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardTitle title="Laufband" sub="Walking-Pad unterm Schreibtisch · Sessions kommen vom Recorder auf dem PC (tools/walkpad)" />
+          <div className="flex flex-wrap gap-4">
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] text-muted">Schrittlänge in m</span>
+              <input type="number" inputMode="decimal" min={0.3} max={1.5} step={0.01} value={stride} onChange={(e) => setStride(e.target.value)} className={INPUT} />
+            </label>
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] text-muted">Steigung in % (neue Walks)</span>
+              <input type="number" inputMode="decimal" min={0} max={15} step={1} value={padIncline} onChange={(e) => setPadIncline(e.target.value)} className={INPUT} />
+            </label>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <input type="checkbox" checked={padUpload} onChange={(e) => setPadUpload(e.target.checked)} />Walks zu Garmin Connect hochladen
+            </label>
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Das Pad meldet keine Schritte: Schritte = Distanz ÷ Schrittlänge (gilt auch rückwirkend). Kalibrieren: 100 Schritte zählen und
+            die Distanz-Anzeige des Pads durch 100 teilen. Die Steigung stellst du am Pad von Hand ein; sie wird nicht übertragen.
           </p>
         </Card>
 

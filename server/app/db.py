@@ -30,6 +30,7 @@ def init_db() -> None:
     from . import hero_events_live  # noqa: F401 -- spontaneous events during a keystone run
     from . import hero_import  # noqa: F401 -- own GPX dungeons and walked tracks
     from . import bike_plan  # noqa: F401 -- imported bike training block (local only)
+    from . import walkpad  # noqa: F401 -- walking pad sessions from the host recorder
 
     SQLModel.metadata.create_all(engine)
     _run_migrations()
