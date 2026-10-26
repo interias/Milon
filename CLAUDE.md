@@ -600,7 +600,7 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 
 ## Laufband / Walking-Pad (2026-10-26)
 - **Gerät:** Sportstech sWalk Lite (BLE-Name `sWalk Lite-682`, FTMS `0x1826`). Treadmill Data `0x2ACD` mit ~1 Hz, Flags `0x0584`: Tempo, Gesamtdistanz, Energie, Puls (0 = kein Kontakt), verstrichene Zeit. **Keine Schritte, keine Steigung.** Tempo 1–6 km/h. Nur eine BLE-Verbindung gleichzeitig: Solange der Recorder verbunden ist, sperrt das die Sportstech-App.
-- **Recorder `tools/walkpad/`** (Windows-Host, `bleak`, nicht in Docker): nur lesend, nie Control Point `0x2AD9`.
+- **Recorder `tools/walkpad/`** (Windows-Host, `bleak`, nicht in Docker): liest die Pad-Daten; schreibt den Control Point nur für die Fernbedienung (s. u.).
   - `ftms.py` = Parser + `SessionTracker`. Die Zähler des Pads sind die Summen; verbindet er sich mitten im Walk, datiert er den Start zurück.
   - Session-Ende: Zähler-Reset, 5 min Stillstand oder 3 min ohne Paket. Eine Pause ohne Reset ergibt eine neue Session mit Basis-Abzug. < 2 min / < 100 m wird verworfen.
   - Spool unter `%LOCALAPPDATA%\milon-walkpad\`; `POST /api/walkpad/sessions` mit Header `X-Walkpad-Token`.
@@ -618,4 +618,20 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **Manuelle Walks** (Quelle `manual`, `POST /walkpad/manual {started_at lokal, minutes, speed_kmh, incline_pct?}`, `DELETE /walkpad/sessions/{id}` nur für manuelle): konstantes Tempo; eine überlappende Recorder-Session ersetzt sie (und übernimmt einen schon erfolgten Garmin-Upload). Überlappende manuelle Einträge → 422.
 - **Steigung:** Default **6 %** (Klappe ist beim User immer oben; „6 Grad“ meint laut Datenblatt 6 %), je Session 0/6 %.
 - **kcal = ACSM-Gehformel** VO2 = 3,5 + 0,1·v + 1,8·v·grade (v m/min) × 7-Tage-Gewicht (`cycling._weights`) × 5 kcal/l → `kcal`, `kcal_flat`, `kcal_incline` (Mehrverbrauch durch Steigung; 3,5 km/h @ 6 % ≈ +68 % brutto). Pad-kcal (FTMS, ohne Steigung) nur als `kcal_pad`. FIT-Upload nimmt die ACSM-kcal.
+- **Fernbedienung (2026-10-26, vom User freigegeben):** App → Server → Recorder → FTMS Control Point `0x2AD9`.
+  - **Server** `app/walkpad_control.py`: in-memory, ein uvicorn-Worker; nach einem Neustart sind wartende Befehle weg (sichere Seite).
+    - UI: `GET/POST /walkpad/control {action: start|pause|stop|speed|faster|slower, kmh?, step 0,1|0,5?, confirm?}`.
+    - Recorder (Token): `GET /walkpad/control/next?wait=20` (Long-Poll, 204 = nichts), `POST /control/state`, `POST /control/result`.
+  - **Sicherheit:**
+    - Start nur mit `confirm` (422).
+    - Tempo wird auf `WALKPAD_MAX_SPEED_KMH` begrenzt (Default 6, Einstellung).
+    - ±-Schritte rechnet der Server ab dem Ziel- bzw. Ist-Tempo; das optimistische Ziel bleibt, solange ein Tempo-Befehl wartet.
+    - Stopp überholt die Warteschlange, je Aktion zählt nur der neueste Befehl.
+    - Befehle > 3 s verwerfen Server **und** Recorder. Der Server gibt dafür das Alter (`age_s`) mit statt eines Zeitstempels, weil die Uhr der Docker-VM abweichen kann.
+    - Offline (Recorder > 35 s still oder Pad nicht verbunden) → 409. Keine Totmannschaltung (User-Wunsch).
+  - **Recorder** `tools/walkpad/ftms_control.py`:
+    - Erst Request Control (`0x00`), dann Opcode; die Antwort kommt als Indication `80 op result`. `0x05` → einmal neu anfordern, solange der Befehl frisch ist.
+    - Status `0x2ADA` → running/paused/stopped/target. `WALKPAD_REMOTE=0` = nur lesen.
+    - URL standardmäßig `127.0.0.1`: `localhost` kostet unter Windows mit urllib ~2 s IPv6-Versuch und reißt so die 3-s-Grenze.
+  - **UI** `/laufband` (Nav nach Gesundheit): Tempo groß, ±0,1/±0,5, Tempo setzen, Start zweistufig, Pause, großer STOPP fest unten. Tests `tests/test_walkpad_control.py` mit simuliertem FTMS-Pad.
 - **UI:** Karte „Laufband“ auf `/gesundheit` (`components/WalkpadCard.tsx`); Einstellungen → Laufband (Schrittlänge, Steigung, Upload). Tests: `tests/test_walkpad.py` mit synthetischen FTMS-Paketen.

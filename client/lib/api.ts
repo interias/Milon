@@ -456,12 +456,12 @@ export type LlmBudget = {
 export type AppSettings = {
   openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
   anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
-  timezone: string; scheduler_enabled: boolean; run_hr_max: number; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; weather_places: string[]; fddb_user_masked: string;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; weather_places: string[]; fddb_user_masked: string;
   keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
   openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
-  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
@@ -641,6 +641,13 @@ export type WalkpadOverview = {
   recent: WalkpadSessionRow[]; total_sessions: number; stride_m: number; incline_pct: number; garmin_upload: boolean; recorder_enabled: boolean;
 };
 
+export type WalkpadControlState = {
+  recorder_online: boolean; connected: boolean; status: "running" | "paused" | "stopped" | null;
+  speed_kmh: number | null; target_kmh: number | null; device: string | null; updated_at: number | null;
+  max_kmh: number; min_kmh: number; last_result: { id: number; ok: boolean; message: string; at: number } | null;
+};
+export type WalkpadCommand = { action: "start" | "pause" | "stop" | "speed" | "faster" | "slower"; kmh?: number; step?: number; confirm?: boolean };
+
 export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
@@ -674,6 +681,8 @@ export const api = {
   healthSteps: (days = 30) => get<StepsTrendPoint[]>(`/metrics/health/steps?days=${days}`),
   healthStepsWeekly: (weeks = 12) => get<StepsWeek[]>(`/metrics/health/steps-weekly?weeks=${weeks}`),
   walkpad: (weeks = 12) => get<WalkpadOverview>(`/walkpad?weeks=${weeks}`),
+  walkpadControl: () => get<WalkpadControlState>("/walkpad/control"),
+  walkpadCommand: (body: WalkpadCommand) => send<{ state: WalkpadControlState }>("POST", "/walkpad/control", body),
   walkpadManual: (body: { started_at: string; minutes: number; speed_kmh: number; incline_pct: number }) => send<WalkpadSessionRow>("POST", "/walkpad/manual", body),
   walkpadDelete: (id: string) => send<{ deleted: string }>("DELETE", `/walkpad/sessions/${encodeURIComponent(id)}`),
   walkpadIncline: (id: string, incline_pct: number) => put<WalkpadSessionRow>(`/walkpad/sessions/${encodeURIComponent(id)}/incline`, { incline_pct }),

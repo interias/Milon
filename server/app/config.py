@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     walkpad_stride_m: float = Field(default=0.65, gt=0.2, le=1.5, allow_inf_nan=False)
     walkpad_incline_pct: float = Field(default=6.0, ge=0, le=15, allow_inf_nan=False)
     walkpad_garmin_upload: bool = True
+    # Remote control via the recorder (FTMS Control Point): highest speed the app may set (pad: 1–6 km/h).
+    walkpad_max_speed_kmh: float = Field(default=6.0, ge=1, le=6, allow_inf_nan=False)
 
     # Maximalpuls für die Lauf-Puls-Zonen (%HFmax). Fester Wert ist robuster als die
     # Datenableitung (einzelne Sensor-Spikes verschieben das beobachtete Max). 0 = aus

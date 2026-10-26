@@ -52,6 +52,7 @@ export default function Einstellungen() {
   const [stride, setStride] = useState("");
   const [padIncline, setPadIncline] = useState("");
   const [padUpload, setPadUpload] = useState(true);
+  const [padMax, setPadMax] = useState("");
   const [places, setPlaces] = useState<string[]>([]);
   const [newPlace, setNewPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
@@ -60,7 +61,7 @@ export default function Einstellungen() {
   const [msg, setMsg] = useState<string | null>(null);
 
   function setPad(d: AppSettings) {
-    setStride(String(d.walkpad_stride_m ?? "")); setPadIncline(String(d.walkpad_incline_pct ?? "")); setPadUpload(d.walkpad_garmin_upload ?? true);
+    setStride(String(d.walkpad_stride_m ?? "")); setPadIncline(String(d.walkpad_incline_pct ?? "")); setPadUpload(d.walkpad_garmin_upload ?? true); setPadMax(String(d.walkpad_max_speed_kmh ?? ""));
   }
 
   function applyLlm(d: AppSettings) {
@@ -95,6 +96,8 @@ export default function Einstellungen() {
       const inc = parseFloat(padIncline.replace(",", "."));
       if (!Number.isNaN(inc) && inc !== s.walkpad_incline_pct) body.walkpad_incline_pct = inc;
       if (padUpload !== s.walkpad_garmin_upload) body.walkpad_garmin_upload = padUpload;
+      const vmax = parseFloat(padMax.replace(",", "."));
+      if (!Number.isNaN(vmax) && vmax !== s.walkpad_max_speed_kmh) body.walkpad_max_speed_kmh = vmax;
       const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
       if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
@@ -253,6 +256,10 @@ export default function Einstellungen() {
             <label className="block w-40">
               <span className="mb-1 block text-[11px] text-muted">Steigung in % (6 = Klappe oben, 0 = weg)</span>
               <input type="number" inputMode="decimal" min={0} max={15} step={1} value={padIncline} onChange={(e) => setPadIncline(e.target.value)} className={INPUT} />
+            </label>
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] text-muted">Höchsttempo Fernbedienung (km/h)</span>
+              <input type="number" inputMode="decimal" min={1} max={6} step={0.1} value={padMax} onChange={(e) => setPadMax(e.target.value)} className={INPUT} />
             </label>
             <label className="flex items-center gap-2 self-end pb-2 text-sm">
               <input type="checkbox" checked={padUpload} onChange={(e) => setPadUpload(e.target.checked)} />Walks zu Garmin Connect hochladen
