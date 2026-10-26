@@ -15,13 +15,16 @@ export default function Woche() {
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<WeekPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    setData(null); setErr(null);
+    if (revision === 0) setData(null);
+    setErr(null);
     api.week(offset).then((d) => { if (alive) setData(d); }).catch((e) => { if (alive) setErr(String(e)); });
     return () => { alive = false; };
-  }, [offset]);
+  }, [offset, revision]);
 
   const t = data?.totals;
   const future = offset > 0;
@@ -58,9 +61,14 @@ export default function Woche() {
       {data.warnings.length > 0 && <div className="mt-3"><Warnings items={data.warnings} /></div>}
       <div className="mb-2 mt-4 flex flex-wrap items-baseline justify-between gap-2">
         <WeekLegend />
-        <span className="flex gap-3 text-xs"><Link href="/rad/plan" className="text-accent">Rad-Plan →</Link><Link href="/kraft" className="text-accent">Kraft →</Link></span>
+        <span className="flex items-center gap-3 text-xs">
+          {offset >= 0 && <button type="button" aria-pressed={planning} onClick={() => setPlanning(!planning)}
+            className={`rounded-md border px-3 py-1 font-semibold ${planning ? "border-accent bg-accent text-white" : "border-accent text-accent"}`}>{planning ? "Fertig" : "Planen"}</button>}
+          <Link href="/rad/plan" className="text-accent">Rad-Plan →</Link><Link href="/kraft" className="text-accent">Kraft →</Link>
+        </span>
       </div>
-      <WeekDays data={data} />
+      {planning && offset >= 0 && <p className="mb-2 text-[11px] text-muted">Offene Einheiten auf einen anderen Tag ziehen oder per „verschieben auf“ umlegen (belegter Tag = tauschen); Kraft je Tag festlegen. Hinweise zu den Regeln aktualisieren sich sofort.</p>}
+      <WeekDays data={data} planning={planning && offset >= 0} onChanged={() => setRevision((r) => r + 1)} />
     </>}
 
     <div className="mt-6"><WeeklyReview /></div>

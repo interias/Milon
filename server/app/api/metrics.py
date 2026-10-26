@@ -1,6 +1,7 @@
 """Metrik-Endpunkte für das Dashboard. Dünne Wrapper über die reine metrics/-Schicht."""
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -191,6 +192,33 @@ def week(offset: int = 0) -> dict:
     if not -52 <= offset <= 8:
         raise HTTPException(422, "offset zwischen -52 und 8")
     return week_plan.week(offset)
+
+
+class WeekGymInput(BaseModel):
+    day: date
+    program: Literal["ok", "uk"] | None = None
+
+
+class WeekGymMove(BaseModel):
+    from_day: date
+    to_day: date
+
+
+@router.put("/week/gym")
+def week_gym(body: WeekGymInput) -> dict:
+    """Kraft-Tag setzen (ok/uk) oder löschen (null); im Rad-Plan als Gym-Label, sonst eigene Übersteuerung."""
+    week_plan.set_gym(body.day, body.program)
+    return {"day": body.day.isoformat(), "program": week_plan.gym_program(body.day)}
+
+
+@router.post("/week/gym/move")
+def week_gym_move(body: WeekGymMove) -> dict:
+    """Kraft-Tag verschieben (am Ziel belegt = tauschen)."""
+    try:
+        week_plan.move_gym(body.from_day, body.to_day)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"from": week_plan.gym_program(body.from_day), "to": week_plan.gym_program(body.to_day)}
 
 
 @router.get("/cycling/wkg-hr")

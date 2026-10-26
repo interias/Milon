@@ -623,6 +623,7 @@ export type WeekItem = {
   kind?: string; optional?: boolean; status?: BikeSessionStatus; duration_min?: number | null; ratio?: number | null; target?: string | null;
   ride?: BikeSession["ride"]; run?: BikeSession["run"]; execution?: BikeExecution | null; run_alternative?: string | null;
   warnings?: string[]; zwo?: number | null; program?: "ok" | "uk" | null; label?: string | null;
+  session_id?: number; day?: string; hard?: boolean; start?: string; end?: string;
   done?: { title: string; minutes: number | null; program: string | null } | null; prescription?: string[];
   minutes?: number | null; km?: number; avg_hr?: number | null;
 };
@@ -738,6 +739,8 @@ export const api = {
   cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
   cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
   week: (offset = 0) => get<WeekPlan>(`/metrics/week?offset=${offset}`),
+  weekGym: (day: string, program: "ok" | "uk" | null) => send<{ day: string; program: string | null }>("PUT", "/metrics/week/gym", { day, program }),
+  weekGymMove: (fromDay: string, toDay: string) => send<{ from: string | null; to: string | null }>("POST", "/metrics/week/gym/move", { from_day: fromDay, to_day: toDay }),
   bikePlan: () => get<BikePlanOverview>("/bike-plan"),
   bikePlanImport: async (file: File): Promise<{ id: string; name: string; weeks: number; sessions: number }> => {
     const form = new FormData();
