@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type CycSummary, type CycCurve, type CycEftp, type CycHrAtPower, type CycEfficiency, type CycZones, type CycWkgHr, type CycRide, type CycWorlds } from "@/lib/api";
+import { api, type BikePlanOverview, type CycSummary, type CycCurve, type CycEftp, type CycHrAtPower, type CycEfficiency, type CycZones, type CycWkgHr, type CycRide, type CycWorlds } from "@/lib/api";
 import { Card, CardTitle, Kpi, PageTitle, Loading, ApiError } from "@/components/ui";
 import { AreaTrend, MultiTrend } from "@/components/charts";
 import { TrendBadge } from "@/components/RunningMoreAnalyses";
 import { CurveTable, EFTP_SOURCE, Empty, LogCurve, RideRow, WeeklyZones, WkgHrChart, hasPower } from "@/components/Cycling";
+import { PlanTodayCard } from "@/components/BikePlan";
 import { de, de0, dm } from "@/lib/format";
 
 const LIST_LIMIT = 20;
@@ -26,6 +28,7 @@ export default function Rad() {
   const [eff, setEff] = useState<CycEfficiency | null>(null);
   const [zones, setZones] = useState<CycZones | null>(null);
   const [wkgHr, setWkgHr] = useState<CycWkgHr | null>(null);
+  const [plan, setPlan] = useState<BikePlanOverview | null>(null);
   const [worlds, setWorlds] = useState<CycWorlds | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [extrasError, setExtrasError] = useState(false);
@@ -41,6 +44,7 @@ export default function Rad() {
     api.cycEfficiency().then(setEff).catch(soft);
     api.cycZones().then(setZones).catch(soft);
     api.cycWkgHr().then(setWkgHr).catch(soft);
+    api.bikePlan().then(setPlan).catch(() => setPlan(null));
     api.cycWorlds().then(setWorlds).catch(soft);
   }, []);
 
@@ -68,6 +72,9 @@ export default function Rad() {
 
   return <>
     <PageTitle title="Rad" sub="Zwift & Indoor-Training — Leistung, Fitness & Last" />
+
+    {plan?.plan ? <Card className="mb-4"><PlanTodayCard data={plan} /></Card>
+      : plan && <p className="mb-3 text-xs text-muted">Trainingsplan? <Link href="/rad/plan" className="text-accent underline underline-offset-4">Plan importieren →</Link></p>}
 
     <section aria-label="Kennzahlen" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Kpi label="eFTP" sub={summary.eftp_source ? `Quelle: ${EFTP_SOURCE[summary.eftp_source] ?? summary.eftp_source}` : "noch nicht bestimmbar"}

@@ -31,6 +31,8 @@ async function put<T>(path: string, body?: unknown): Promise<T> {
 
 // URL eines Fortschritts-Fotos (statisch vom Backend ausgeliefert).
 export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename}`;
+// Zwift-Workout (.zwo) einer Plan-Einheit, über den /api-Proxy.
+export const bikeZwoUrl = (id: number) => `${BASE}/bike-plan/session/${id}.zwo`;
 // Strecken-Download eines entdeckten Verlieses (GPX-Track bzw. FIT-Course), über den /api-Proxy.
 export const dungeonFileUrl = (key: string, ext: "gpx" | "fit") => `${BASE}/hero/world/dungeon/${encodeURIComponent(key)}.${ext}`;
 // Live-Endpunkte der Expedition: Token im Header X-Hero-Token (nur auf dem Gerät, nie im Code).
@@ -555,6 +557,49 @@ export type CycWkgHr = {
   periods: { key: "recent" | "previous"; label: string; from: string; to: string; rides: number; bins: CycWkgBin[] }[];
   caveat?: string;
 };
+// ---- Rad-Trainingsplan (/bike-plan) ----
+export type BikeStep = { label: string; duration_min: number | null; power_pct: [number, number] | null; cadence: [number | null, number | null] | null; watts: [number, number] | null };
+export type BikeExecution =
+  | { type: "hr_band"; band: [number | null, number | null]; minutes: number; in_band_pct: number; below_pct: number; above_pct: number; avg_hr: number }
+  | { type: "intervals"; shift_s: number; hit_pct: number | null; covered_pct: number; steps: { label: string; target_w: [number, number] | null; avg_w: number | null; in_band_pct: number | null; covered_pct: number }[] }
+  | { type: "test"; ftp: number | null }
+  | { type: "hr_invalid" };
+export type BikeSessionStatus = "done" | "run" | "missed" | "skipped" | "today" | "planned";
+export type BikeSession = {
+  id: number; date: string; weekday: string; week: number; gym: string | null; title: string; kind: string; optional: boolean;
+  steering: string | null; hr: [number | null, number | null] | null; duration_min: number | null; steps: BikeStep[];
+  run_alternative: string | null; note: string | null; zwift_workout: string | null; ftp: number; zwo: boolean;
+  status: BikeSessionStatus; execution: BikeExecution | null;
+  ride: { activity_id: string; title: string | null; minutes: number; np: number | null; avg_power: number | null; avg_hr: number | null } | null;
+  run: { minutes: number; km: number | null; avg_hr: number | null } | null;
+};
+export type BikeFtpEntry = { date: string; watts: number; source: "plan" | "ramp" | "manual"; id: string | number | null };
+export type BikeWeek = { week: number; start: string; end: string; phase: string | null; goal: string | null; current: boolean; sessions: BikeSession[] };
+export type BikePlanOverview = {
+  plan: { id: string; name: string; start: string; end: string; imported_at: string } | null;
+  today?: string;
+  ftp?: BikeFtpEntry & { wkg: number | null; history: BikeFtpEntry[] };
+  zones?: { zone: string; from_pct: number; to_pct: number; watts: [number, number] }[];
+  hr_targets?: Record<string, unknown> | null;
+  weeks?: BikeWeek[];
+  progress?: { core: number; core_done: number; optional_done: number; missed: number };
+  background?: {
+    weekly_template?: { days?: Record<string, string>; rules?: string[]; intensity_distribution?: string } | null;
+    in_ride_rules?: { when: string; then: string }[] | null;
+    zwift?: { setup?: string[]; z2_routes?: string[]; erg_spiral?: string; [k: string]: unknown } | null;
+    expectations?: Record<string, string> | null;
+    evidence?: { claim: string; source: string; url?: string }[] | null;
+    open_points?: string[] | null;
+  };
+};
+export type BikeCell = { value: number; source: "auto" | "manual" | "plan"; estimated: boolean; note: string | null } | null;
+export type BikeCheckpoints = {
+  plan: { id: string; name: string } | null;
+  today?: string;
+  checkpoints?: { key: string; date: string; reached: boolean }[];
+  metrics?: { key: string; name: string; unit: string; better: string; target: string | null; how: string | null; derived: boolean; pace: boolean; auto: boolean;
+    values: Record<string, BikeCell>; now: BikeCell; delta: number | null; verdict: "up" | "down" | "eq" | null }[];
+};
 export type CycRideDetail = CycRide & {
   power_curve: { seconds: number; watts: number | null }[];
   zones: (CycZone & { seconds: number | null })[];
@@ -625,6 +670,29 @@ export const api = {
   cycEftp: (weeks = 26) => get<CycEftp>(`/metrics/cycling/eftp?weeks=${weeks}`),
   cycHrAtPower: () => get<CycHrAtPower>("/metrics/cycling/hr-at-power"),
   cycEfficiency: () => get<CycEfficiency>("/metrics/cycling/efficiency"),
+  bikePlan: () => get<BikePlanOverview>("/bike-plan"),
+  bikePlanImport: async (file: File): Promise<{ id: string; name: string; weeks: number; sessions: number }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const r = await fetch(`${BASE}/bike-plan`, { method: "POST", body: form });
+    if (!r.ok) {
+      const detail = await r.json().then((j) => j?.detail).catch(() => null);
+      throw new Error(typeof detail === "string" ? detail : `Import fehlgeschlagen (${r.status})`);
+    }
+    return r.json();
+  },
+  bikePlanDelete: async (id: string) => {
+    const r = await fetch(`${BASE}/bike-plan/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`/bike-plan/${id} → ${r.status}`);
+  },
+  bikePlanFtp: (watts: number) => post<NonNullable<BikePlanOverview["ftp"]>>("/bike-plan/ftp", { watts }),
+  bikePlanFtpDelete: async (id: number) => {
+    const r = await fetch(`${BASE}/bike-plan/ftp/${id}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`/bike-plan/ftp/${id} → ${r.status}`);
+  },
+  bikePlanCheckpoints: () => get<BikeCheckpoints>("/bike-plan/checkpoints"),
+  bikePlanCheckpointSet: (body: { checkpoint: string; key: string; value: number | null; estimated?: boolean }) =>
+    put<BikeCheckpoints>("/bike-plan/checkpoints", body),
   cycWkgHr: () => get<CycWkgHr>("/metrics/cycling/wkg-hr"),
   cycZones: (weeks = 12) => get<CycZones>(`/metrics/cycling/zones?weeks=${weeks}`),
   cycRides: (limit = 20) => get<CycRide[]>(`/metrics/cycling/rides?limit=${limit}`),
