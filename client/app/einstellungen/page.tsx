@@ -251,7 +251,7 @@ export default function Einstellungen() {
               <input type="number" inputMode="decimal" min={0.3} max={1.5} step={0.01} value={stride} onChange={(e) => setStride(e.target.value)} className={INPUT} />
             </label>
             <label className="block w-40">
-              <span className="mb-1 block text-[11px] text-muted">Steigung in % (neue Walks)</span>
+              <span className="mb-1 block text-[11px] text-muted">Steigung in % (6 = Klappe oben, 0 = weg)</span>
               <input type="number" inputMode="decimal" min={0} max={15} step={1} value={padIncline} onChange={(e) => setPadIncline(e.target.value)} className={INPUT} />
             </label>
             <label className="flex items-center gap-2 self-end pb-2 text-sm">

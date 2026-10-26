@@ -53,6 +53,9 @@ def _run_migrations() -> None:
         for col, typ in (("provider", "TEXT"), ("fallback_reason", "TEXT"), ("cache_read_tokens", "INTEGER")):
             if col not in cr:
                 con.exec_driver_sql(f"ALTER TABLE coach_reports ADD COLUMN {col} {typ}")
+        tables = {r[0] for r in con.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "walkpad_sessions" in tables and "source" not in cols("walkpad_sessions"):
+            con.exec_driver_sql("ALTER TABLE walkpad_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'recorder'")
         sync_cols = cols("sync_state")
         if "status" not in sync_cols:
             con.exec_driver_sql("ALTER TABLE sync_state ADD COLUMN status TEXT")

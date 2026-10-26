@@ -9,7 +9,12 @@ Daily steps stay Garmin's truth (steps_daily). A pad session only adds the steps
 count in the same window (arms rest on the desk, the wrist barely moves): extra = max(0, pad − watch),
 with the watch's 15-minute step buckets filled in on Garmin syncs. Until then extra is provisional.
 Finished sessions are uploaded to Garmin Connect as an indoor-walking FIT activity (no effect on
-Garmin's daily steps, which come from wellness monitoring only)."""
+Garmin's daily steps, which come from wellness monitoring only).
+
+Energy: ACSM walking equation VO2 = 3.5 + 0.1·v + 1.8·v·grade (ml/kg/min, v in m/min) with the
+7-day weight, 5 kcal per litre O2 — the grade term is the extra cost of the incline. The pad's own
+kcal (FTMS expended energy, no incline) is shown only as a second value.
+Manual entries (source "manual") are replaced by a recorder session that overlaps them."""
 from __future__ import annotations
 
 import json
@@ -39,6 +44,7 @@ WATCH_REFRESH = timedelta(hours=24)  # watch buckets keep updating until the wat
 WATCH_GIVE_UP = timedelta(days=7)    # no watch data by then → the estimate stays provisional
 MAX_UPLOAD_ATTEMPTS = 5
 SPORT_WALKING, SUB_SPORT_INDOOR_WALKING = 11, 27
+KCAL_PER_L_O2 = 5.0
 
 
 class WalkpadSession(SQLModel, table=True):
@@ -57,6 +63,7 @@ class WalkpadSession(SQLModel, table=True):
     avg_hr: float | None = None
     incline_pct: float = 0.0
     device: str | None = None
+    source: str = "recorder"                    # recorder | manual
     samples_json: str = "[]"                    # [[t_s, speed_kmh, distance_m, hr|null], …] every 5 s
     watch_steps: int | None = None              # Garmin wrist steps inside the window (None = not yet known)
     watch_checked_at: datetime | None = None
@@ -177,13 +184,88 @@ def ingest(payload: dict, now: datetime | None = None) -> tuple[dict, bool]:
         garmin_status=None if settings.walkpad_garmin_upload else "off",
     )
     with Session(engine) as db:
+        for manual in db.exec(select(WalkpadSession).where(
+                WalkpadSession.source == "manual", WalkpadSession.started_at_utc < end,
+                WalkpadSession.ended_at_utc > start)):
+            if manual.garmin_status in ("uploaded", "duplicate"):  # never a second activity for the same walk
+                row.garmin_status, row.garmin_activity_id = manual.garmin_status, manual.garmin_activity_id
+            db.delete(manual)
         db.add(row)
         db.commit()
         db.refresh(row)
         return _row(row), True
 
 
-def _row(r: WalkpadSession) -> dict:
+def add_manual(start: datetime, minutes: float, speed_kmh: float, incline_pct: float | None = None,
+               now: datetime | None = None) -> dict:
+    """Walk entered by hand (before the recorder ran, or without it): constant speed from a local start."""
+    if not 2 <= minutes <= MAX_SECONDS / 60 or not 0.5 <= speed_kmh <= MAX_SPEED_KMH:
+        raise ValueError("Dauer oder Tempo unplausibel.")
+    t0 = start.replace(tzinfo=_tz()).timestamp()
+    end = t0 + minutes * 60
+    if end > (now or datetime.now(timezone.utc)).timestamp() + 300:
+        raise ValueError("Der Walk liegt in der Zukunft.")
+    with Session(engine) as db:
+        overlap = db.exec(select(WalkpadSession).where(WalkpadSession.started_at_utc < end,
+                                                       WalkpadSession.ended_at_utc > t0)).first()
+    if overlap is not None:
+        raise ValueError("In diesem Zeitraum ist schon ein Walk erfasst.")
+    v = speed_kmh / 3.6
+    samples = [[t, speed_kmh, round(v * t, 1), None] for t in range(0, int(minutes * 60), SAMPLE_STEP_S)]
+    samples.append([round(minutes * 60), speed_kmh, round(v * minutes * 60, 1), None])
+    row = WalkpadSession(
+        id=f"manual-{int(t0)}", started_at=start.replace(tzinfo=None), started_at_utc=t0, ended_at_utc=end,
+        moving_s=minutes * 60, distance_m=round(v * minutes * 60, 1), avg_speed_kmh=speed_kmh,
+        max_speed_kmh=speed_kmh, source="manual",
+        incline_pct=settings.walkpad_incline_pct if incline_pct is None else incline_pct,
+        samples_json=json.dumps(samples, separators=(",", ":")),
+        garmin_status=None if settings.walkpad_garmin_upload else "off",
+    )
+    with Session(engine) as db:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return _row(row)
+
+
+def delete_manual(sid: str) -> bool | None:
+    """None = unknown, False = recorder session (kept), True = deleted."""
+    with Session(engine) as db:
+        row = db.get(WalkpadSession, sid)
+        if row is None:
+            return None
+        if row.source != "manual":
+            return False
+        db.delete(row)
+        db.commit()
+        return True
+
+
+def _weights():
+    try:
+        from .metrics import cycling
+        return cycling._weights()
+    except Exception:  # noqa: BLE001 -- no weight → no ACSM estimate, pad kcal only
+        return None
+
+
+def energy(distance_m: float, moving_s: float, incline_pct: float, weight_kg: float | None) -> dict:
+    """ACSM walking equation: gross kcal, the share caused by the incline, and the flat-ground value."""
+    if not weight_kg or moving_s <= 0:
+        return {"kcal": None, "kcal_flat": None, "kcal_incline": None, "weight_kg": None}
+    minutes = moving_s / 60
+    v = distance_m / minutes  # m/min
+    per_ml = weight_kg * minutes / 1000 * KCAL_PER_L_O2
+    flat = (3.5 + 0.1 * v) * per_ml
+    incline = 1.8 * v * incline_pct / 100 * per_ml
+    return {"kcal": round(flat + incline), "kcal_flat": round(flat), "kcal_incline": round(incline),
+            "weight_kg": round(weight_kg, 1)}
+
+
+def _row(r: WalkpadSession, weights=None) -> dict:
+    from .metrics import cycling
+    weights = _weights() if weights is None else weights
+    kg = cycling._weight_at(weights, r.started_at.date()) if weights is not None else None
     steps = steps_of(r.distance_m)
     extra = max(0, steps - (r.watch_steps or 0))
     return {
@@ -191,7 +273,8 @@ def _row(r: WalkpadSession) -> dict:
         "date": r.started_at.date().isoformat(),
         "ended_at": _local(r.ended_at_utc).isoformat(timespec="seconds"),
         "minutes": round(r.moving_s / 60, 1), "distance_km": round(r.distance_m / 1000, 2),
-        "avg_speed_kmh": r.avg_speed_kmh, "max_speed_kmh": r.max_speed_kmh, "kcal": r.kcal, "avg_hr": r.avg_hr,
+        "avg_speed_kmh": r.avg_speed_kmh, "max_speed_kmh": r.max_speed_kmh, "kcal_pad": r.kcal, "avg_hr": r.avg_hr,
+        **energy(r.distance_m, r.moving_s, r.incline_pct, kg), "source": r.source,
         "incline_pct": r.incline_pct, "elevation_m": round(r.distance_m * r.incline_pct / 100),
         "steps": steps, "watch_steps": r.watch_steps, "extra_steps": extra,
         "steps_provisional": r.watch_steps is None, "garmin_status": r.garmin_status,
@@ -267,7 +350,8 @@ def overview(weeks: int = 12, recent: int = 8, today: date | None = None) -> dic
     today = today or datetime.now(_tz()).date()
     with Session(engine) as db:
         rows = list(db.exec(select(WalkpadSession).order_by(WalkpadSession.started_at.desc())))
-    items = [_row(r) for r in rows]
+    weights = _weights()
+    items = [_row(r, weights) for r in rows]
     monday = today - timedelta(days=today.weekday())
     first = monday - timedelta(weeks=weeks - 1)
     series = []
@@ -284,6 +368,8 @@ def overview(weeks: int = 12, recent: int = 8, today: date | None = None) -> dic
                 "km": round(sum(x["distance_km"] for x in sel), 2), "steps": sum(x["steps"] for x in sel),
                 "extra_steps": sum(x["extra_steps"] for x in sel),
                 "kcal": round(sum(x["kcal"] or 0 for x in sel)),
+                "kcal_incline": round(sum(x["kcal_incline"] or 0 for x in sel)),
+                "kcal_pad": round(sum(x["kcal_pad"] or 0 for x in sel)),
                 "elevation_m": sum(x["elevation_m"] for x in sel)}
 
     return {
@@ -313,7 +399,7 @@ def fit_activity_bytes(row: WalkpadSession) -> bytes:
     elapsed_ms = round((row.ended_at_utc - row.started_at_utc) * 1000)
     timer_ms = round(row.moving_s * 1000)
     dist_cm = round(row.distance_m * 100)
-    kcal = round(row.kcal or 0)
+    kcal = round(_row(row)["kcal"] or row.kcal or 0)  # ACSM incl. incline; pad value as fallback
     cycles = steps_of(row.distance_m) // 2  # walking/running: total_cycles counts strides (2 steps)
     avg = round((row.avg_speed_kmh or 0) / 3.6 * 1000)
     mx = round((row.max_speed_kmh or row.avg_speed_kmh or 0) / 3.6 * 1000)
