@@ -11,7 +11,8 @@ import { HeroWidget } from "@/components/HeroWidget";
 import { WeatherCard } from "@/components/WeatherCard";
 import { BriefingCard } from "@/components/BriefingCard";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
-import { WeeklyReview } from "@/components/WeeklyReview";
+import { WeekLine } from "@/components/WeekPlan";
+import type { WeekPlan } from "@/lib/api";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
 import { de, de0, dm } from "@/lib/format";
@@ -185,7 +186,7 @@ export default function Overview() {
 
     <OverviewHistory onSelect={setHistoryPoint} />
     {historyPoint && <div className="mt-4"><HistoryCards point={historyPoint} /></div>}
-    <WeeklyReview />
+    <WeekCard />
 
     <div className="mt-4">
       <Card className="flex flex-col">
@@ -196,4 +197,18 @@ export default function Overview() {
     </div>
     {yearOpen && c && <RunAnalysisDialog title="Konsistenz · gesamter Zeitraum" onClose={() => setYearOpen(false)}><ConsistencyHistory data={c} /></RunAnalysisDialog>}
   </>;
+}
+
+// Kompakte Wochenzeile; Details, Plan und Rückblick auf /woche.
+function WeekCard() {
+  const [week, setWeek] = useState<WeekPlan | null>(null);
+  useEffect(() => { api.week(0).then(setWeek).catch(() => setWeek(null)); }, []);
+  return (
+    <Card className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {week ? <WeekLine data={week} /> : <p className="text-sm text-muted">Woche wird geladen …</p>}
+        <Link href="/woche" className="text-sm font-semibold text-accent">Wochenplan →</Link>
+      </div>
+    </Card>
+  );
 }

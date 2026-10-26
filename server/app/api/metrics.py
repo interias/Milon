@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from ..metrics import week_plan
 from ..metrics import achievements, activity, body, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -182,6 +183,14 @@ def cycling_hr_at_power(ref_power: int | None = None) -> dict:
 @router.get("/cycling/efficiency")
 def cycling_efficiency() -> dict:
     return cycling.efficiency()
+
+
+@router.get("/week")
+def week(offset: int = 0) -> dict:
+    """Mein Wochenplan: Kalenderwoche relativ zur aktuellen (−1 Vorwoche, +1 nächste)."""
+    if not -52 <= offset <= 8:
+        raise HTTPException(422, "offset zwischen -52 und 8")
+    return week_plan.week(offset)
 
 
 @router.get("/cycling/wkg-hr")
