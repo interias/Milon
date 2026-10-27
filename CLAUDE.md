@@ -669,3 +669,11 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
     → **Start mit Wunschtempo:** `start` nimmt `kmh` mit (begrenzt). Der Recorder setzt es per Folgeaufgabe, sobald das Band läuft (max. 10 s); jeder neuere Befehl (Stopp) bricht sie ab.
   - **UI** `/laufband` (Nav nach Gesundheit): Tempo groß, ±0,1/±0,5, Tempo setzen, Start zweistufig, Pause, großer STOPP fest unten. Tests `tests/test_walkpad_control.py` mit simuliertem FTMS-Pad.
 - **UI:** Karte „Laufband“ auf `/gesundheit` (`components/WalkpadCard.tsx`); Einstellungen → Laufband (Schrittlänge, Steigung, Upload). Tests: `tests/test_walkpad.py` mit synthetischen FTMS-Paketen.
+
+## Aktive Kalorien auf der Übersicht (2026-10-27)
+- Kachel „Aktivität“ (erste in der rechten Kachelspalte, ab `md` 2×2-Raster) = **Milon-Summe** `metrics/active_kcal.daily()`, `GET /metrics/activity/active-kcal?days=`, `api.activeKcal()`:
+  - **Garmin-Basis** (`garmin_daily.active_calories`, liest `raw_json`, kein Neu-Sync): `activeKilocalories` = **Alltag** (`wellnessActiveKilocalories`, schrittbasiert) + **Training** (Differenz: auf der Uhr aufgezeichnete Läufe/Fahrten/hochgeladene Walks).
+  - **+ Laufband**, nur Walks mit `garmin_status` ≠ uploaded/duplicate (Upload aus = `off`): ACSM-Netto-kcal × Anteil der Pad-Schritte, die die Uhr nicht gezählt hat (die gezählten stecken schon in Garmins Alltag).
+  - **+ Gym** aus Hevy: (MET 3,5 − 1) × 7-T-Gewicht × Dauer. Annahme (an echten Daten geprüft 16./19./26.10.): Gym wird nicht auf der Uhr aufgezeichnet — sonst doppelt.
+  - Ø = letzte 7 vollen Tage mit Garmin-Daten; heute vorläufig („Stand HH:MM“, Daily-Sync stündlich). Nur Anzeige — nie zum adaptiven TDEE addieren.
+  - Echte Daten 26.10.: 401 Alltag + 357 Training + 181 Gym + 188 Laufband = 1.127 kcal (Garmin allein 758).

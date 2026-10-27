@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type Report, type Consistency } from "@/lib/api";
+import { api, type BodySummary, type StandardizedHr, type RunningFitnessData, type StrengthIndex, type Report, type Consistency, type ActiveKcal, type ActiveKcalDay } from "@/lib/api";
 import { Card, CardTitle, PageTitle } from "@/components/ui";
 import { Heatmap } from "@/components/Heatmap";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
@@ -30,6 +30,10 @@ function useResource<T>(load: () => Promise<T>): Resource<T> {
 }
 const loadStrength = () => api.strengthIndex("3m");
 const loadReport = () => api.coachReports(1);
+const loadActiveKcal = () => api.activeKcal(14);
+const kcalSplit = (d: ActiveKcalDay) => [d.everyday != null && `Alltag ${de0(d.everyday)}`, d.training ? `Training ${de0(d.training)}` : null,
+  d.gym ? `Gym ${de0(d.gym)}` : null, d.walkpad ? `Laufband ${de0(d.walkpad)}` : null].filter(Boolean).join(" · ") || "keine Aktivität";
+const clock = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
 const signed = (value: number | null | undefined, digits = 1) => value == null || !Number.isFinite(value) ? "Kein Vergleich verfügbar" : `${value > 0 ? "+" : value === 0 ? "±" : ""}${de(value, digits)}`;
 const stamp = (date: string) => Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
 
@@ -113,6 +117,7 @@ export default function Overview() {
   const running = useResource<StandardizedHr>(api.runStandardizedHr);
   const fitness = useResource<RunningFitnessData>(api.runFitness);
   const strength = useResource<StrengthIndex>(loadStrength);
+  const activeKcal = useResource<ActiveKcal>(loadActiveKcal);
   const [checkinRevision, setCheckinRevision] = useState(0);
   const loadConsistency = useCallback(() => api.activityConsistency(0), [checkinRevision]);
   const consistency = useResource<Consistency>(loadConsistency);
@@ -136,6 +141,9 @@ export default function Overview() {
   const index = strength.data;
   const lastStrength = index?.series?.at(-1)?.week;
   const c = consistency.data;
+  const kcal = activeKcal.data;
+  const kcalDay = kcal?.today ?? kcal?.latest;
+  const kcalPrev = kcal?.series.filter((p) => !p.provisional).at(-1);
   const report = reports.data?.[0];
   const excerpt = report?.content.replace(/[#*`>|]/g, "").replace(/\s+/g, " ").trim() ?? "";
 
@@ -143,7 +151,16 @@ export default function Overview() {
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="min-w-0 xl:col-span-2"><WeatherCard /><WeeklyReportCard /><BriefingCard /></div>
-      <div className="grid min-w-0 gap-4 md:grid-cols-3 xl:flex xl:flex-col">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:flex xl:flex-col">
+        <KpiTile title="Aktivität" subtitle={kcal?.today ? "Aktive Kalorien heute" : "Aktive Kalorien"} href="/gesundheit"
+          value={kcalDay ? de0(kcalDay.total) : null} unit="kcal"
+          change={kcal?.avg7 != null ? `Ø ${de0(kcal.avg7)} kcal/Tag (${kcal.avg7_days} T)` : "Noch kein Mittel"}
+          meta={<>{kcalDay ? kcalSplit(kcalDay) : ""} · {kcalDay?.provisional ? `Stand ${clock(kcalDay.synced_at) ?? "–"}` : kcalDay ? dm(kcalDay.date) : ""}</>}
+          details={[kcalDay?.provisional && kcalPrev && `Gestern: ${de0(kcalPrev.total)} kcal (${kcalSplit(kcalPrev)})`,
+            "Alltag = Schritte · Training = auf der Uhr aufgezeichnet (Läufe, Fahrten, hochgeladene Walks)",
+            `Gym aus Hevy und nicht hochgeladene Laufband-Walks schätzt Milon selbst (Gym: MET ${de(kcal?.gym_met ?? 3.5, 1)} × Gewicht × Dauer)`,
+            "Nur Kalorien über dem Grundumsatz · heute vorläufig (Garmin-Sync stündlich)"]}
+          empty={<StateNote resource={activeKcal} empty="Noch keine Aktivitätsdaten." />} />
         <KpiTile title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper"
           value={b?.weight_avg7 != null ? de(b.weight_avg7, 1) : null} unit="kg"
           change={b?.weight_delta7 == null ? "Kein Vergleich" : `${signed(b.weight_delta7, 2)} kg ggü. 7 Tagen`}

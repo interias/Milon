@@ -403,3 +403,24 @@ def test_real_hc_import_preserves_daily_priority_and_historical_sources(db, monk
         assert [(row.vo2, row.source) for row in vo2] == [(43, "health_connect"), (45.6, daily.SOURCE)]
         assert session.exec(select(BodyMeasurement)).one().weight_kg == 75
         assert session.get(RestingHrDaily, DAY).bpm == 45
+
+
+def test_active_calories_split_today_and_average_from_raw_summary(db):
+    with Session(db) as session:
+        for offset, (total, everyday) in enumerate([(300, 200), (800, 400), (50, 70)]):
+            day = DAY - timedelta(days=2 - offset)
+            raw = {"summary": {"calendarDate": day.isoformat(), "activeKilocalories": total,
+                               "wellnessActiveKilocalories": everyday}}
+            session.add(daily.GarminDaily(day=day, raw_json=json.dumps(raw), synced_at=NOW.replace(tzinfo=None)))
+        session.add(daily.GarminDaily(day=DAY - timedelta(days=3), raw_json=json.dumps({"summary": {"calendarDate": "x"}})))
+        session.commit()
+    value = daily.active_calories(14, now=NOW)
+    assert [p["total"] for p in value["series"]] == [300, 800, 50]
+    assert (value["series"][1]["everyday"], value["series"][1]["training"]) == (400, 400)
+    # Wellness above the total is clamped, never a negative training share.
+    assert value["today"] == {**value["today"], "date": DAY.isoformat(), "everyday": 50, "training": 0, "provisional": True}
+    assert value["avg7"] == 550 and value["avg7_days"] == 2
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).get("/metrics/garmin/active-calories?days=0")
+    assert response.status_code == 422

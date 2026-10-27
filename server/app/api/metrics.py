@@ -4,11 +4,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
 from ..metrics import week_plan
-from ..metrics import achievements, activity, body, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
+from ..metrics import achievements, active_kcal, activity, body, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -107,6 +107,11 @@ def body_steps(days: int = 14) -> dict:
 @router.get("/activity/recent")
 def activity_recent(limit: int = 8) -> list[dict]:
     return activity.recent(limit)
+
+
+@router.get("/activity/active-kcal")
+def activity_active_kcal(days: int = Query(default=14, ge=1, le=365)) -> dict:
+    return active_kcal.daily(days)
 
 
 @router.get("/activity/consistency")
