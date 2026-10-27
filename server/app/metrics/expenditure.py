@@ -95,10 +95,16 @@ def predict_weight(row: dict, intake: pd.Series, active: pd.Series, days: int) -
     return w
 
 
-def resting_kcal(weight: float, height_cm: float | None, age: float | None) -> float | None:
-    """Ruheumsatz nach Mifflin-St Jeor (Mann: 10·kg + 6,25·cm − 5·Jahre + 5) — nur zur Einordnung von B.
-    Bewusst ohne Körperfett: der Wert der Waage ist eine Formel aus dem Gewicht (R² 0,998), keine Messung."""
-    return None if height_cm is None or age is None else 10 * weight + 6.25 * height_cm - 5 * age + 5
+def resting_kcal(weight: float, height_cm: float | None, age: float | None,
+                 ffm: float | None = None) -> tuple[float | None, str | None]:
+    """Ruheumsatz nur zur Einordnung von B: mit fettfreier Masse (aus dem Taillenumfang) Cunningham
+    (500 + 22 · FFM, für Trainierte genauer), sonst Mifflin-St Jeor (Mann: 10·kg + 6,25·cm − 5·Jahre + 5).
+    Bewusst nie mit dem Körperfett der Waage: eine Formel aus dem Gewicht (R² 0,998), keine Messung."""
+    if ffm is not None:
+        return 500 + 22 * ffm, "cunningham"
+    if height_cm is None or age is None:
+        return None, None
+    return 10 * weight + 6.25 * height_cm - 5 * age + 5, "mifflin"
 
 
 # ---------------- Anbindung an Milons Daten ----------------

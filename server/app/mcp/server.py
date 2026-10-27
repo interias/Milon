@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from ..coach import snapshot
 from ..db import init_db
 from .. import checkins
-from ..metrics import achievements, activity, body, health, run_analysis, run_fitness_service, run_zones, running, sleep, strength
+from ..metrics import achievements, activity, body, composition, health, run_analysis, run_fitness_service, run_zones, running, sleep, strength
 
 mcp = FastMCP("Milon")
 
@@ -52,6 +52,13 @@ def get_snapshot() -> str:
 def get_weight_trend(days: int = 90) -> list:
     """Gewichtsverlauf (Tageswert, 7-Tage-Mittel, EWMA) der letzten N Tage."""
     return body.weight_trend(days)
+
+
+@mcp.tool()
+def get_body_composition() -> dict:
+    """Taillenumfang, Taille/Größe und Körperfett als Spanne (bf_low..bf_high) mit fettfreier Masse je
+    Taillenmessung. Nie als Einzelwert lesen: oben Taillenformel (RFM), unten blinde Fotobewertung."""
+    return composition.estimate()
 
 
 @mcp.tool()

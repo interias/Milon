@@ -82,7 +82,9 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
             wc = round(float(wavg.iloc[-1] - ref.iloc[-1]), 2)
     born = settings.birth_date
     age = (date.fromisoformat(last["date"]) - born).days / 365.25 if born else None
-    resting = expenditure.resting_kcal(last["weight_trend"], settings.body_height_cm, age)
+    from . import composition
+    resting, resting_method = expenditure.resting_kcal(last["weight_trend"], settings.body_height_cm, age,
+                                                       composition.current_ffm())
     learned_days = sum(r["observed"] for r in rows)
     return {
         "tdee": last["expenditure"],
@@ -99,7 +101,8 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
         "provisional": learned_days < 28,
         "parts": {"base": last["base"], "tef": last["tef"], "active": last["active_avg"],
                   "resting": round(resting) if resting else None,
-                  "unmeasured": round(last["base"] - resting) if resting else None},
+                  "unmeasured": round(last["base"] - resting) if resting else None,
+                  "resting_method": resting_method},
         "model": {"rho": expenditure.RHO, "tef": expenditure.TEF, "since": rows[0]["date"]},
         "today": now["date"],
         "active_kcal_today": now["active_day"],

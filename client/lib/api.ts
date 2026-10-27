@@ -157,6 +157,15 @@ export type Forecast = {
   per_month?: number; horizon_days?: number; fit_days?: number; from_date?: string;
   history?: ForecastPoint[]; points?: ForecastPoint[];
 };
+export type CompositionPoint = {
+  date: string; waist: number; whtr: number; bf_low: number; bf_high: number; bf_mid: number; weight: number | null;
+  fat_low?: number; fat_high?: number; ffm_low?: number; ffm_high?: number; ffm_mid?: number;
+};
+export type BodyComposition = {
+  available: boolean; reason?: string; caveat: string; series: CompositionPoint[];
+  current?: CompositionPoint; first?: CompositionPoint; height_cm?: number;
+  whtr_delta?: number; waist_delta?: number; photo_offset?: number;
+};
 export type Tdee = {
   from_date?: string;
   estimate_days?: number; smooth_days?: number; provisional?: boolean;
@@ -164,7 +173,7 @@ export type Tdee = {
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
   // Lernendes Verbrauchsmodell: typischer Tag ± Unsicherheit, Zerlegung, heute
   tdee_sd?: number; weight_trend?: number;
-  parts?: { base: number; tef: number; active: number; resting: number | null; unmeasured: number | null };
+  parts?: { base: number; tef: number; active: number; resting: number | null; resting_method?: "cunningham" | "mifflin" | null; unmeasured: number | null };
   model?: { rho: number; tef: number; since: string };
   today?: string; tdee_base?: number; active_kcal_today?: number; tdee_today?: number;
   intake_today?: number | null;
@@ -669,6 +678,7 @@ export const api = {
   // Körper
   bodyWeight: (days = 180) => get<WeightPoint[]>(`/metrics/body/weight?days=${days}`),
   bodyTdee: () => get<Tdee>("/metrics/body/tdee"),
+  bodyComposition: () => get<BodyComposition>("/metrics/body/composition"),
   bodyTdeeTrend: (windowDays = 14, days = 180) => get<TdeePoint[]>(`/metrics/body/tdee-trend?window_days=${windowDays}&days=${days}`),
   bodyWeeklyWeight: (weeks = 12) => get<WeeklyWeight[]>(`/metrics/body/weight-weekly?weeks=${weeks}`),
   bodyWeightForecast: (horizon = 30, fitDays = 30) => get<Forecast>(`/metrics/body/weight-forecast?horizon=${horizon}&fit_days=${fitDays}`),

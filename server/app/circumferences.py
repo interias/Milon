@@ -40,6 +40,12 @@ DEFINITIONS = [
     {"key": "shoulders_deltoid", "name": "Schultern", "site": "Um beide Schulterkappen", "color": "#a77785",
      "definition": "Um die stärksten seitlichen Stellen beider Schultermuskeln messen, Arme locker am Körper. Möglichst von derselben zweiten Person messen lassen: Beim Selbstanlegen verändert sich leicht die Armhaltung.",
      "guide": [143, 164, 194, 19]},
+    {"key": "iliac_crest", "name": "Beckenkamm", "site": "Oberkante Beckenknochen", "color": "#3f7f6e",
+     "definition": "Seitlich die Oberkante des Beckenknochens ertasten und das Band genau dort waagerecht anlegen. Morgens nüchtern, entspannt am Ende der normalen Ausatmung ablesen; dreimal messen und den mittleren Wert eintragen.",
+     "guide": [181, 300, 117, 14]},
+    {"key": "neck", "name": "Hals", "site": "Unterhalb des Kehlkopfs", "color": "#7a6a4f",
+     "definition": "Direkt unterhalb des Kehlkopfs messen, Band leicht nach vorn unten geneigt. Kopf gerade, Blick nach vorn, Schultern locker; dreimal messen und den mittleren Wert eintragen.",
+     "guide": [218, 140, 44, 12]},
 ]
 MEASURE_KEYS = frozenset(item["key"] for item in DEFINITIONS)
 DEFAULT_VISIBLE_KEYS = [item["key"] for item in DEFINITIONS[:4]]

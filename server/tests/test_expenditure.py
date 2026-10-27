@@ -62,6 +62,7 @@ def test_adaptive_tdee_uses_last_full_day_and_reports_parts(monkeypatch):
     assert out["from_date"] == "2025-04-30" and out["today"] == "2025-05-01"   # ein Tag nach den Daten, nicht bis heute
     assert out["deficit_per_day"] == out["tdee"] - out["avg_intake"]
     assert out["parts"]["resting"] == round(10 * out["weight_trend"] + 6.25 * 180 - 5 * 40 + 5)  # Mifflin, 40 Jahre
+    assert out["parts"]["resting_method"] == "mifflin"   # ohne Taillenmessung
     assert abs(out["parts"]["unmeasured"] - (out["parts"]["base"] - out["parts"]["resting"])) <= 1
     assert not out["provisional"]
     trend = body.tdee_trend(days=30)

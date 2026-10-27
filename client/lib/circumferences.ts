@@ -1,6 +1,7 @@
 export type MeasureKey =
   | "abdomen_navel" | "waist_narrowest" | "hip_widest" | "upper_arm_right"
-  | "chest_nipple" | "shoulders_deltoid" | "thigh_right_mid" | "calf_right_max";
+  | "chest_nipple" | "shoulders_deltoid" | "thigh_right_mid" | "calf_right_max"
+  | "iliac_crest" | "neck";
 export type CircumferencePeriod = "1m" | "3m" | "6m" | "12m" | "all";
 export type CircumferenceDefinition = {
   key: MeasureKey; name: string; site: string; color: string; definition: string;

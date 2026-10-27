@@ -31,7 +31,7 @@ def client(tmp_path, monkeypatch):
 def test_roundtrip_reopen_replace_delete_and_protocol_isolation(client, monkeypatch):
     initial = client.get(PATH).json()
     assert initial["today"] == "2026-10-04" and initial["entries"] == []
-    assert len(initial["definitions"]) == 8
+    assert len(initial["definitions"]) == 10
     assert all(set(row) == {"key", "name", "site", "color", "definition", "guide"} for row in initial["definitions"])
     created = client.post(PATH, json=BASE)
     assert created.status_code == 200

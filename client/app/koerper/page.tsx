@@ -10,6 +10,7 @@ import { BodyDetails } from "@/components/BodyDetails";
 import { EnergyBalance } from "@/components/EnergyBalance";
 import { BodyCircumferences } from "@/components/BodyCircumferences";
 import { BodyProgress } from "@/components/BodyProgress";
+import { BodyComposition } from "@/components/BodyComposition";
 import { de, dm } from "@/lib/format";
 
 export default function Koerper() {
@@ -29,7 +30,7 @@ export default function Koerper() {
   const delta = summary?.weight_delta7;
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : "Wird geladen …";
   return <>
-    <PageTitle title="Körper" sub="Körpermaße & Gewicht" />
+    <PageTitle title="Körper" sub="Körpermaße, Gewicht & Zusammensetzung" />
     <BodyProgress revision={measurementsRevision} />
     <div className="mb-5"><BodyCircumferences onChange={() => setMeasurementsRevision(value => value + 1)} /></div>
     <Card className="min-w-0">
@@ -46,6 +47,7 @@ export default function Koerper() {
         observations={rawWeight ? weight.map((p) => ({ date: p.date, value: p.weight, detail: "Einzelmesswert" })) : []} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
       <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
     </Card>
+    <BodyComposition revision={measurementsRevision} />
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
       <button className="py-2 text-accent underline underline-offset-4" onClick={() => setDetails(true)}>Weitere Körperanalysen</button>
       <Link className="py-2 text-muted underline underline-offset-4" href="/fortschritt">Foto-Fortschritt ansehen</Link>
