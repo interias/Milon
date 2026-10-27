@@ -100,70 +100,71 @@ def body_fat_band(days: int = 180) -> dict:
             "window_days": 28, "minimum_days": 7, "note": note}
 
 
-def _walk_kcal() -> dict:
-    try:
-        from .. import walkpad
-        return walkpad.active_kcal_by_day()
-    except Exception:  # noqa: BLE001 -- walking pad is optional; TDEE stands without it
-        return {}
-
-
-def _today_with_walks(tdee: float, until: date, window_days: int, smooth_days: int,
-                      today: date | None = None) -> dict:
-    """Day-resolved expenditure without double counting: the adaptive TDEE already contains the walks
-    of its window (it is inferred from intake and weight), so their mean is taken out and today's
-    walks are put back — same mean, but walk days show up at once instead of weeks later."""
-    walk = _walk_kcal()
-    today = today or datetime.now(ZoneInfo(settings.timezone)).date()
-    span = window_days + smooth_days  # calendar days that feed tdee_avg at `until`
-    walk_avg = sum(v for d, v in walk.items() if until - timedelta(days=span) < d <= until) / span
-    walk_today = walk.get(today, 0.0)
-    try:
-        intake = _intake_daily()
-        eaten = intake.get(pd.Timestamp(today)) if not intake.empty else None
-    except Exception:  # noqa: BLE001 -- today's intake is optional context
-        eaten = None
-    base = tdee - walk_avg
-    return {"today": today.isoformat(), "walk_kcal_avg": round(walk_avg), "tdee_base": round(base),
-            "walk_kcal_today": round(walk_today), "tdee_today": round(base + walk_today),
-            "intake_today": round(float(eaten)) if eaten is not None and pd.notna(eaten) else None}
-
-
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
-    """TDEE and intake averaged over identical calendar-dated estimates."""
-    trend = tdee_trend(window_days=window_days, days=400, smooth_days=smooth_days)
-    if not trend:
+    """Verbrauch aus dem lernenden Modell (`expenditure`): typischer Tag (Ø Essen und Bewegung der letzten
+    14 Tage) mit Unsicherheit, Zerlegung und heute. `window_days`/`smooth_days` bleiben nur für alte Aufrufer."""
+    from . import expenditure
+    w, i = _weight_daily().dropna(), _intake_daily().dropna()
+    if w.empty or i.empty:
         return {"tdee": None, "reason": "Gewicht oder Intake fehlt"}
-    tdee = trend[-1]["tdee_avg"]
-    cutoff = pd.Timestamp(trend[-1]["date"]) - pd.Timedelta(days=smooth_days)
-    recent = [p for p in trend if pd.Timestamp(p["date"]) > cutoff]
-    avg_intake = round(sum(p["intake"] for p in recent) / len(recent))
-    # Gewichtsänderung (7-Tage-Mittel) über das Glättungsfenster — nur Kontext.
+    last_data = max(w.index.max(), i.index.max()).date()
+    rows = expenditure.model(until=min(datetime.now(ZoneInfo(settings.timezone)).date(), last_data + timedelta(days=1)))
+    if not rows:
+        return {"tdee": None, "reason": "Gewicht oder Intake fehlt"}
+    # Der heutige Tag ist beim Essen unvollständig: Stand und Mittel vom letzten vollen Tag, heute nur als Zusatz.
+    last, now = (rows[-2], rows[-1]) if len(rows) > 1 else (rows[-1], rows[-1])
     wavg = _weight_daily().rolling(7, min_periods=3).mean().dropna()
     wc = None
     if not wavg.empty:
         ref = wavg[wavg.index <= wavg.index.max() - pd.Timedelta(days=smooth_days)]
         if not ref.empty:
             wc = round(float(wavg.iloc[-1] - ref.iloc[-1]), 2)
+    bf = _bodyfat_daily().dropna()
+    resting = expenditure.resting_kcal(last["weight_trend"], float(bf.tail(28).median()) if not bf.empty else None)
+    learned_days = sum(r["observed"] for r in rows)
     return {
-        "tdee": tdee,
-        "from_date": trend[-1]["date"],
-        "avg_intake": avg_intake,
-        "deficit_per_day": tdee - avg_intake,
+        "tdee": last["expenditure"],
+        "tdee_sd": last["expenditure_sd"],
+        "from_date": last["date"],
+        "avg_intake": last["intake_avg"],
+        "deficit_per_day": last["expenditure"] - last["intake_avg"],
         "weight_change_kg": wc,
+        "weight_trend": last["weight_trend"],
         "window_days": int(window_days),
         "smooth_days": int(smooth_days),
-        "intake_days": int(len(recent)),
-        "estimate_days": len(recent),
-        # Coverage marker, not a physiological validity threshold.
-        "provisional": len(recent) < max(1, (smooth_days + 1) // 2),
-        **_today_with_walks(tdee, date.fromisoformat(trend[-1]["date"]), window_days, smooth_days),
+        "intake_days": int(sum(r["intake"] is not None for r in rows[-expenditure.AVG_DAYS - 1:-1] or rows)),
+        "estimate_days": learned_days,
+        "provisional": learned_days < 28,
+        "parts": {"base": last["base"], "tef": last["tef"], "active": last["active_avg"],
+                  "resting": round(resting) if resting else None,
+                  "unmeasured": round(last["base"] - resting) if resting else None},
+        "model": {"rho": expenditure.RHO, "tef": expenditure.TEF, "since": rows[0]["date"]},
+        "today": now["date"],
+        "active_kcal_today": now["active_day"],
+        "tdee_base": last["base"] + last["tef"],
+        "tdee_today": now["expenditure_day"],
+        "intake_today": now["intake"],
     }
 
 
 def tdee_trend(window_days: int = 14, days: int = 180, smooth_days: int = 14,
                min_intake_days: int = 7) -> list[dict]:
-    """Rollendes adaptives TDEE je Tag (`tdee`) + geglättetes `tdee_avg` (rollendes
+    """Verbrauch je Tag aus dem Modell: `tdee` = dieser Tag, `tdee_avg` = typischer Tag (± `tdee_sd`).
+    Nur Tage mit Esseintrag; Fenster-Parameter bleiben für alte Aufrufer."""
+    from . import expenditure
+    rows = [r for r in expenditure.model() if r["intake"] is not None]
+    if not rows:
+        return []
+    cutoff = pd.Timestamp(rows[-1]["date"]) - pd.Timedelta(days=days)
+    return [{"date": r["date"], "tdee": r["expenditure_day"], "tdee_avg": r["expenditure"], "tdee_sd": r["expenditure_sd"],
+             "intake": r["intake"], "intake_avg": r["intake_avg"], "estimate_days": expenditure.AVG_DAYS}
+            for r in rows if pd.Timestamp(r["date"]) >= cutoff]
+
+
+def _window_tdee_trend(window_days: int = 14, days: int = 180, smooth_days: int = 14,
+                       min_intake_days: int = 7) -> list[dict]:
+    """Altes Verfahren (bis 2026-10-27), nur noch für `scripts/backtest_expenditure.py`.
+    Rollendes adaptives TDEE je Tag (`tdee`) + geglättetes `tdee_avg` (rollendes
     smooth_days-Mittel der Tagesschätzungen). TDEE(t) = Ø-Intake[t−window..t] −
     Δ(7-Tage-Gewicht über das Fenster) × 7700 / window. Die Einzelschätzung schwankt durch
     Wasser/Glykogen stark → `tdee_avg` ist der stabile Wert."""

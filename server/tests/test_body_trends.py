@@ -56,12 +56,3 @@ def test_composition_scenario_exposes_anchor_and_assumption(monkeypatch):
     assert body.bodyfat_forecast()["available"]
     assert result["weight"] == {k: body.weight_forecast()[k] for k in ("current", "projected", "per_month")}
     assert all(abs(s["weight"] - result["weight"]["projected"]) <= 0.06 for s in result["scenarios"])
-
-
-def test_adaptive_tdee_exposes_latest_estimate_date(monkeypatch):
-    monkeypatch.setattr(body, "tdee_trend", lambda **kwargs: [
-        {"date": "2026-01-10", "tdee_avg": 2400, "intake": 2200},
-    ])
-    monkeypatch.setattr(body, "_weight_daily", lambda: pd.Series(dtype=float))
-
-    assert body.adaptive_tdee()["from_date"] == "2026-01-10"
