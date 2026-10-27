@@ -31,9 +31,8 @@ function useResource<T>(load: () => Promise<T>): Resource<T> {
 const loadStrength = () => api.strengthIndex("3m");
 const loadReport = () => api.coachReports(1);
 const loadActiveKcal = () => api.activeKcal(14);
-const kcalSplit = (d: ActiveKcalDay) => [d.everyday != null && `Alltag ${de0(d.everyday)}`, d.training ? `Training ${de0(d.training)}` : null,
-  d.gym ? `Gym ${de0(d.gym)}` : null, d.walkpad ? `Laufband ${de0(d.walkpad)}` : null].filter(Boolean).join(" · ") || "keine Aktivität";
-const clock = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : null;
+const kcalSplit = (d: ActiveKcalDay) => ([["Alltag", d.everyday], ["Laufen", d.run], ["Rad", d.ride], ["Laufband", d.walkpad], ["Gym", d.gym]] as const)
+  .filter(([, kcal]) => kcal > 0).map(([label, kcal]) => `${label} ${de0(kcal)}`).join(" · ") || "keine Aktivität";
 const signed = (value: number | null | undefined, digits = 1) => value == null || !Number.isFinite(value) ? "Kein Vergleich verfügbar" : `${value > 0 ? "+" : value === 0 ? "±" : ""}${de(value, digits)}`;
 const stamp = (date: string) => Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
 
@@ -155,11 +154,11 @@ export default function Overview() {
         <KpiTile title="Aktivität" subtitle={kcal?.today ? "Aktive Kalorien heute" : "Aktive Kalorien"} href="/gesundheit"
           value={kcalDay ? de0(kcalDay.total) : null} unit="kcal"
           change={kcal?.avg7 != null ? `Ø ${de0(kcal.avg7)} kcal/Tag (${kcal.avg7_days} T)` : "Noch kein Mittel"}
-          meta={<>{kcalDay ? kcalSplit(kcalDay) : ""} · {kcalDay?.provisional ? `Stand ${clock(kcalDay.synced_at) ?? "–"}` : kcalDay ? dm(kcalDay.date) : ""}</>}
+          meta={<>{kcalDay ? kcalSplit(kcalDay) : ""} · {kcalDay?.provisional ? "heute bisher" : kcalDay ? dm(kcalDay.date) : ""}</>}
           details={[kcalDay?.provisional && kcalPrev && `Gestern: ${de0(kcalPrev.total)} kcal (${kcalSplit(kcalPrev)})`,
-            "Alltag = Schritte · Training = auf der Uhr aufgezeichnet (Läufe, Fahrten, hochgeladene Walks)",
-            `Gym aus Hevy und nicht hochgeladene Laufband-Walks schätzt Milon selbst (Gym: MET ${de(kcal?.gym_met ?? 3.5, 1)} × Gewicht × Dauer)`,
-            "Nur Kalorien über dem Grundumsatz · heute vorläufig (Garmin-Sync stündlich)"]}
+            kcalPrev?.garmin != null && `Zum Vergleich Garmin gestern: ${de0(kcalPrev.garmin)} kcal`,
+            `Alltag = Schritte ohne Lauf/Laufband (${de(kcal?.stride_m ?? 0.65, 2)} m Schrittlänge) · Laufen/Laufband nach ACSM · Rad aus Watt bzw. Tempo · Gym MET ${de(kcal?.gym_met ?? 3.5, 1)}`,
+            "Berechnet von Milon aus deinen Daten · nur Kalorien über dem Ruheumsatz"]}
           empty={<StateNote resource={activeKcal} empty="Noch keine Aktivitätsdaten." />} />
         <KpiTile title="Körper" subtitle="Gewicht · 7-Tage-Mittel" href="/koerper"
           value={b?.weight_avg7 != null ? de(b.weight_avg7, 1) : null} unit="kg"
