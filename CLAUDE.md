@@ -673,7 +673,7 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 ## Aktive Kalorien auf der Übersicht (2026-10-27)
 - Kachel „Aktivität“ (erste in der rechten Kachelspalte, ab `md` 2×2-Raster) = **eigene Milon-Rechnung aus lokalen Daten, unabhängig von Garmins Schätzung** (User-Wunsch): `metrics/active_kcal.daily()`, `GET /metrics/activity/active-kcal?days=`, `api.activeKcal()`. Alles **netto** über Ruhe (1 MET = 1 kcal/kg/h), Gewicht = 7-T-Mittel (`cycling._weights`, vor erster Messung die erste):
   - **Alltag:** `steps_daily` minus Laufschritte (165/min × Laufdauer) minus Laufband-Uhrschritte (`watch_steps`), ACSM-Gehen 0,1 ml/kg/m × `walkpad_stride_m`.
-  - **Laufen:** `running._runs`, ACSM 0,2 ml/kg/m (≈ 1 kcal/kg/km). **Rad indoor:** kJ / (0,24 × 4,184) − Ruhe; ohne Watt MET 6,8. **Rad draußen:** `health._rides`, MET nach Tempo (4,0/6,8/8,0/10,0 bei < 16/19/22,5 km/h).
+  - **Laufen:** `running._runs`, ACSM 0,2 ml/kg/m (≈ 1 kcal/kg/km). **Rad indoor:** kJ / (0,20 × 4,184) − Ruhe (bis 2026-10-27: 0,24; Laborwerte bei ~100 W/90 U/min liegen bei 16–20 %); ohne Watt MET 6,8. **Rad draußen:** `health._rides`, MET nach Tempo (4,0/6,8/8,0/10,0 bei < 16/19/22,5 km/h).
   - **Laufband:** `walkpad.energy` (ACSM mit Steigung), alle Walks. **Gym:** Hevy, MET 3,5.
   - Garmins `activeKilocalories` (`garmin_daily.active_calories`) nur als Vergleich in den Details. Ø = letzte 7 vollen Tage. Nur Anzeige — nie zum adaptiven TDEE addieren.
   - Echte Daten (3 Wochen): Milon nah an Garmin; 10-km-Lauf ≈ 740 kcal, ruhige Tage 50–200, 26.10. 991 (Garmin 758, kannte Gym und einen Walk nicht).
