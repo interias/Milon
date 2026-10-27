@@ -28,7 +28,7 @@ function fillDays(series: ActiveKcalDay[], days: number): (ActiveKcalDay | { dat
   });
 }
 
-export function ActiveKcalChart({ days = 30, height = 190, revision = 0 }: { days?: number; height?: number; revision?: number }) {
+export function ActiveKcalChart({ days = 30, height = 230, revision = 0 }: { days?: number; height?: number; revision?: number }) {
   const [data, setData] = useState<ActiveKcal | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -40,7 +40,11 @@ export function ActiveKcalChart({ days = 30, height = 190, revision = 0 }: { day
   const full = data?.series.filter((d) => !d.provisional) ?? [];
   const avg = full.length ? full.reduce((a, d) => a + d.total, 0) / full.length : null;
   const bars = data ? fillDays(data.series, days) : [];
-  const max = Math.max(...bars.map((d) => d.total ?? 0), 1);
+  const peak = Math.max(...bars.map((d) => d.total ?? 0), 1);
+  // Runde Achse: 200er-Schritte, bei hohen Spitzen 400er, damit höchstens ~8 Linien entstehen.
+  const step = peak > 1600 ? 400 : 200;
+  const max = Math.ceil(peak / step) * step;
+  const ticks = Array.from({ length: max / step + 1 }, (_, i) => i * step);
   const stride = Math.max(1, Math.ceil(days / 7));
   const labelH = 18, plotH = height - labelH - 4;
   const used = PARTS.filter((p) => data?.series.some((d) => d[p.key] > 0));
@@ -51,16 +55,18 @@ export function ActiveKcalChart({ days = 30, height = 190, revision = 0 }: { day
       <p className="mt-3 font-display text-3xl font-extrabold">{avg != null ? de0(avg) : "–"} <span className="text-sm font-normal text-muted">kcal/Tag im Schnitt</span></p>
       <p className="mt-1 text-xs text-muted">{full.length} volle Tage{data.today ? ` · heute bisher ${de0(data.today.total)} kcal` : ""} · Ø 7 Tage {data.avg7 != null ? `${de0(data.avg7)} kcal` : "–"}</p>
       <div className="mt-4 flex" style={{ height }}>
-        <div className="flex w-10 shrink-0 flex-col justify-between pr-2 text-right text-[10px] leading-none text-muted sm:w-14" style={{ paddingBottom: labelH + 4 }}>
-          {[max, max / 2, 0].map((t, k) => <span key={k}>{de0(t)}</span>)}
+        <div className="relative w-10 shrink-0 text-right text-[10px] leading-none text-muted sm:w-14">
+          {ticks.map((t) => <span key={t} className="absolute right-2 -translate-y-1/2" style={{ top: height - labelH - 4 - (t / max) * plotH }}>{de0(t)}</span>)}
         </div>
-        <div className="flex min-w-0 flex-1 items-end gap-[2px]">
+        <div className="relative flex min-w-0 flex-1 items-end gap-[2px]">
+          {ticks.map((t) => <div key={t} aria-hidden className={`pointer-events-none absolute inset-x-0 border-t ${t === 0 ? "border-muted/50" : "border-line"}`}
+            style={{ top: height - labelH - 4 - (t / max) * plotH }} />)}
           {bars.map((d, i) => {
             const day = d.total != null ? d as ActiveKcalDay : null;
             const tip = day ? `${dm(d.date)}${day.provisional ? " (heute bisher)" : ""}: ${de0(day.total)} kcal\n` +
               PARTS.filter((p) => day[p.key] > 0).map((p) => `${p.label} ${de0(day[p.key])}`).join(" · ") +
               (day.garmin != null ? `\nGarmin: ${de0(day.garmin)} kcal` : "") : `${dm(d.date)}: keine Daten`;
-            return <div key={d.date} title={tip} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+            return <div key={d.date} title={tip} className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-end">
               <div className="flex w-full flex-col-reverse overflow-hidden rounded-t group-hover:brightness-110"
                 style={{ height: day ? Math.max(day.total > 0 ? 2 : 0, (day.total / max) * plotH) : 0, opacity: day?.provisional ? 0.5 : 1 }}>
                 {day && PARTS.map((p) => day[p.key] > 0 && <div key={p.key}
