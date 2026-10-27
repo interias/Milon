@@ -303,6 +303,29 @@ def test_eftp_garmin_floor_until_hard_effort(db, monkeypatch):
     assert (cycling.eftp(today=TODAY)["value"], cycling.eftp(today=TODAY)["source"]) == (250, "setting")
 
 
+def test_eftp_ramp_test_lifts_floor_and_takes_the_higher_value(db):
+    set_garmin_ftp(db, 203.0)
+    store(TODAY - timedelta(days=20), "70", power=101.0, seconds=2700)                    # nur locker
+    store(TODAY - timedelta(days=5), "71", power=150.0, seconds=1200, title="Zwift - FTP Ramp Test",
+          curve={60: 221.0, 300: 182.0})
+    result = cycling.eftp(today=TODAY)
+    assert (result["value"], result["source"]) == (166, "ramp")                         # 0,75 × 221, unter Garmin
+    assert result["series"][-1]["source"] == "ramp"
+    ride = next(r for r in cycling.rides() if r["activity_id"] == "71")
+    assert ride["eftp"] == 166
+    power = cycling._usable(cycling.indoor_rides())
+    assert cycling._auto_eftp(power, TODAY, None, ramp=False) == cycling._raw_auto_eftp(power, TODAY)  # Heldenreise
+    assert cycling._auto_eftp(power, TODAY - timedelta(days=6), 203.0) == (203.0, "garmin_floor")    # vor dem Test
+    # Später eine harte 20-min-Fahrt über dem Test → die höhere Schätzung zählt.
+    store(TODAY - timedelta(days=2), "72", power=190.0, seconds=1800)
+    assert (cycling.eftp(today=TODAY)["value"], cycling.eftp(today=TODAY)["source"]) == (round(0.95 * 190), "20min")
+    # Ein neuerer, niedrigerer Test gilt (der letzte Test zählt, nicht der beste).
+    store(TODAY - timedelta(days=1), "73", power=140.0, seconds=1200, title="Ramp Test", curve={60: 300.0})
+    assert cycling.ramp_ftp(cycling._usable(cycling.indoor_rides()), TODAY) == 225
+    # Nach 90 Tagen altert der Test aus dem Fenster.
+    assert cycling.ramp_ftp(cycling._usable(cycling.indoor_rides()), TODAY + timedelta(days=95)) is None
+
+
 def test_eftp_floor_threshold_is_85_percent_of_garmin_ftp(db):
     set_garmin_ftp(db, 200.0)
     store(TODAY - timedelta(days=5), "80", power=178.0, seconds=1800)  # 0.95*178 = 169.1 < 170

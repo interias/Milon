@@ -24,8 +24,6 @@ from .config import settings
 from .db import engine
 
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
-RAMP_FACTOR = 0.75          # Zwift-Ramp-Test: FTP = 75 % der besten Minute
-RAMP_TITLE = re.compile(r"ramp", re.IGNORECASE)
 HR_TRIM_S = 300             # Z2-Ausführung ohne Ein-/Ausrollen
 POWER_TOLERANCE = 0.05      # Intervall getroffen: 10-s-Mittel im Zielband ±5 %
 ALIGN_MAX_S = 900           # Workout darf bis 15 min nach Fahrtbeginn starten
@@ -211,13 +209,14 @@ def _rides() -> pd.DataFrame:
 
 def ftp_history(plan: BikePlan, rides: pd.DataFrame | None = None) -> list[dict]:
     """Alle FTP-Stände chronologisch: Startwert, erkannte Ramp-Tests, Handwerte."""
+    from .metrics import cycling  # gleiche Ramp-Erkennung wie Milons eFTP
     rides = _rides() if rides is None else rides
     entries = [{"date": plan.start.isoformat(), "watts": plan.ftp_default, "source": "plan", "id": None}]
     if not rides.empty:
         for _, r in rides[rides["day"] >= plan.start - timedelta(days=60)].iterrows():
             best_min = (r["power_curve"] or {}).get(60)
-            if RAMP_TITLE.search(str(r["title"] or "")) and best_min:
-                entries.append({"date": r["day"].isoformat(), "watts": float(round(RAMP_FACTOR * best_min)),
+            if cycling.RAMP_TITLE.search(str(r["title"] or "")) and best_min:
+                entries.append({"date": r["day"].isoformat(), "watts": float(round(cycling.RAMP_FACTOR * best_min)),
                                 "source": "ramp", "id": str(r["activity_id"])})
     with Session(engine) as db:
         for m in db.exec(select(BikePlanFtp).where(BikePlanFtp.plan_id == plan.id)).all():

@@ -886,8 +886,8 @@ def _eftp_rise(rides: pd.DataFrame, i: int) -> bool:
     before = before[before["has_power"]]
     if not ride["has_power"] or before.empty:
         return False
-    old, _ = cycling._auto_eftp(before, ride["day"], None)
-    new, _ = cycling._auto_eftp(pd.concat([before, rides.iloc[i:i + 1]]), ride["day"], None)
+    old, _ = cycling._auto_eftp(before, ride["day"], None, ramp=False)
+    new, _ = cycling._auto_eftp(pd.concat([before, rides.iloc[i:i + 1]]), ride["day"], None, ramp=False)
     return bool(old and new and new > old + 0.5)
 
 

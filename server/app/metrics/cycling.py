@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -29,6 +30,8 @@ from . import stats
 EFTP_WINDOW_DAYS = 90
 EFTP_FACTOR = 0.95
 HARD_EFFORT_SHARE = 0.85  # raw eFTP / Garmin FTP from which a hard effort exists (= 20-min power >= 90 % FTP)
+RAMP_FACTOR = 0.75        # Zwift-Ramp-Test: FTP = 75 % der besten Minute der Testfahrt
+RAMP_TITLE = re.compile(r"ramp", re.IGNORECASE)
 COGGAN = (0.55, 0.75, 0.90, 1.05, 1.20, 1.50)  # Obergrenzen Z1–Z6 als Anteil der eFTP; Z7 darüber
 ZONE_NAMES = ("Aktive Erholung", "Grundlage", "Tempo", "Schwelle", "VO2max", "Anaerob", "Neuromuskulär")
 STEADY_VI = 1.08          # Variabilitätsindex NP/Ø-Leistung, bis zu dem eine Fahrt als gleichmäßig gilt
@@ -144,15 +147,33 @@ def _raw_auto_eftp(power: pd.DataFrame, day: date) -> tuple[float | None, str | 
     return None, None
 
 
-def _auto_eftp(power: pd.DataFrame, day: date, garmin_ftp: float | None) -> tuple[float | None, str | None]:
+def ramp_ftp(power: pd.DataFrame, day: date) -> float | None:
+    """FTP of the latest Zwift ramp test (title contains "ramp") in the 90-day window up to `day`:
+    RAMP_FACTOR x best minute of that ride. The latest test counts, also when it is lower."""
+    if power.empty or "title" not in power:
+        return None
+    window = power[(power["day"] > day - timedelta(days=EFTP_WINDOW_DAYS)) & (power["day"] <= day)]
+    tests = window[window["title"].fillna("").str.contains(RAMP_TITLE)]
+    for curve in reversed(list(tests.sort_values("started_at")["power_curve"])):
+        if curve.get(60):
+            return float(round(RAMP_FACTOR * curve[60]))
+    return None
+
+
+def _auto_eftp(power: pd.DataFrame, day: date, garmin_ftp: float | None,
+               ramp: bool = True) -> tuple[float | None, str | None]:
     """Auto eFTP with Garmin's FTP as floor until a hard effort exists in the 90-day window.
 
-    Hard effort = raw auto eFTP >= HARD_EFFORT_SHARE x Garmin FTP, i.e. best 20 min >= 90 % of the
-    Garmin FTP (or a CP fit that implies the same). Easy rides stay far below that and never lift
-    the floor (real data: 96 W vs. Garmin 203 W gave IF 1.23 on an easy ride); a ramp test or a
-    hard 20-min piece does, after which the measured value counts even if it is below Garmin's.
-    garmin_ftp=None returns the raw auto eFTP unchanged."""
+    Hard effort = a Zwift ramp test in the window, or raw auto eFTP >= HARD_EFFORT_SHARE x Garmin FTP,
+    i.e. best 20 min >= 90 % of the Garmin FTP (or a CP fit that implies the same). Easy rides stay far
+    below that and never lift the floor (real data: 96 W vs. Garmin 203 W gave IF 1.23 on an easy ride).
+    With a ramp test the eFTP is max(ramp FTP, raw auto eFTP), also below Garmin's (real data: ramp
+    166 W vs. Garmin estimate 203 W). garmin_ftp=None and ramp=False return the raw auto eFTP unchanged
+    (Heldenreise rule "eFTP-Anstieg")."""
     auto, source = _raw_auto_eftp(power, day)
+    tested = ramp_ftp(power, day) if ramp else None
+    if tested is not None:
+        return (tested, "ramp") if auto is None or tested >= auto else (auto, source)
     if not garmin_ftp:
         return auto, source
     if auto is None:
@@ -236,8 +257,10 @@ def eftp(weeks: int = 26, today: date | None = None) -> dict:
         "window_days": EFTP_WINDOW_DAYS, "factor": EFTP_FACTOR,
         "zones": _zone_bounds(value), "series": series,
         "caveat": "eFTP = 95 % der besten 20 min (90 T), sonst 95 % der Critical Power aus der "
-                  "Leistungskurve, sonst Garmin-FTP. Solange nur lockere Fahrten vorliegen (Wert unter "
-                  "85 % der Garmin-FTP), gilt Garmins FTP als Untergrenze. BIKE_FTP > 0 übersteuert.",
+                  "Leistungskurve, sonst Garmin-FTP. Ein Zwift-Ramp-Test (90 T, 75 % der besten Minute) "
+                  "zählt als Messung: eFTP = höherer Wert aus Test und Schätzung. Solange weder Test noch "
+                  "harte Fahrt vorliegen (Wert unter 85 % der Garmin-FTP), gilt Garmins FTP als "
+                  "Untergrenze. BIKE_FTP > 0 übersteuert.",
     })
 
 

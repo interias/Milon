@@ -415,6 +415,38 @@ def recovery(days: int = 30, *, now: datetime | None = None) -> dict:
                       "Heute ist vorläufig; fehlende Werte werden nicht als null Messwert ergänzt."]}
 
 
+def active_calories(days: int = 14, *, now: datetime | None = None) -> dict:
+    """Garmin's active kcal per day, read from the stored raw summary (no re-sync needed).
+
+    activeKilocalories covers everything above BMR: everyday movement (wellnessActiveKilocalories,
+    step-based) plus recorded activities (runs, rides, uploaded walks, watch-recorded gym)."""
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    today = now.astimezone(ZoneInfo(settings.timezone)).date()
+    with Session(engine) as session:
+        rows = session.exec(select(GarminDaily).where(GarminDaily.day >= today - timedelta(days=days - 1),
+                            GarminDaily.day <= today).order_by(GarminDaily.day)).all()
+    series = []
+    for row in rows:
+        summary = json.loads(row.raw_json).get("summary")
+        if not isinstance(summary, dict) or summary.get("calendarDate") != row.day.isoformat():
+            continue
+        total = _number(summary.get("activeKilocalories"), 0, 10_000)
+        if total is None:
+            continue
+        everyday = _number(summary.get("wellnessActiveKilocalories"), 0, 10_000)
+        everyday = min(everyday, total) if everyday is not None else None
+        observed = json.loads(row.normalized_json).get("summary", {}).get("_observed_at", {})
+        series.append({"date": row.day.isoformat(), "total": round(total),
+                       "everyday": round(everyday) if everyday is not None else None,
+                       "training": round(total - everyday) if everyday is not None else None,
+                       "provisional": row.day == today,
+                       "synced_at": max(observed.values(), default=None) or _iso(row.synced_at)})
+    latest = series[-1] if series else None
+    full = [p["total"] for p in series if not p["provisional"]][-7:]
+    return {"source": SOURCE, "today": latest if latest and latest["provisional"] else None, "latest": latest,
+            "avg7": round(sum(full) / len(full)) if full else None, "avg7_days": len(full), "series": series}
+
+
 def coach_summary(days: int = 14) -> dict:
     value = recovery(days)
     return {"source": value["source"], "latest": value["latest"], "coverage": value["coverage"],
