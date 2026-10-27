@@ -63,8 +63,8 @@ async function live<T>(token: string, method: "GET" | "POST", path: string, body
 export const coachImageUrl = (path: string) => `${BASE}${path}`;
 
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
-export type ActiveKcalDay = { date: string; total: number; everyday: number | null; training: number | null; walkpad: number; gym: number; garmin: boolean; provisional: boolean; synced_at: string | null };
-export type ActiveKcal = { gym_met: number; today: ActiveKcalDay | null; latest: ActiveKcalDay | null; avg7: number | null; avg7_days: number; series: ActiveKcalDay[] };
+export type ActiveKcalDay = { date: string; total: number; everyday: number; run: number; ride: number; walkpad: number; gym: number; steps: number | null; garmin: number | null; provisional: boolean };
+export type ActiveKcal = { stride_m: number; gym_met: number; today: ActiveKcalDay | null; latest: ActiveKcalDay | null; avg7: number | null; avg7_days: number; series: ActiveKcalDay[] };
 export type BodySummary = {
   weight_kg: number | null; weight_avg7: number | null; weight_delta7: number | null;
   body_fat_pct: number | null; tdee: number | null;
