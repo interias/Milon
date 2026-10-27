@@ -145,6 +145,23 @@ def test_match_status_and_hr_band_execution(db):
     assert ov["progress"] == {"core": 7, "core_done": 2, "optional_done": 0, "missed": 3}
 
 
+def test_match_picks_fitting_ride_when_a_day_has_several(db):
+    _import()
+    curve = {60: 280.0, 300: 220.0, 1200: 190.0}
+    hard, test, z2 = START + timedelta(days=1), START + timedelta(days=8), START + timedelta(days=7)
+    store(hard, "9101", power=110.0, seconds=3600, title="Zwift - Pacer")            # länger, aber locker
+    store(hard, "9102", power=180.0, seconds=1800, title="Zwift - Sweet Spot")      # hart
+    store(test, "9103", power=110.0, seconds=3600, title="Zwift - Pacer")
+    store(test, "9104", power=150.0, seconds=780, curve=curve, title="Zwift - FTP Ramp Test")
+    store(z2, "9105", power=150.0, seconds=1500, curve=curve, title="Zwift - Ramp Test")  # länger, aber Test
+    store(z2, "9106", power=110.0, seconds=900, title="Zwift - Pacer")
+    ov = _overview()
+    assert _find(ov, hard)["ride"]["activity_id"] == "9102"
+    assert _find(ov, test)["ride"]["activity_id"] == "9104"
+    assert _find(ov, test)["execution"] == {"type": "test", "ftp": 210}
+    assert _find(ov, z2)["ride"]["activity_id"] == "9106"
+
+
 def _follow(steps, ftp, offset_s, scale=1.0):
     timeline = []
     for st in steps:
