@@ -554,15 +554,31 @@ def _runs() -> pd.DataFrame:
     return df
 
 
+def _pick_ride(kind: str, day_rides: pd.DataFrame):
+    """Passende Fahrt eines Tages mit mehreren Fahrten: Test = Ramp-Titel, hart = höchste NP, sonst die längste
+    Fahrt ohne Ramp-Test."""
+    from .metrics import cycling
+    ramp = day_rides["title"].fillna("").astype(str).str.contains(cycling.RAMP_TITLE)
+    power = day_rides["norm_power_w"].fillna(day_rides["avg_power_w"]).fillna(0)
+    by_len = day_rides.assign(_p=power).sort_values(["duration_seconds", "_p"], ascending=False)
+    if kind == "test" and ramp.any():
+        return by_len[ramp.loc[by_len.index]].iloc[0]
+    if kind in HARD_KINDS:
+        return by_len.sort_values("_p", ascending=False, kind="stable").iloc[0]
+    easy = by_len[~ramp.loc[by_len.index]]
+    return (easy if not easy.empty else by_len).iloc[0]
+
+
 def _match(sessions: list[BikePlanSession], rides: pd.DataFrame, runs: pd.DataFrame, today: date) -> dict:
-    """Je Einheit die längste Fahrt bzw. (sonst) den längsten Lauf desselben Tages."""
-    rides_by_day = ({d: g.sort_values("duration_seconds", ascending=False).iloc[0] for d, g in rides.groupby("day")}
-                    if not rides.empty else {})
+    """Je Einheit die passende Fahrt (`_pick_ride`) bzw. (sonst) den längsten Lauf desselben Tages."""
+    rides_by_day = dict(iter(rides.groupby("day"))) if not rides.empty else {}
     runs_by_day = ({d: g.sort_values("dur_min", ascending=False).iloc[0] for d, g in runs.groupby("day")}
                    if not runs.empty else {})
     out = {}
     for s in sessions:
-        ride, run = rides_by_day.get(s.day), runs_by_day.get(s.day)
+        day_rides = rides_by_day.get(s.day)
+        ride = _pick_ride(s.kind, day_rides) if day_rides is not None else None
+        run = runs_by_day.get(s.day)
         if ride is not None:
             status = "done"
         elif run is not None and s.kind != "test":

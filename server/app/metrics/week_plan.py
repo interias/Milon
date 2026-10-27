@@ -211,7 +211,7 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             if s["status"] == "done" and s["ride"]:
                 used_ride = s["ride"]["activity_id"]
                 ratio = (s["ride"]["minutes"] or 0) / s["duration_min"] if s["duration_min"] else None
-                color = ratio_color(ratio)
+                color = "green" if s["kind"] == "test" else ratio_color(ratio)  # Rampe endet beim Ausbelasten
             if s["status"] == "run":
                 used_run = True
             hard = s["kind"] in bike_plan.HARD_KINDS
