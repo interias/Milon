@@ -84,7 +84,7 @@ export type Overview = { body: BodySummary; running: RunSummary; strength: Stren
 
 export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null };
 export type WeeklyWeight = { week: string; weight: number };
-export type TdeePoint = { date: string; tdee: number; tdee_avg: number; intake: number; intake_avg: number; estimate_days: number };
+export type TdeePoint = { date: string; tdee: number; tdee_avg: number; tdee_sd?: number; intake: number; intake_avg: number; estimate_days: number };
 export type StepsPoint = { date: string; steps: number };
 export type StepsSummary = { last: number | null; last_day: string | null; avg7: number | null; series: StepsPoint[] };
 export type Activity = { kind: "run" | "workout" | "ride"; date: string; title: string; detail: string };
@@ -186,8 +186,11 @@ export type Tdee = {
   estimate_days?: number; smooth_days?: number; provisional?: boolean;
   tdee: number | null; avg_intake?: number; weight_change_kg?: number;
   deficit_per_day?: number; window_days?: number; intake_days?: number; reason?: string;
-  // Laufband (aktive kcal): im TDEE schon enthalten → Basis ohne Walks + heutige Walks
-  today?: string; walk_kcal_avg?: number; tdee_base?: number; walk_kcal_today?: number; tdee_today?: number;
+  // Lernendes Verbrauchsmodell: typischer Tag ± Unsicherheit, Zerlegung, heute
+  tdee_sd?: number; weight_trend?: number;
+  parts?: { base: number; tef: number; active: number; resting: number | null; unmeasured: number | null };
+  model?: { rho: number; tef: number; since: string };
+  today?: string; tdee_base?: number; active_kcal_today?: number; tdee_today?: number;
   intake_today?: number | null;
 };
 export type RunWeekOverview = {

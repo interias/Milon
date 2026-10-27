@@ -5,23 +5,6 @@ import pandas as pd
 from app.metrics import body
 
 
-def test_energy_uses_same_calendar_dates(monkeypatch):
-    dates = pd.date_range("2026-01-01", periods=76)
-    weight = pd.Series([80 - d / 100 for d in range(76)], index=dates)
-    weight.iloc[35:50] = float("nan")
-    monkeypatch.setattr(body, "_weight_daily", lambda: weight)
-    monkeypatch.setattr(body, "_intake_daily", lambda: pd.Series([2000 + d * 10 for d in range(76)], index=dates))
-    trend = body.tdee_trend()
-    result = body.adaptive_tdee()
-    cutoff = pd.Timestamp(trend[-1]["date"]) - pd.Timedelta(days=14)
-    recent = [p for p in trend if pd.Timestamp(p["date"]) > cutoff]
-    assert result["avg_intake"] == round(sum(p["intake"] for p in recent) / len(recent))
-    assert result["avg_intake"] == trend[-1]["intake_avg"]
-    assert result["estimate_days"] == len(recent) == trend[-1]["estimate_days"]
-    assert result["deficit_per_day"] == result["tdee"] - result["avg_intake"]
-    assert result["provisional"] == (len(recent) < 7)
-
-
 def test_forecast_resumes_only_when_both_coverage_rules_pass(monkeypatch):
     dates = pd.date_range("2026-01-01", periods=70)
     weight = pd.Series(80.0, index=dates)

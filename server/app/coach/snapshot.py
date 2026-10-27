@@ -78,13 +78,12 @@ def snapshot_text() -> str:
         f"KÖRPER: Gewicht {b.get('weight_kg')} kg (7-Tage-Mittel {b.get('weight_avg7')}, "
         f"Δ7T {b.get('weight_delta7')} kg; letzter Messtag {b.get('weight_date')}, "
         f"{b.get('weight_days7')}/7 Messtage), KFA-Trend {b.get('body_fat_pct')} %. "
-        f"Adaptives TDEE ~{t.get('tdee')} kcal (Ø-Intake {t.get('avg_intake')}, "
-        f"Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}, "
-        f"{t.get('estimate_days')} Schätztage in {t.get('smooth_days')} Kalendertagen"
+        f"Verbrauch (lernendes Modell aus Essen + Waage + Bewegung) ~{t.get('tdee')} ± {t.get('tdee_sd')} kcal/Tag "
+        f"(Ø-Intake {t.get('avg_intake')}, Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}"
         + (", vorläufig" if t.get("provisional") else "") + ")."
-        + (f" Laufband (aktive kcal, im TDEE schon enthalten): Ø {t.get('walk_kcal_avg')} kcal/Tag im Schätzfenster, "
-           f"heute {t.get('walk_kcal_today')} kcal → Verbrauch heute ~{t.get('tdee_today')} kcal."
-           if t.get("walk_kcal_avg") or t.get("walk_kcal_today") else ""),
+        + (f" Zerlegung: Grundverbrauch {p.get('base')} (davon Ruheumsatz-Formel {p.get('resting')}), "
+           f"Verdauung {p.get('tef')}, gemessene Bewegung Ø {p.get('active')} kcal/Tag; "
+           f"heute bisher ~{t.get('tdee_today')} kcal." if (p := t.get("parts")) else ""),
         "",
         f"LAUFEN: letzte erfasste Woche ({cur_week}) {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "

@@ -118,3 +118,12 @@ def _no_real_week_plan(request, monkeypatch):
     from app.metrics import week_plan
     monkeypatch.setattr(week_plan, "briefing_lines", lambda day: [])
     monkeypatch.setattr(week_plan, "compact", lambda *args, **kwargs: {})
+
+
+@pytest.fixture(autouse=True)
+def _no_real_active_kcal(monkeypatch):
+    """Das Verbrauchsmodell holt die aktiven kcal aus vielen Quellen; in Tests ohne Bewegung (eigene Tests
+    reichen eine Serie direkt an `expenditure.run`)."""
+    import pandas as pd
+    from app.metrics import expenditure
+    monkeypatch.setattr(expenditure, "_active_series", lambda start, end: pd.Series(dtype=float))
