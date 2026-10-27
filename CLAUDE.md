@@ -677,3 +677,4 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
   - **Laufband:** `walkpad.energy` (ACSM mit Steigung), alle Walks. **Gym:** Hevy, MET 3,5.
   - Garmins `activeKilocalories` (`garmin_daily.active_calories`) nur als Vergleich in den Details. Ø = letzte 7 vollen Tage. Nur Anzeige — nie zum adaptiven TDEE addieren.
   - Echte Daten (3 Wochen): Milon nah an Garmin; 10-km-Lauf ≈ 740 kcal, ruhige Tage 50–200, 26.10. 991 (Garmin 758, kannte Gym und einen Walk nicht).
+- **Diagramm auf `/gesundheit`** (2026-10-27, Karte nach „Schritte“): `components/ActiveKcalChart.tsx` = gestapelte Tagesbalken der letzten 30 Tage (lückenlose Tagesachse, heute halbtransparent), Ø je vollem Tag + Ø 7 T, Tooltip je Tag mit Teilen + Garmin-Vergleich, Legende, Tabelle. Farben fest je Teil (Alltag `#00917d`, Laufen `#2a78d6`, Rad `#ab7f00`, Laufband `#b53415`, Gym `#d4579a`), per dataviz-Validator (light) alle Checks PASS.

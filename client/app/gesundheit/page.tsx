@@ -11,6 +11,7 @@ import { GarminRecovery } from "@/components/GarminRecovery";
 import { GarminNights } from "@/components/GarminNights";
 import { SourceStatus } from "@/components/SourceStatus";
 import { WalkpadCard } from "@/components/WalkpadCard";
+import { ActiveKcalChart } from "@/components/ActiveKcalChart";
 import { de, de0, dm } from "@/lib/format";
 
 export default function Gesundheit() {
@@ -52,6 +53,7 @@ export default function Gesundheit() {
       <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted"><span>Bis zu 30 Tage · fehlende Tage bleiben unbekannt</span><label className="flex items-center gap-2"><input type="checkbox" checked={raw} onChange={(event) => setRaw(event.target.checked)} />Tageswerte</label></div>
       {summary && <p className="mt-3 text-xs text-muted">{summary.source_label}</p>}
     </Card>
+    <ActiveKcalChart revision={revision} />
     <Card className="mt-4">
       <h2 className="text-sm font-semibold">Radfahren · letzte 30 Tage</h2>
       {cycling ? <>
