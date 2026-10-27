@@ -197,7 +197,7 @@ def test_snapshot_exposes_action_feedback_without_inventing_results(monkeypatch)
     from app import garmin_daily
     from app.coach import snapshot
 
-    for module, names in ((snapshot.body, ["summary", "adaptive_tdee", "weight_forecast", "bodyfat_forecast"]),
+    for module, names in ((snapshot.body, ["summary", "adaptive_tdee", "weight_forecast"]),
                           (snapshot.nutrition, ["summary"]), (snapshot.running, ["summary"]),
                           (snapshot.strength, ["summary", "strength_index"]),
                           (snapshot.health, ["steps_summary", "cycling_summary", "resting_hr_trend"])):

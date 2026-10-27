@@ -32,7 +32,6 @@ MISSING_INTAKE_SD = 3000.0    # kcal: ein Tag ohne Eintrag ist praktisch unbekan
 B_DRIFT_SD = 15.0             # kcal/Tag: so schnell darf der Grundverbrauch wandern
 B_PRIOR_SD = 400.0
 AVG_DAYS = 14                 # „typischer Tag“: Mittel über Essen und Bewegung der letzten 14 Tage
-FORBES_C = 10.4               # nur für die Anzeige: Ruheumsatz nach Cunningham aus der Magermasse
 
 
 def run(weight: pd.Series, intake: pd.Series, active: pd.Series | None, until: date | None = None) -> list[dict]:
@@ -96,9 +95,10 @@ def predict_weight(row: dict, intake: pd.Series, active: pd.Series, days: int) -
     return w
 
 
-def resting_kcal(weight: float, bf_pct: float | None) -> float | None:
-    """Ruheumsatz nach Cunningham (500 + 22 · Magermasse) — nur zur Einordnung von B, kein Modellteil."""
-    return None if bf_pct is None else 500 + 22 * weight * (1 - bf_pct / 100)
+def resting_kcal(weight: float, height_cm: float | None, age: float | None) -> float | None:
+    """Ruheumsatz nach Mifflin-St Jeor (Mann: 10·kg + 6,25·cm − 5·Jahre + 5) — nur zur Einordnung von B.
+    Bewusst ohne Körperfett: der Wert der Waage ist eine Formel aus dem Gewicht (R² 0,998), keine Messung."""
+    return None if height_cm is None or age is None else 10 * weight + 6.25 * height_cm - 5 * age + 5
 
 
 # ---------------- Anbindung an Milons Daten ----------------

@@ -67,7 +67,7 @@ export type ActiveKcalDay = { date: string; total: number; everyday: number; run
 export type ActiveKcal = { stride_m: number; gym_met: number; today: ActiveKcalDay | null; latest: ActiveKcalDay | null; avg7: number | null; avg7_days: number; series: ActiveKcalDay[] };
 export type BodySummary = {
   weight_kg: number | null; weight_avg7: number | null; weight_delta7: number | null;
-  body_fat_pct: number | null; tdee: number | null;
+  tdee: number | null;
   weight_date: string | null; weight_days7: number; previous_weight_days7: number;
 };
 export type RunSummary = {
@@ -134,8 +134,6 @@ export type CyclingHealth = {
   total_km: number; rides: number; km_30d: number; avg_speed: number | null; last_day: string | null;
 };
 export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };
-export type BodyFatPoint = { date: string; pct: number | null; avg7: number | null };
-export type BodyFatBand = { series: { date: string; median: number | null; low: number | null; high: number | null; days: number }[]; window_days: number; minimum_days: number; note: string };
 export type SleepPoint = { external_id: string; date: string; started_at: string; ended_at: string; asleep_hours: number | null; window_hours: number; awake_minutes: number | null; nap: boolean; main_sleep: boolean; source_package: string; stage_coverage: number | null };
 export type SleepOverview = { summary: { latest_date: string | null; latest_asleep_hours: number | null; latest_window_hours: number | null; avg_asleep_hours_7d: number | null; nights_7d: number; known_asleep_nights_7d: number; naps_7d: number }; series: SleepPoint[]; sources: { package: string; label: string; nights: number; known_asleep_nights: number }[]; switch_date: string | null; method: string; notes: string[] };
 export type SleepPerformancePoint = { date: string; sleep_hours: number; value: number; title: string; session_id: string };
@@ -151,13 +149,6 @@ export type NutritionSummary = {
 };
 export type ProteinPoint = { date: string; protein: number | null; avg7: number | null; days7: number };
 export type KcalPoint = { date: string; kcal: number | null; avg7: number | null; days7: number };
-export type LeanMassPoint = { date: string; weight: number | null; ffm: number | null; fat: number | null; paired_days: number };
-export type LeanMassSummary = {
-  ffm: number | null; fat: number | null; weight: number | null;
-  ffm_delta: number | null; fat_delta: number | null; days: number;
-  from_date?: string; to_date?: string; measurement_days: number;
-};
-export type LeanMass = { summary: LeanMassSummary; trend: LeanMassPoint[] };
 export type ForecastPoint = { date: string; value: number };
 export type Forecast = {
   available: boolean; reason?: string; observed_days?: number; span_days?: number;
@@ -165,21 +156,6 @@ export type Forecast = {
   current?: number; projected?: number; slope_per_day?: number; per_week?: number;
   per_month?: number; horizon_days?: number; fit_days?: number; from_date?: string;
   history?: ForecastPoint[]; points?: ForecastPoint[];
-};
-export type CompScenario = {
-  key: "preserved" | "expected" | "trend"; label: string; p: number;
-  weight: number; ffm: number; fat: number; bf_pct: number | null;
-  ffm_delta: number; fat_delta: number; note: string | null;
-};
-export type CompositionForecast = {
-  available: boolean; reason?: string;
-  from_date?: string;
-  horizon_days?: number;
-  weight?: { current: number; projected: number; per_month: number };
-  anchor?: { weight: number; bf_pct: number; fat: number; ffm: number };
-  scenarios?: CompScenario[];
-  p_obs?: number;
-  note?: string;
 };
 export type Tdee = {
   from_date?: string;
@@ -464,12 +440,12 @@ export type LlmBudget = {
 export type AppSettings = {
   openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
   anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
-  timezone: string; scheduler_enabled: boolean; run_hr_max: number; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; weather_places: string[]; fddb_user_masked: string;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; body_height_cm: number | null; birth_date: string | null; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; weather_places: string[]; fddb_user_masked: string;
   keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
   openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
-  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; body_height_cm?: number; birth_date?: string; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
@@ -692,15 +668,10 @@ export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
   bodyWeight: (days = 180) => get<WeightPoint[]>(`/metrics/body/weight?days=${days}`),
-  bodyFat: (days = 180) => get<BodyFatPoint[]>(`/metrics/body/bodyfat?days=${days}`),
-  bodyFatBand: (days = 180) => get<BodyFatBand>(`/metrics/body/bodyfat-band?days=${days}`),
   bodyTdee: () => get<Tdee>("/metrics/body/tdee"),
   bodyTdeeTrend: (windowDays = 14, days = 180) => get<TdeePoint[]>(`/metrics/body/tdee-trend?window_days=${windowDays}&days=${days}`),
   bodyWeeklyWeight: (weeks = 12) => get<WeeklyWeight[]>(`/metrics/body/weight-weekly?weeks=${weeks}`),
   bodyWeightForecast: (horizon = 30, fitDays = 30) => get<Forecast>(`/metrics/body/weight-forecast?horizon=${horizon}&fit_days=${fitDays}`),
-  bodyFatForecast: (horizon = 30, fitDays = 30) => get<Forecast>(`/metrics/body/bodyfat-forecast?horizon=${horizon}&fit_days=${fitDays}`),
-  bodyCompositionForecast: (horizon = 30, fitDays = 30) => get<CompositionForecast>(`/metrics/body/composition-forecast?horizon=${horizon}&fit_days=${fitDays}`),
-  bodyLeanMass: (days = 180) => get<LeanMass>(`/metrics/body/lean-mass?days=${days}`),
   // Ernährung
   nutritionSummary: () => get<NutritionSummary>("/metrics/nutrition/summary"),
   nutritionProtein: (days = 30) => get<ProteinPoint[]>(`/metrics/nutrition/protein?days=${days}`),

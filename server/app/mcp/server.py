@@ -61,12 +61,6 @@ def get_tdee() -> dict:
 
 
 @mcp.tool()
-def get_bodyfat_trend(days: int = 180) -> list:
-    """Körperfett-Trend (Bioimpedanz, nur Trend) der letzten N Tage."""
-    return body.body_fat_trend(days)
-
-
-@mcp.tool()
 def get_steps(days: int = 14) -> dict:
     """Tagesschritte + 7-Tage-Schnitt."""
     return body.steps_recent(days)
@@ -211,8 +205,8 @@ def get_cycling_volume(weeks: int = 12) -> list:
 
 @mcp.tool()
 def get_forecast() -> dict:
-    """30-Tage-Prognose (linearer Trend) für Gewicht & Körperfett: aktuell -> projiziert, Δ/Woche, Δ/Monat."""
-    return {"weight": body.weight_forecast(), "bodyfat": body.bodyfat_forecast()}
+    """30-Tage-Prognose (linearer Trend) für das Gewicht: aktuell -> projiziert, Δ/Woche, Δ/Monat."""
+    return {"weight": body.weight_forecast()}
 
 
 @mcp.tool()

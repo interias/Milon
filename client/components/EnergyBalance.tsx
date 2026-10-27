@@ -63,14 +63,14 @@ export function EnergyBalance({ compact = false, className = "mt-4" }: { compact
 }
 
 const PARTS = [
-  { key: "resting", label: "Ruheumsatz", color: "#8a9a99", note: "Formel nach Cunningham aus deiner Magermasse" },
+  { key: "resting", label: "Ruheumsatz", color: "#8a9a99", note: "Formel nach Mifflin-St Jeor aus Gewicht, Größe und Alter" },
   { key: "unmeasured", label: "Unerfasste Alltagsbewegung", color: "#5cb8af", note: "Stehen, Hausarbeit, Nachbrenneffekt … – gelernt" },
   { key: "tef", label: "Verdauung", color: "#ab7f00", note: "10 % der Zufuhr" },
   { key: "active", label: "Gemessene Bewegung", color: "#0a6e66", note: "Milons aktive kcal, Ø 14 Tage" },
 ] as const;
 
 function Breakdown({ parts, total }: { parts: NonNullable<Tdee["parts"]>; total: number }) {
-  // Ohne Körperfett (oder wenn die Formel über dem Gelernten liegt) bleibt der Grundverbrauch ein Block.
+  // Ohne Größe/Geburtsdatum (oder wenn die Formel über dem Gelernten liegt) bleibt der Grundverbrauch ein Block.
   const split = parts.resting != null && parts.unmeasured != null && parts.unmeasured > 0;
   const rows = split ? PARTS.map((p) => ({ ...p, value: parts[p.key] as number }))
     : [{ key: "base", label: "Grundverbrauch", color: "#8a9a99", note: "Ruheumsatz + Unerfasstes – gelernt", value: parts.base },

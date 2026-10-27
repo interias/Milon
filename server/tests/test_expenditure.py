@@ -1,5 +1,6 @@
 """Verbrauchsmodell: lernt einen bekannten Verbrauch aus synthetischer Waage + Essen + Bewegung."""
 import json
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -54,12 +55,13 @@ def test_adaptive_tdee_uses_last_full_day_and_reports_parts(monkeypatch):
     weight, intake, _ = _world(days=120)
     monkeypatch.setattr(body, "_weight_daily", lambda: weight)
     monkeypatch.setattr(body, "_intake_daily", lambda: intake)
-    monkeypatch.setattr(body, "_bodyfat_daily", lambda: pd.Series(15.0, index=weight.index))
+    monkeypatch.setattr(body.settings, "body_height_cm", 180.0)
+    monkeypatch.setattr(body.settings, "birth_date", date(1985, 4, 30))
     out = body.adaptive_tdee()
     json.dumps(out, allow_nan=False)
     assert out["from_date"] == "2025-04-30" and out["today"] == "2025-05-01"   # ein Tag nach den Daten, nicht bis heute
     assert out["deficit_per_day"] == out["tdee"] - out["avg_intake"]
-    assert out["parts"]["resting"] == round(500 + 22 * out["weight_trend"] * 0.85)
+    assert out["parts"]["resting"] == round(10 * out["weight_trend"] + 6.25 * 180 - 5 * 40 + 5)  # Mifflin, 40 Jahre
     assert abs(out["parts"]["unmeasured"] - (out["parts"]["base"] - out["parts"]["resting"])) <= 1
     assert not out["provisional"]
     trend = body.tdee_trend(days=30)
