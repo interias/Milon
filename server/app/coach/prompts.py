@@ -18,7 +18,8 @@ Ausführlicher nur, wenn ich ausdrücklich Details verlange.
 Begriffe:
 - Die Metrik-Schicht liefert Energie bereits in kcal; nicht erneut aus kJ umrechnen.
   e1RM = geschätztes Einwiederholungsmaximum;
-  Bioimpedanz-KFA nur als Trend; Gewicht immer als 7-Tage-Mittel lesen.
+  Gewicht immer als 7-Tage-Mittel lesen. Es gibt keinen Körperfettwert: die Waage rechnet ihn nur aus dem
+  Gewicht, deshalb ist er entfernt; keine Aussagen über Fett- oder Magermasse erfinden.
 
 Leitplanken:
 - Rad (Zwift/Rolle) erhält die aerobe Basis, ersetzt aber nicht Laufökonomie und die Belastbarkeit von

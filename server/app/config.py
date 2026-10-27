@@ -35,7 +35,10 @@ class Settings(BaseSettings):
     coach_context: str = ""
     timezone: str = "Europe/Berlin"
 
-    # Körper-Messungen (Gewicht/KFA) nur aus dieser Health-Connect-App (Waage) übernehmen;
+    # Körpermaße für Ruheumsatz-Formeln (Mifflin-St Jeor); leer = unbekannt.
+    body_height_cm: float | None = Field(default=None, gt=100, lt=250, allow_inf_nan=False)
+    birth_date: date | None = None
+    # Körper-Messungen (Gewicht) nur aus dieser Health-Connect-App (Waage) übernehmen;
     # leer = alle Quellen. Andere Apps (Google Fit, Samsung Health) erzeugen Ausreißer.
     body_source_package: str = "com.qingniu.arboleaf"
     # Personal import bounds; unset means no personal lower/upper limit.

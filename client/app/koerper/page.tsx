@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type BodySummary, type WeightPoint, type BodyFatPoint, type BodyFatBand } from "@/lib/api";
+import { api, type BodySummary, type WeightPoint } from "@/lib/api";
 import { Card, PageTitle } from "@/components/ui";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
@@ -15,12 +15,8 @@ import { de, dm } from "@/lib/format";
 export default function Koerper() {
   const [summary, setSummary] = useState<BodySummary | null>(null);
   const [weight, setWeight] = useState<WeightPoint[] | null>(null);
-  const [fat, setFat] = useState<BodyFatPoint[] | null>(null);
-  const [fatBand, setFatBand] = useState<BodyFatBand | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [rawWeight, setRawWeight] = useState(false);
-  const [rawFat, setRawFat] = useState(false);
-  const [showFatBand, setShowFatBand] = useState(false);
   const [details, setDetails] = useState(false);
   const [measurementsRevision, setMeasurementsRevision] = useState(0);
   useEffect(() => {
@@ -28,47 +24,28 @@ export default function Koerper() {
     const failed = (key: string) => { if (active) setErrors((previous) => [...previous, key]); };
     api.bodySummary().then((value) => { if (active) setSummary(value); }).catch(() => failed("summary"));
     api.bodyWeight(180).then((value) => { if (active) setWeight(value); }).catch(() => failed("weight"));
-    api.bodyFat(180).then((value) => { if (active) setFat(value); }).catch(() => failed("fat"));
-    api.bodyFatBand(180).then((value) => { if (active) setFatBand(value); }).catch(() => failed("fatBand"));
     return () => { active = false; };
   }, []);
-  const lastFat = fat?.filter((p) => p.pct != null).at(-1);
   const delta = summary?.weight_delta7;
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : "Wird geladen …";
   return <>
-    <PageTitle title="Körper" sub="Körpermaße, Gewicht & Körperzusammensetzung" />
+    <PageTitle title="Körper" sub="Körpermaße & Gewicht" />
     <BodyProgress revision={measurementsRevision} />
     <div className="mb-5"><BodyCircumferences onChange={() => setMeasurementsRevision(value => value + 1)} /></div>
-    <div className="grid items-start gap-4 xl:grid-cols-2">
-      <Card className="min-w-0">
-        <h2 className="text-sm font-semibold">Gewicht</h2>
-        <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
-        {summary ? <>
-          <p className="mt-3 font-display text-3xl font-extrabold">{de(summary.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
-          <p className="mt-2 text-sm">{delta == null ? "Kein Vergleich verfügbar" : `${delta > 0 ? "+" : ""}${de(delta, 2)} kg gegenüber 7 Tagen zuvor`}</p>
-          <p className="mt-2 text-xs text-muted">{summary.weight_date ? `Letzte Messung: ${de(summary.weight_kg, 1)} kg · ${dm(summary.weight_date)}` : "Noch keine Gewichtsmessung"}</p>
-          {summary.weight_date && <p className="mt-1 text-xs text-muted">{summary.weight_days7}/7 Messtage · Vergleichsfenster {summary.previous_weight_days7}/7</p>}
-        </> : <p role="status" className="mt-3 text-xs text-muted">{state("summary")}</p>}
-        {weight ? <RunTrendChart label="Gewicht · 7-Tage-Mittel" unit="kg" showPoints={false}
-          points={weight.map((p) => ({ date: p.date, value: p.avg7, detail: "7-Tage-Mittel aus vorhandenen Messungen" }))}
-          observations={rawWeight ? weight.map((p) => ({ date: p.date, value: p.weight, detail: "Einzelmesswert" })) : []} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
-        <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
-      </Card>
-      <Card className="min-w-0">
-        <h2 className="text-sm font-semibold">Körperfett-Schätzung</h2>
-        <p className="mt-1 text-xs text-muted">Bioimpedanz-Waage · 7-Tage-Mittel</p>
-        {fat ? <>
-          <p className="mt-3 font-display text-3xl font-extrabold">{de(lastFat?.avg7, 1)} <span className="text-sm font-normal text-muted">%</span></p>
-          <p className="mt-2 text-xs text-muted">{lastFat ? `Letzter Waagenwert: ${de(lastFat.pct, 1)} % · ${dm(lastFat.date)}` : "Noch keine Körperfettwerte"}</p>
-          <p className="mt-2 text-xs text-muted">Wasserhaushalt und Messbedingungen beeinflussen die Schätzung.</p>
-          <RunTrendChart label={showFatBand ? "Körperfett · Messstreuung" : "Körperfett-Schätzung · 7-Tage-Mittel"} unit="%" showPoints={false} intervalLabel="Messstreuung (10.–90. Perzentil)"
-            points={showFatBand ? (fatBand?.series ?? []).map((p) => ({ date: p.date, value: p.median, low: p.low, high: p.high, detail: `28-Tage-Median · ${p.days} Messtage` })) : fat.map((p) => ({ date: p.date, value: p.avg7, detail: "Geglättete BIA-Schätzung" }))}
-            observations={rawFat ? fat.map((p) => ({ date: p.date, value: p.pct, detail: "Waagen-Schätzwert" })) : []} />
-        </> : <p role="status" className="mt-3 text-xs text-muted">{state("fat")}</p>}
-        <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawFat} onChange={(e) => setRawFat(e.target.checked)} />Rohwerte</label><label className="flex items-center gap-2"><input type="checkbox" checked={showFatBand} onChange={(e) => setShowFatBand(e.target.checked)} />Messstreuung (28 Tage)</label></div>
-        {showFatBand && <p className="mt-3 text-xs text-muted">{fatBand ? fatBand.note : state("fatBand")}</p>}
-      </Card>
-    </div>
+    <Card className="min-w-0">
+      <h2 className="text-sm font-semibold">Gewicht</h2>
+      <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
+      {summary ? <>
+        <p className="mt-3 font-display text-3xl font-extrabold">{de(summary.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
+        <p className="mt-2 text-sm">{delta == null ? "Kein Vergleich verfügbar" : `${delta > 0 ? "+" : ""}${de(delta, 2)} kg gegenüber 7 Tagen zuvor`}</p>
+        <p className="mt-2 text-xs text-muted">{summary.weight_date ? `Letzte Messung: ${de(summary.weight_kg, 1)} kg · ${dm(summary.weight_date)}` : "Noch keine Gewichtsmessung"}</p>
+        {summary.weight_date && <p className="mt-1 text-xs text-muted">{summary.weight_days7}/7 Messtage · Vergleichsfenster {summary.previous_weight_days7}/7</p>}
+      </> : <p role="status" className="mt-3 text-xs text-muted">{state("summary")}</p>}
+      {weight ? <RunTrendChart label="Gewicht · 7-Tage-Mittel" unit="kg" showPoints={false}
+        points={weight.map((p) => ({ date: p.date, value: p.avg7, detail: "7-Tage-Mittel aus vorhandenen Messungen" }))}
+        observations={rawWeight ? weight.map((p) => ({ date: p.date, value: p.weight, detail: "Einzelmesswert" })) : []} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
+      <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
+    </Card>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
       <button className="py-2 text-accent underline underline-offset-4" onClick={() => setDetails(true)}>Weitere Körperanalysen</button>
       <Link className="py-2 text-muted underline underline-offset-4" href="/fortschritt">Foto-Fortschritt ansehen</Link>

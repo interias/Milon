@@ -48,6 +48,8 @@ export default function Einstellungen() {
   const [budget, setBudget] = useState("100");
   const [scheduler, setScheduler] = useState(true);
   const [hrMax, setHrMax] = useState("");
+  const [height, setHeight] = useState("");
+  const [birth, setBirth] = useState("");
   const [ftp, setFtp] = useState("");
   const [stride, setStride] = useState("");
   const [padIncline, setPadIncline] = useState("");
@@ -71,7 +73,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setFtp(String(d.bike_ftp ?? "")); setPad(d); setPlaces(d.weather_places ?? []); })
+      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setHeight(String(d.body_height_cm ?? "")); setBirth(d.birth_date ?? ""); setFtp(String(d.bike_ftp ?? "")); setPad(d); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -89,6 +91,9 @@ export default function Einstellungen() {
       if (!Number.isNaN(bud) && bud >= 0 && bud !== s.llm_monthly_budget_usd) body.llm_monthly_budget_usd = bud;
       const hr = parseFloat(hrMax);
       if (!Number.isNaN(hr) && hr >= 0 && hr !== s.run_hr_max) body.run_hr_max = hr;
+      const cm = parseFloat(height.replace(",", "."));
+      if (!Number.isNaN(cm) && cm !== s.body_height_cm) body.body_height_cm = cm;
+      if (birth && birth !== s.birth_date) body.birth_date = birth;
       const watts = parseFloat(ftp);
       if (!Number.isNaN(watts) && watts >= 0 && watts !== s.bike_ftp) body.bike_ftp = watts;
       const strideM = parseFloat(stride.replace(",", "."));
@@ -110,6 +115,8 @@ export default function Einstellungen() {
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
       setHrMax(String(updated.run_hr_max ?? ""));
+      setHeight(String(updated.body_height_cm ?? ""));
+      setBirth(updated.birth_date ?? "");
       setFtp(String(updated.bike_ftp ?? ""));
       setPad(updated);
       setPlaces(updated.weather_places ?? []);
@@ -211,6 +218,21 @@ export default function Einstellungen() {
           <p className="mt-2 text-[11px] text-muted">
             Hevy alle 6 h · FDDB täglich · HC-Ordner-Scan alle 10 min. Manuell über „↻ Daten aktualisieren".
           </p>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardTitle title="Körper" sub="Für den Ruheumsatz in der Energiebilanz (Mifflin-St Jeor)" />
+          <div className="flex flex-wrap gap-3">
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] text-muted">Größe in cm</span>
+              <input type="number" inputMode="decimal" min={100} max={250} step={1}
+                value={height} onChange={(e) => setHeight(e.target.value)} placeholder="z. B. 178" className={INPUT} />
+            </label>
+            <label className="block w-48">
+              <span className="mb-1 block text-[11px] text-muted">Geburtsdatum</span>
+              <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} className={INPUT} />
+            </label>
+          </div>
         </Card>
 
         <Card className="md:col-span-2">

@@ -4,7 +4,7 @@ Secrets werden maskiert ausgegeben; PUT aktualisiert nur übergebene, nicht-leer
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -61,6 +61,8 @@ def _current() -> dict:
         "timezone": settings.timezone,
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
+        "body_height_cm": settings.body_height_cm,
+        "birth_date": settings.birth_date.isoformat() if settings.birth_date else None,
         "bike_ftp": settings.bike_ftp,
         "walkpad_stride_m": settings.walkpad_stride_m,
         "walkpad_incline_pct": settings.walkpad_incline_pct,
@@ -96,6 +98,8 @@ class SettingsIn(BaseModel):
     anthropic_api_key: str | None = None
     scheduler_enabled: bool | None = None
     run_hr_max: float | None = None
+    body_height_cm: float | None = None
+    birth_date: date | None = None
     bike_ftp: float | None = None  # 0 = automatisch (eFTP)
     walkpad_stride_m: float | None = None
     walkpad_incline_pct: float | None = None
@@ -122,6 +126,10 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Budget muss eine Zahl ≥ 0 sein (0 = kein Limit).")
     if body.bike_ftp is not None and not 0 <= body.bike_ftp <= 1000:
         raise HTTPException(status_code=422, detail="FTP muss zwischen 0 und 1000 W liegen (0 = automatisch).")
+    if body.body_height_cm is not None and not 100 < body.body_height_cm < 250:
+        raise HTTPException(status_code=422, detail="Größe muss zwischen 100 und 250 cm liegen.")
+    if body.birth_date is not None and not date(1900, 1, 1) < body.birth_date < date.today():
+        raise HTTPException(status_code=422, detail="Ungültiges Geburtsdatum.")
     if body.walkpad_stride_m is not None and not 0.2 < body.walkpad_stride_m <= 1.5:
         raise HTTPException(status_code=422, detail="Schrittlänge muss zwischen 0,2 und 1,5 m liegen.")
     if body.walkpad_incline_pct is not None and not 0 <= body.walkpad_incline_pct <= 15:
@@ -167,6 +175,14 @@ def update_settings(body: SettingsIn) -> dict:
     if body.run_hr_max is not None and body.run_hr_max >= 0:
         settings.run_hr_max = body.run_hr_max
         env_updates["RUN_HR_MAX"] = str(body.run_hr_max)
+
+    # Körpermaße für den Ruheumsatz in der Energiebilanz.
+    if body.body_height_cm is not None:
+        settings.body_height_cm = body.body_height_cm
+        env_updates["BODY_HEIGHT_CM"] = str(body.body_height_cm)
+    if body.birth_date is not None:
+        settings.birth_date = body.birth_date
+        env_updates["BIRTH_DATE"] = body.birth_date.isoformat()
 
     # Rad-FTP: 0 = wieder automatisch (eFTP aus den Fahrten).
     if body.bike_ftp is not None:

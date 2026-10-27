@@ -105,7 +105,7 @@ def test_snapshot_rad_line_names_noise_as_no_trend_and_is_empty_without_data(rid
 def test_snapshot_text_carries_the_rad_lines(monkeypatch):
     from app.coach import snapshot
     data = {key: {} for key in ["koerper", "tdee", "laufen", "kraft", "schritte", "radfahren", "gewicht_prognose",
-                               "kfa_prognose", "kraft_index", "schlaf", "ernaehrung"]}
+                               "kraft_index", "schlaf", "ernaehrung"]}
     data.update(stand="2026-09-20", lauf_volumen_4w=[], kraft_tonnage_6w=[])
     data["checkins"] = {"count": 0, "days": 30, "energy_avg": None, "energy_days": 0,
                         "training_effort_avg": None, "training_effort_days": 0}

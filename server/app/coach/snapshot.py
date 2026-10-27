@@ -44,7 +44,6 @@ def build_snapshot() -> dict:
         "radfahren": health.cycling_summary(),
         "ruhepuls": health.resting_hr_trend(days=30),
         "gewicht_prognose": body.weight_forecast(),
-        "kfa_prognose": body.bodyfat_forecast(),
         "kraft_index": strength.strength_index("3m"),
         "schlaf": sleep.overview(30)["summary"],
         "checkins": checkins.summary(30),
@@ -59,7 +58,7 @@ def snapshot_text() -> str:
     snap = build_snapshot()
     b, t, r, k = snap["koerper"], snap["tdee"], snap["laufen"], snap["kraft"]
     st, rad = snap["schritte"], snap["radfahren"]
-    gp, fp = snap["gewicht_prognose"], snap["kfa_prognose"]
+    gp = snap["gewicht_prognose"]
     food = snap["ernaehrung"]
 
     vol = " / ".join(f'{w["week"]}: {w["km"]:.0f}' for w in snap["lauf_volumen_4w"]) or "–"
@@ -77,7 +76,7 @@ def snapshot_text() -> str:
         "",
         f"KÖRPER: Gewicht {b.get('weight_kg')} kg (7-Tage-Mittel {b.get('weight_avg7')}, "
         f"Δ7T {b.get('weight_delta7')} kg; letzter Messtag {b.get('weight_date')}, "
-        f"{b.get('weight_days7')}/7 Messtage), KFA-Trend {b.get('body_fat_pct')} %. "
+        f"{b.get('weight_days7')}/7 Messtage). "
         f"Verbrauch (lernendes Modell aus Essen + Waage + Bewegung) ~{t.get('tdee')} ± {t.get('tdee_sd')} kcal/Tag "
         f"(Ø-Intake {t.get('avg_intake')}, Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}"
         + (", vorläufig" if t.get("provisional") else "") + ")."
@@ -123,8 +122,6 @@ def snapshot_text() -> str:
         "",
         "PROGNOSE (30 T, linearer Trend): "
         + (f"Gewicht {gp['current']}→{gp['projected']} kg ({gp['per_month']:+} kg/Monat)" if gp.get("projected") is not None else f"Gewicht: {gp.get('reason', 'nicht verfügbar')}")
-        + "; "
-        + (f"KFA-Szenario (15%-Annahme) {fp['current']}→{fp['projected']} % ({fp['per_month']:+} %/Monat)" if fp.get("projected") is not None else f"KFA: {fp.get('reason', 'nicht verfügbar')}")
         + ".",
     ]
     if snap.get("garmin_erholung"):

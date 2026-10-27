@@ -58,8 +58,6 @@ TOOLS = [
         "erfassten Tag, nicht zwingend heute. Eintragstage belegen keine vollstaendige Tageserfassung. "
         "tdee und kcal_avg7 haben unterschiedliche Fenster: fuer Energiebilanz get_tdee verwenden. "
         "protein_target ist ein Referenzwert, kein individuell verordnetes Ziel."),
-    _fn("get_bodyfat_trend", "Koerperfett-Trend (Bioimpedanz, nur Trend) der letzten N Tage.",
-        {"days": {"type": "integer"}}),
     _fn("get_running_volume", "Wochen-Laufvolumen (km) + Anzahl Laeufe der letzten N Wochen.",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
     _fn("get_pace_trend", "Pace-Trend (min/km) je Woche (niedriger = schneller).",
@@ -139,8 +137,7 @@ TOOLS = [
         {"days": {"type": "integer", "description": "Default 30"}}),
     _fn("get_cycling_volume", "Wochen-Radvolumen (km) + Anzahl Fahrten der letzten N Wochen (exercise_type 4).",
         {"weeks": {"type": "integer", "description": "Default 12"}}),
-    _fn("get_forecast", "30-Tage-Gewichtsprognose aus linearem Trend; Körperfett als abgeleitetes "
-        "Szenario mit 15%-Magermasseverlust-Annahme, keine eigenstaendige KFA-Prognose. Datenstand beachten."),
+    _fn("get_forecast", "30-Tage-Gewichtsprognose aus linearem Trend. Datenstand beachten."),
     _fn("get_strength_index", "Gesamtstärke-Index (wöchentlich aufgelöst, driftfrei am Monats-Backbone "
         "verankert, Basis 100 = Trainingsstart): aktueller Wert, Δ über den Zeitraum, Trend "
         "(steigt/stagniert/faellt) + Treiber-/Bremse-Übungen.",
@@ -181,8 +178,6 @@ def dispatch(name: str, args: dict):
         return body.adaptive_tdee(int(args.get("window_days", 14)))
     if name == "get_nutrition_summary":
         return nutrition.summary()
-    if name == "get_bodyfat_trend":
-        return _thin(body.body_fat_trend(int(args.get("days", 180))))
     if name == "get_running_volume":
         return running.weekly_volume(int(args.get("weeks", 12)))
     if name == "get_pace_trend":
@@ -262,7 +257,7 @@ def dispatch(name: str, args: dict):
     if name == "get_cycling_volume":
         return health.cycling_weekly(int(args.get("weeks", 12)))
     if name == "get_forecast":
-        return {"weight": body.weight_forecast(), "bodyfat": body.bodyfat_forecast()}
+        return {"weight": body.weight_forecast()}
     if name == "get_strength_index":
         return strength.strength_index(str(args.get("period", "3m")))
     if name == "get_strength_energy":

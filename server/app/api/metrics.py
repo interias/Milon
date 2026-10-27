@@ -33,16 +33,6 @@ def body_weight(days: int = 180) -> list[dict]:
     return body.weight_trend(days)
 
 
-@router.get("/body/bodyfat")
-def body_bodyfat(days: int = 180) -> list[dict]:
-    return body.body_fat_trend(days)
-
-
-@router.get("/body/bodyfat-band")
-def body_bodyfat_band(days: int = 180) -> dict:
-    return body.body_fat_band(max(1, min(days, 1825)))
-
-
 @router.get("/body/tdee")
 def body_tdee(window_days: int = 14) -> dict:
     return body.adaptive_tdee(window_days)
@@ -61,21 +51,6 @@ def body_weight_weekly(weeks: int = 12) -> list[dict]:
 @router.get("/body/weight-forecast")
 def body_weight_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
     return body.weight_forecast(horizon, fit_days)
-
-
-@router.get("/body/bodyfat-forecast")
-def body_bodyfat_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
-    return body.bodyfat_forecast(horizon, fit_days)
-
-
-@router.get("/body/composition-forecast")
-def body_composition_forecast(horizon: int = 30, fit_days: int = 30) -> dict:
-    return body.composition_forecast(horizon, fit_days)
-
-
-@router.get("/body/lean-mass")
-def body_lean_mass(days: int = 180) -> dict:
-    return {"summary": body.lean_mass_summary(min(days, 90)), "trend": body.lean_mass_trend(days)}
 
 
 # --- Ernährung (FDDB: kcal + Makros) ---

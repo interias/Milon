@@ -35,7 +35,7 @@ def test_reports_use_configured_goals_and_current_date(monkeypatch):
 
 def test_snapshot_labels_old_observations_and_nutrition_coverage(monkeypatch):
     data = {key: {} for key in ["koerper", "tdee", "laufen", "kraft", "schritte",
-                               "radfahren", "gewicht_prognose", "kfa_prognose", "kraft_index"]}
+                               "radfahren", "gewicht_prognose", "kraft_index"]}
     data.update(stand="2026-09-20", lauf_volumen_4w=[], kraft_tonnage_6w=[])
     data["koerper"] = {"weight_date": "2026-09-10", "weight_days7": 3}
     data["schritte"] = {"last_day": "2026-09-11", "last": 4321, "days7": 2}
