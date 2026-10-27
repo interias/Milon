@@ -54,7 +54,7 @@ def test_each_source_is_net_and_steps_exclude_run_and_treadmill(db, monkeypatch)
     assert today["everyday"] == round(0.1 * today["steps"] * 0.65 * KG * 0.005)
     assert today["walkpad"] == walkpad.energy(3250, 3000, 6, KG)["kcal"]
     assert today["gym"] == round(2.5 * KG)
-    indoor = 600 / (0.24 * 4.184) - KG + (6.8 - 1) * KG * 0.5
+    indoor = 600 / (0.20 * 4.184) - KG + (6.8 - 1) * KG * 0.5
     outdoor = (4.0 - 1) * KG * 0.5
     assert today["ride"] == round(indoor + outdoor)
     assert today["total"] == sum(today[k] for k in active_kcal.PARTS)

@@ -4,7 +4,7 @@ Alles netto, also über dem Ruheumsatz (1 MET = 1 kcal je kg und Stunde), damit 
 - Alltag: Tagesschritte der Uhr ohne die Schritte in Läufen (Kadenz) und auf dem Laufband (watch_steps),
   ACSM-Gehformel 0,1 ml O₂/kg/m × Schrittlänge (`walkpad_stride_m`).
 - Laufen: ACSM-Laufformel 0,2 ml O₂/kg/m (≈ 1 kcal/kg/km).
-- Rad indoor: gemessene Arbeit kJ / (24 % Wirkungsgrad × 4,184) minus Ruheanteil; ohne Watt MET 6,8.
+- Rad indoor: gemessene Arbeit kJ / (20 % Wirkungsgrad × 4,184) minus Ruheanteil; ohne Watt MET 6,8.
 - Rad draußen: MET nach Tempo (Compendium: < 16 km/h 4,0 · < 19 6,8 · < 22,5 8,0 · sonst 10,0).
 - Laufband: ACSM mit Steigung (`walkpad.energy`), alle Walks.
 - Gym (Hevy): MET 3,5 (Krafttraining, mehrere Übungen, 8–15 Wdh.).
@@ -25,7 +25,7 @@ KCAL_PER_ML = 5 / 1000          # 5 kcal je Liter O₂
 WALK_ML_PER_KG_M = 0.1
 RUN_ML_PER_KG_M = 0.2
 RUN_CADENCE = 165               # Schritte/min, um Laufschritte aus den Tagesschritten zu nehmen
-BIKE_EFFICIENCY = 0.24
+BIKE_EFFICIENCY = 0.20         # Laborwerte bei ~100 W und ~90 U/min liegen bei 16–20 % (Moseley & Jeukendrup 2001)
 INDOOR_NO_POWER_MET = 6.8
 GYM_MET = 3.5
 PARTS = ("everyday", "run", "ride", "walkpad", "gym")
