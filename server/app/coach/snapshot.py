@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from ..config import settings
 from .. import checkins, coach_actions
-from ..metrics import body, health, nutrition, running, sleep, strength
+from ..metrics import body, composition, health, nutrition, running, sleep, strength
 from . import rad as rad_context
 
 
@@ -17,6 +17,13 @@ def _pace(p: float | None) -> str:
     m = int(p)
     s = round((p - m) * 60)
     return f"{m}:{s:02d} min/km"
+
+
+def _safe(fn) -> dict:
+    try:
+        return fn()
+    except Exception:  # noqa: BLE001 -- ein fehlender Zusatz kürzt nur den Snapshot
+        return {}
 
 
 def _hero() -> dict:
@@ -35,6 +42,7 @@ def build_snapshot() -> dict:
         "ernaehrung": nutrition.summary(),
         "koerper": body.summary(),
         "tdee": body.adaptive_tdee(),
+        "zusammensetzung": _safe(composition.estimate),
         "laufen": running.summary(),
         "lauf_volumen_4w": running.weekly_volume(4),
         "kraft": strength.summary(),
@@ -77,7 +85,10 @@ def snapshot_text() -> str:
         f"KÖRPER: Gewicht {b.get('weight_kg')} kg (7-Tage-Mittel {b.get('weight_avg7')}, "
         f"Δ7T {b.get('weight_delta7')} kg; letzter Messtag {b.get('weight_date')}, "
         f"{b.get('weight_days7')}/7 Messtage). "
-        f"Verbrauch (lernendes Modell aus Essen + Waage + Bewegung) ~{t.get('tdee')} ± {t.get('tdee_sd')} kcal/Tag "
+        + (f"Taille {c['waist']} cm am {c['date']} (Taille/Größe {c['whtr']}), Körperfett-Spanne {c['bf_low']}–{c['bf_high']} % "
+           f"(nur Spanne, aus dem Taillenumfang), fettfreie Masse {c.get('ffm_low')}–{c.get('ffm_high')} kg. "
+           if (c := (snap.get("zusammensetzung") or {}).get("current")) else "")
+        + f"Verbrauch (lernendes Modell aus Essen + Waage + Bewegung) ~{t.get('tdee')} ± {t.get('tdee_sd')} kcal/Tag "
         f"(Ø-Intake {t.get('avg_intake')}, Defizit ~{t.get('deficit_per_day')} kcal/Tag; Stand {t.get('from_date')}"
         + (", vorläufig" if t.get("provisional") else "") + ")."
         + (f" Zerlegung: Grundverbrauch {p.get('base')} (davon Ruheumsatz-Formel {p.get('resting')}), "

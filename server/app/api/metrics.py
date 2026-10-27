@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
 from ..metrics import week_plan
-from ..metrics import achievements, active_kcal, activity, body, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
+from ..metrics import achievements, active_kcal, activity, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -31,6 +31,11 @@ def body_summary() -> dict:
 @router.get("/body/weight")
 def body_weight(days: int = 180) -> list[dict]:
     return body.weight_trend(days)
+
+
+@router.get("/body/composition")
+def body_composition() -> dict:
+    return composition.estimate()
 
 
 @router.get("/body/tdee")

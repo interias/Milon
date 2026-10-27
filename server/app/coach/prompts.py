@@ -18,8 +18,8 @@ Ausführlicher nur, wenn ich ausdrücklich Details verlange.
 Begriffe:
 - Die Metrik-Schicht liefert Energie bereits in kcal; nicht erneut aus kJ umrechnen.
   e1RM = geschätztes Einwiederholungsmaximum;
-  Gewicht immer als 7-Tage-Mittel lesen. Es gibt keinen Körperfettwert: die Waage rechnet ihn nur aus dem
-  Gewicht, deshalb ist er entfernt; keine Aussagen über Fett- oder Magermasse erfinden.
+  Gewicht immer als 7-Tage-Mittel lesen. Körperfett gibt es nur als Spanne aus dem Taillenumfang
+  (Taillenformel oben, Fotobewertung unten), nie als Einzelwert; der Wert der Waage ist entfernt.
 
 Leitplanken:
 - Rad (Zwift/Rolle) erhält die aerobe Basis, ersetzt aber nicht Laufökonomie und die Belastbarkeit von

@@ -2,7 +2,7 @@
 Dieselbe metrics/-Schicht wie REST/Snapshot - das LLM ruft gezielt, was es fuer eine Frage braucht."""
 from __future__ import annotations
 
-from ..metrics import achievements, body, health, nutrition, run_analysis, run_fitness_service, running, strength
+from ..metrics import achievements, body, composition, health, nutrition, run_analysis, run_fitness_service, running, strength
 
 
 def _thin(items: list, n: int = 16) -> list:
@@ -51,6 +51,9 @@ TOOLS = [
     _fn("get_overview", "Kompakte Zusammenfassung aller drei Bereiche (Koerper, Laufen, Kraft) mit den aktuellen Kennzahlen."),
     _fn("get_weight_trend", "Gewichtsverlauf (Tageswerte + 7-Tage-EWMA) der letzten N Tage.",
         {"days": {"type": "integer", "description": "Zeitraum in Tagen (Default 90)"}}),
+    _fn("get_body_composition", "Taillenumfang, Taille/Groesse und Koerperfett als SPANNE (bf_low..bf_high) samt "
+        "fettfreier Masse je Taillenmessung. Nie als Einzelwert nennen; Verlauf von Taille/Groesse ist belastbarer als das "
+        "Niveau. 'caveat' beachten."),
     _fn("get_tdee", "Geschaetzter Energieverbrauch und Energiebilanz. Datenstand, Erfassung und Vorlaeufigkeit beachten.",
         {"window_days": {"type": "integer", "minimum": 1, "description": "Default 14 Tage"}}),
     _fn("get_nutrition_summary", "Ernaehrung: Protein, Kalorien (bereits kcal), Makros und Protein-Referenzziel. "
@@ -174,6 +177,8 @@ def dispatch(name: str, args: dict):
         return {"body": body.summary(), "running": running.summary(), "strength": strength.summary()}
     if name == "get_weight_trend":
         return _thin(body.weight_trend(int(args.get("days", 90))))
+    if name == "get_body_composition":
+        return {k: v for k, v in composition.estimate().items() if k != "series"}
     if name == "get_tdee":
         return body.adaptive_tdee(int(args.get("window_days", 14)))
     if name == "get_nutrition_summary":

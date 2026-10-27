@@ -127,3 +127,12 @@ def _no_real_active_kcal(monkeypatch):
     import pandas as pd
     from app.metrics import expenditure
     monkeypatch.setattr(expenditure, "_active_series", lambda start, end: pd.Series(dtype=float))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_waists(monkeypatch):
+    """Die Körperzusammensetzung liest Taillenmessungen über die gemeinsame Engine; in Tests keine
+    (eigene Tests setzen `composition._waists`)."""
+    import pandas as pd
+    from app.metrics import composition
+    monkeypatch.setattr(composition, "_waists", lambda: pd.Series(dtype=float))
