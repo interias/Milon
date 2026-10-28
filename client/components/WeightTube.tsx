@@ -44,6 +44,7 @@ export function WeightTube({ points, raw, corridor }: { points: WeightPoint[]; r
   const pts = [...points].sort((a, b) => ts(a.date) - ts(b.date));
   const vals = pts.flatMap((p) => [
     ...(ok(p.fit) ? [p.fit - HALF, p.fit + HALF] : []),
+    ...(ok(p.avg7) ? [p.avg7] : []),
     ...(raw && ok(p.weight) ? [p.weight] : []),
     ...(corridor && ok(p.band_low) && ok(p.band_high) ? [p.band_low, p.band_high] : []),
   ]);
@@ -71,6 +72,12 @@ export function WeightTube({ points, raw, corridor }: { points: WeightPoint[]; r
     });
     return <path d={d} fill="none" stroke="var(--color-ink)" strokeOpacity="0.55" strokeDasharray="4 4" strokeWidth="1.2" />;
   };
+  // 7-Tage-Mittel als Linie; fehlt es (Lücke), bricht die Linie ab.
+  let mean = "";
+  pts.forEach((p, i) => {
+    if (!ok(p.avg7)) return;
+    mean += `${i > 0 && ok(pts[i - 1].avg7) ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.avg7).toFixed(1)}`;
+  });
   const tickCount = width < 420 ? 3 : 5;
   return <div ref={box} className="relative mt-3 min-w-0 w-full">
     <svg viewBox={`0 0 ${width} 290`} height="290" className="w-full rounded outline-accent" role="group" tabIndex={0}
@@ -95,17 +102,19 @@ export function WeightTube({ points, raw, corridor }: { points: WeightPoint[]; r
         return <polygon key={p.date} points={`${x(q.date)},${y(q.fit + HALF)} ${x(p.date)},${y(p.fit + HALF)} ${x(p.date)},${y(p.fit - HALF)} ${x(q.date)},${y(q.fit - HALF)}`}
           fill={c} stroke={c} strokeWidth="0.8" strokeLinejoin="round" />;
       })}
+      <path d={mean} fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {corridor && <>{corridorLine("band_low")}{corridorLine("band_high")}</>}
       {raw && pts.map((p) => ok(p.weight) && <circle key={`r${p.date}`} cx={x(p.date)} cy={y(p.weight)} r="2" fill="var(--color-ink)" fillOpacity="0.45" />)}
       {active && <line x1={x(active.date)} x2={x(active.date)} y1={top} y2={bottom} stroke="var(--color-muted)" strokeDasharray="3 3" />}
-      {active && ok(active.fit) && <circle cx={x(active.date)} cy={y(active.fit)} r="4" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="1.5" />}
+      {active && ok(active.avg7) && <circle cx={x(active.date)} cy={y(active.avg7)} r="4" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="1.5" />}
       {Array.from({ length: tickCount }, (_, i) => {
         const f = i / (tickCount - 1);
         return <text key={i} x={left + f * (right - left)} y="284" textAnchor={i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle"} fontSize="12" fill="var(--color-muted)">{dm(new Date(first + f * (last - first)).toISOString())}</text>;
       })}
     </svg>
     {active && <div className="pointer-events-none absolute right-2 top-0 max-w-[calc(100%-3.5rem)] rounded border border-line bg-surface/95 px-3 py-2 text-xs shadow-sm" role="status" aria-live="polite">
-      <p className="font-semibold">{dm(active.date)}{active.date.slice(0, 4)}{ok(active.weight) ? ` · gewogen ${de(active.weight, 1)} kg` : ""}</p>
+      <p className="font-semibold">{dm(active.date)}{active.date.slice(0, 4)}{ok(active.avg7) ? ` · 7-Tage-Mittel ${de(active.avg7, 1)} kg` : ""}</p>
+      {ok(active.weight) && <p className="mt-0.5 text-muted">gewogen {de(active.weight, 1)} kg</p>}
       {active.zone && ok(active.rate_pct) && ok(active.fit) ? <>
         <p className="mt-0.5"><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: ZONE[active.zone].color }} />{ZONE[active.zone].label}</p>
         <p className="mt-0.5 text-muted">{signed(active.rate_pct / 100 * active.fit, 2)} kg/Woche · {signed(active.rate_pct, 2)} %/Woche</p>
@@ -114,6 +123,7 @@ export function WeightTube({ points, raw, corridor }: { points: WeightPoint[]; r
       {corridor && active.phase && ok(active.band_low) && <p className="mt-0.5 text-muted">Zielkorridor {active.phase}: {de(active.band_low, 1)}–{de(active.band_high, 1)} kg</p>}
     </div>}
     <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted" aria-label="Legende Änderungsrate">
+      <li className="flex items-center gap-1"><span className="inline-block h-0.5 w-3.5 rounded bg-ink" />7-Tage-Mittel</li>
       {ZONES.map((z) => <li key={z.key} className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: z.color }} />{z.label}</li>)}
     </ul>
   </div>;
