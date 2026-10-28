@@ -53,7 +53,7 @@ export function WeightRate({ onChange }: { onChange: () => void }) {
     </p> : null}
     <p className={`mt-1 font-semibold ${tone(rate)}`}>{rate.verdict === "im" ? "✓ " : ""}{rate.label}
       {rate.kcal_per_day != null && <span className="font-normal text-muted"> · Richtung Korridormitte etwa {signed(rate.kcal_per_day, 0)} kcal/Tag</span>}</p>
-    {rate.verdict === "wenig_daten" && <p className="mt-1 text-xs text-muted">{rate.n} Wiegungen seit {dm(rate.from_date)}.</p>}
+    {rate.verdict === "wenig_daten" && <p className="mt-1 text-xs text-muted">{rate.n} {rate.n === 1 ? "Wiegung" : "Wiegungen"} seit {dm(rate.from_date)}</p>}
     {editing && <div className="mt-3 grid gap-2 border-t border-line pt-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
       <label className="text-xs text-muted">Phase
         <select className="mt-1 block w-full rounded border border-line bg-surface px-2 py-1.5 text-base text-ink sm:text-sm" value={preset} onChange={(e) => setPreset(e.target.value)}>
@@ -75,7 +75,8 @@ export function WeightRate({ onChange }: { onChange: () => void }) {
     <details className="mt-3 text-xs text-muted">
       <summary className="cursor-pointer">So liest du den Korridor</summary>
       <ul className="mt-2 list-disc space-y-1 pl-4">
-        <li>Das helle Band im Diagramm beginnt am Startgewicht der Phase und öffnet sich mit dem Mindest- und Höchsttempo.</li>
+        <li>Der Schlauch zeigt für jeden Tag, wie schnell du gerade zu- oder abnimmst (Gerade durch die Wiegungen ±14 Tage): blau = Abnahme, grau = stabil, rot = Zunahme, je kräftiger, desto schneller. Blass heißt: Die Spanne reicht noch über mehrere Bereiche.</li>
+        <li>Die gestrichelten Linien sind der Zielkorridor deiner Phase: Sie beginnen am Startgewicht und öffnen sich mit dem Mindest- und Höchsttempo.</li>
         <li>Wiege dich morgens nach der Toilette, vor Essen und Trinken. Das Tempo kommt aus allen Einzelwiegungen der letzten 4 Wochen, nicht aus einzelnen Tagen.</li>
         <li>Dein Gewicht schwankt von Tag zu Tag um etwa ±0,4 kg (Wasser, Salz, Kohlenhydrate, Darm). Urteile erst nach 3–4 Wochen; „noch unsicher“ heißt: abwarten.</li>
         <li>Richtwerte: Cut 0,5–1 %/Woche (Helms 2014), etwa 0,7 %/Woche erhielt mehr Muskel als 1 % (Garthe 2011). Aufbau: Anfänger 1–2 %/Monat, Fortgeschrittene 0,5–1 %, Erfahrene 0,25–0,5 % — mehr Überschuss bringt vor allem Fett (Helms 2023). Expertenkonsens, kein Gesetz.</li>

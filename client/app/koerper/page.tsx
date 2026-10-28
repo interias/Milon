@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type BodySummary, type WeightPoint } from "@/lib/api";
 import { Card, PageTitle } from "@/components/ui";
-import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { BodyDetails } from "@/components/BodyDetails";
 import { EnergyBalance } from "@/components/EnergyBalance";
@@ -12,6 +11,7 @@ import { BodyCircumferences } from "@/components/BodyCircumferences";
 import { BodyProgress } from "@/components/BodyProgress";
 import { BodyComposition } from "@/components/BodyComposition";
 import { WeightRate } from "@/components/WeightRate";
+import { WeightTube } from "@/components/WeightTube";
 import { de, dm } from "@/lib/format";
 
 export default function Koerper() {
@@ -19,6 +19,7 @@ export default function Koerper() {
   const [weight, setWeight] = useState<WeightPoint[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [rawWeight, setRawWeight] = useState(false);
+  const [showCorridor, setShowCorridor] = useState(true);
   const [details, setDetails] = useState(false);
   const [measurementsRevision, setMeasurementsRevision] = useState(0);
   const [phaseRevision, setPhaseRevision] = useState(0);
@@ -49,11 +50,14 @@ export default function Koerper() {
         {summary.weight_date && <p className="mt-1 text-xs text-muted">{summary.weight_days7}/7 Messtage · Vergleichsfenster {summary.previous_weight_days7}/7</p>}
       </> : <p role="status" className="mt-3 text-xs text-muted">{state("summary")}</p>}
       <WeightRate onChange={() => setPhaseRevision((value) => value + 1)} />
-      {weight ? <RunTrendChart label="Gewicht · 7-Tage-Mittel" unit="kg" showPoints={false} intervalLabel="Zielkorridor"
-        points={weight.map((p) => ({ date: p.date, value: p.avg7, low: p.band_low, high: p.band_high,
-          detail: p.phase ? `7-Tage-Mittel · Phase ${p.phase}` : "7-Tage-Mittel aus vorhandenen Messungen" }))}
-        observations={rawWeight ? weight.map((p) => ({ date: p.date, value: p.weight, detail: "Einzelmesswert" })) : []} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
-      <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar{weight?.some((p) => p.band_low != null) ? " · Band: Zielkorridor der Phase" : ""}</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
+      {weight ? <WeightTube points={weight} raw={rawWeight} corridor={showCorridor} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
+      <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted">
+        <span>Bis zu 180 Tage · Farbe = Änderungsrate der Wiegungen ±14 Tage · blass = noch unsicher · Lücken bleiben offen</span>
+        <span className="flex gap-4">
+          {weight?.some((p) => p.band_low != null) && <label className="flex items-center gap-2"><input type="checkbox" checked={showCorridor} onChange={(e) => setShowCorridor(e.target.checked)} />Zielkorridor</label>}
+          <label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label>
+        </span>
+      </div>
     </Card>
     <BodyComposition revision={measurementsRevision} />
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">

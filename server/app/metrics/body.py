@@ -41,8 +41,9 @@ def _intake_daily() -> pd.Series:
 
 
 def weight_trend(days: int = 180) -> list[dict]:
-    """Daily weight, EWMA (span 10), mean of the last seven calendar days and the target corridor
-    of the weight phase (`band_low/band_high/phase`, only from a phase start)."""
+    """Daily weight, EWMA (span 10), mean of the last seven calendar days, the target corridor
+    of the weight phase (`band_low/band_high/phase`, only from a phase start) and the local rate
+    tube (`fit/rate_pct/rate_ci/zone/sure/edge`, see weight_phase.rate_series)."""
     from . import weight_phase
     s = _weight_daily()
     if s.empty:
@@ -50,6 +51,7 @@ def weight_trend(days: int = 180) -> list[dict]:
     ewma = s.interpolate().ewm(span=10).mean()
     avg7 = s.rolling(7, min_periods=1).mean()
     band = weight_phase.corridor(avg7)
+    tube = weight_phase.rate_series(s)
     cutoff = s.index.max() - pd.Timedelta(days=days)
     out = []
     for d in s.index:
@@ -64,6 +66,7 @@ def weight_trend(days: int = 180) -> list[dict]:
             "band_low": low,
             "band_high": high,
             "phase": phase,
+            **(tube.get(d) or {"fit": None, "rate_pct": None, "rate_ci": None, "zone": None, "sure": None, "edge": None}),
         })
     return out
 

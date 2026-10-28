@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
@@ -34,6 +35,57 @@ PRESETS: dict[str, tuple[str, str, float, float]] = {
     "bulk_intermediate": ("bulk", "Aufbau Fortgeschritten", 0.5 / WEEKS_PER_MONTH, 1.0 / WEEKS_PER_MONTH),
     "bulk_advanced": ("bulk", "Aufbau Erfahren", 0.25 / WEEKS_PER_MONTH, 0.5 / WEEKS_PER_MONTH),
 }
+
+# Bereiche für den Rate-Schlauch (unabhängig von der gewählten Phase), Grenzen = die Voreinstellungen oben
+_M = WEEKS_PER_MONTH
+ZONES: list[tuple[float, float, str, str]] = [
+    (float("-inf"), -1.0, "fast_loss", "schneller als 1 %/Woche ab"),
+    (-1.0, -0.5, "cut", "Cut 0,5–1 %/Woche"),
+    (-0.5, -0.25, "cut_gentle", "Cut schonend 0,25–0,5 %/Woche"),
+    (-0.25, -0.25 / _M, "slight_loss", "leichte Abnahme"),
+    (-0.25 / _M, 0.25 / _M, "stable", "stabil (±0,25 %/Monat)"),
+    (0.25 / _M, 1.0 / _M, "bulk_slow", "Aufbau 0,25–1 %/Monat"),
+    (1.0 / _M, 2.0 / _M, "bulk", "Aufbau 1–2 %/Monat"),
+    (2.0 / _M, float("inf"), "fast_gain", "schneller als 2 %/Monat zu"),
+]
+TUBE_HALF = 14          # Rate je Tag: Regression über die Wiegungen ±14 Tage
+TUBE_MIN_N = 8
+TUBE_EDGE = 10          # weniger als 10 Tage Daten auf einer Seite = Rand (nur zurück bzw. nur voraus)
+
+
+def zone_of(pct: float) -> dict:
+    lo, hi, key, label = next(z for z in ZONES if z[0] <= pct < z[1])
+    return {"key": key, "label": label}
+
+
+def rate_series(s: pd.Series) -> dict[pd.Timestamp, dict]:
+    """Lokale Rate je Kalendertag: OLS über die Einzelwiegungen ±14 Tage (mind. 8 über 14 Tage).
+    `fit` = Mittellinie des Schlauchs, `sure` = 95-%-Spanne liegt in einem einzigen Bereich."""
+    obs = s.dropna()
+    if obs.empty:
+        return {}
+    day0 = obs.index[0]
+    xs = np.asarray((obs.index - day0).days, float)
+    ys = obs.to_numpy(float)
+    out: dict[pd.Timestamp, dict] = {}
+    for d in pd.date_range(obs.index[0], obs.index[-1], freq="D"):
+        x = (d - day0).days
+        m = (xs >= x - TUBE_HALF) & (xs <= x + TUBE_HALF)
+        wx, wy = xs[m], ys[m]
+        if len(wx) < TUBE_MIN_N or wx[-1] - wx[0] < 14:
+            continue
+        fit = stats.ols(np.column_stack([np.ones(len(wx)), wx - x]), wy)
+        if fit is None:
+            continue
+        beta, se, df, _ = fit
+        level, slope = float(beta[0]), float(beta[1])
+        pct, ci = slope * 7 / level * 100, stats.t95(df) * float(se[1]) * 7 / level * 100
+        out[d] = {"fit": round(level, 2), "rate_pct": round(pct, 3), "rate_ci": round(ci, 3),
+                  "zone": zone_of(pct)["key"],
+                  "sure": zone_of(pct - ci)["key"] == zone_of(pct + ci)["key"],
+                  "edge": bool(x - wx[0] < TUBE_EDGE or wx[-1] - x < TUBE_EDGE)}
+    return out
+
 
 # Lage unter/über dem Korridor → Wortlaut je Art
 _LABELS = {
@@ -126,6 +178,8 @@ def status(today: date | None = None) -> dict:
     all_phases = phases()
     current = next((p for p in reversed(all_phases) if p["start"] <= today.isoformat()), None)
     out: dict = {"phase": current, "phases": all_phases, "window_days": WINDOW_DAYS,
+                 "zones": [{"key": k, "label": lbl, "min_pct": None if lo == float("-inf") else round(lo, 3),
+                            "max_pct": None if hi == float("inf") else round(hi, 3)} for lo, hi, k, lbl in ZONES],
                  "presets": [{"preset": k, "kind": v[0], "name": v[1], "rate_min_pct": round(v[2], 3),
                               "rate_max_pct": round(v[3], 3)} for k, v in PRESETS.items()]}
     s = body._weight_daily().dropna()
@@ -148,8 +202,9 @@ def status(today: date | None = None) -> dict:
     out["rate"] = {"kg_per_week": round(tr["slope_per_week"], 3), "ci_kg": round(tr["ci_per_week"], 3),
                    "pct_per_week": round(pct, 3), "ci_pct": round(ci, 3),
                    "pct_per_month": round(pct * WEEKS_PER_MONTH, 2), "weight": round(mean, 2)}
+    out["zone"] = zone_of(pct)
     if not current:
-        out.update(verdict="keine_phase", label="Keine Phase gewählt")
+        out.update(verdict="keine_phase", label=out["zone"]["label"])
         return out
     lo, hi = current["rate_min_pct"], current["rate_max_pct"]
     if lo <= pct <= hi:

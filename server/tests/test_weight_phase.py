@@ -102,3 +102,32 @@ def test_api_roundtrip(weights):
         assert c.get("/metrics/body/weight-rate").status_code == 200
         assert c.delete(f"/metrics/body/weight-phases/{pid}").status_code == 200
         assert c.delete(f"/metrics/body/weight-phases/{pid}").status_code == 404
+
+
+def test_rate_tube_zones_follow_the_local_slope(weights):
+    # 6 Wochen Cut (−0,5 kg/Wo ≈ −0,67 %), dann 6 Wochen stabil — ohne Phase
+    down = _series(-0.5, days=42)
+    flat = pd.Series(down.iloc[-1], index=pd.date_range(down.index[-1] + pd.Timedelta(days=1), periods=42))
+    weights(pd.concat([down, flat]).asfreq("D"))
+    rows = [r for r in body.weight_trend(days=400) if r["zone"]]
+    json.dumps(rows, allow_nan=False)
+    assert rows[5]["zone"] == "cut" and rows[5]["sure"]
+    assert rows[5]["rate_pct"] == pytest.approx(-0.5 / 74 * 100, rel=0.05)
+    assert rows[-5]["zone"] == "stable" and rows[-5]["edge"]
+    assert rows[0]["edge"] and not rows[30]["edge"]
+
+
+def test_rate_tube_noise_is_unsure_and_gaps_stay_open(weights):
+    s = _series(0.0, days=60, noise=0.5, seed=4)
+    s.iloc[20:45] = np.nan  # Reise
+    weights(s)
+    rows = {r["date"]: r for r in body.weight_trend(days=400)}
+    assert rows[s.index[32].date().isoformat()]["zone"] is None  # mitten in der Lücke: zu wenig Wiegungen
+    assert any(r["sure"] is False for r in rows.values())
+
+
+def test_status_without_phase_names_the_zone(weights):
+    weights(_series(-0.5))
+    st = weight_phase.status(TODAY)
+    assert st["verdict"] == "keine_phase" and st["zone"]["key"] == "cut" and st["label"] == "Cut 0,5–1 %/Woche"
+    assert [z["key"] for z in st["zones"]][0] == "fast_loss" and st["zones"][0]["min_pct"] is None
