@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
-from ..metrics import week_plan
+from ..metrics import week_plan, weight_phase
 from ..metrics import achievements, active_kcal, activity, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -46,6 +46,33 @@ def body_tdee(window_days: int = 14) -> dict:
 @router.get("/body/tdee-trend")
 def body_tdee_trend(window_days: int = 14, days: int = 180) -> list[dict]:
     return body.tdee_trend(window_days, days)
+
+
+class WeightPhaseInput(BaseModel):
+    start: date
+    preset: str
+
+
+@router.get("/body/weight-rate")
+def body_weight_rate() -> dict:
+    """Tempo der letzten 4 Wochen (Regression über Einzelwiegungen) gegen den Korridor der Gewichtsphase."""
+    return weight_phase.status()
+
+
+@router.post("/body/weight-phases")
+def body_weight_phase_set(body: WeightPhaseInput) -> dict:
+    """Phase ab `start` setzen (gleicher Starttag = ersetzen)."""
+    try:
+        return weight_phase.set_phase(body.start, body.preset)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.delete("/body/weight-phases/{phase_id}")
+def body_weight_phase_delete(phase_id: int) -> dict:
+    if not weight_phase.delete_phase(phase_id):
+        raise HTTPException(404, "Phase nicht gefunden")
+    return {"deleted": phase_id}
 
 
 @router.get("/body/weight-weekly")

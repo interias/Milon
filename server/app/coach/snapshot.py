@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from ..config import settings
 from .. import checkins, coach_actions
-from ..metrics import body, composition, health, nutrition, running, sleep, strength
+from ..metrics import body, composition, health, nutrition, running, sleep, strength, weight_phase
 from . import rad as rad_context
 
 
@@ -34,6 +34,19 @@ def _hero() -> dict:
         return {}
 
 
+def _phase_line(w: dict | None) -> str:
+    """Gewichtsphase + Tempo der letzten 4 Wochen (Regression über Einzelwiegungen) gegen den Zielkorridor."""
+    if not w or not (ph := w.get("phase")):
+        return ""
+    r = w.get("rate") or {}
+    tempo = (f"Tempo {r['kg_per_week']:+.2f} kg/Woche ({r['pct_per_week']:+.2f} %/Woche, ±{r['ci_pct']:.2f}) → {w.get('label')}"
+             + (f", Richtung Korridormitte ~{w['kcal_per_day']:+d} kcal/Tag" if w.get("kcal_per_day") is not None else "")
+             if r else w.get("label", ""))
+    return (f" GEWICHTSPHASE: {ph['name']} seit {ph['start']}, Zielkorridor {ph['rate_min_pct']:+.2f} bis "
+            f"{ph['rate_max_pct']:+.2f} %/Woche; {tempo}. Nur bei sicherem Urteil (nicht 'noch unsicher') zu "
+            f"Anpassungen raten.")
+
+
 def build_snapshot() -> dict:
     from .. import garmin_daily
 
@@ -43,6 +56,7 @@ def build_snapshot() -> dict:
         "koerper": body.summary(),
         "tdee": body.adaptive_tdee(),
         "zusammensetzung": _safe(composition.estimate),
+        "gewichtsphase": _safe(weight_phase.status),
         "laufen": running.summary(),
         "lauf_volumen_4w": running.weekly_volume(4),
         "kraft": strength.summary(),
@@ -93,7 +107,8 @@ def snapshot_text() -> str:
         + (", vorläufig" if t.get("provisional") else "") + ")."
         + (f" Zerlegung: Grundverbrauch {p.get('base')} (davon Ruheumsatz-Formel {p.get('resting')}), "
            f"Verdauung {p.get('tef')}, gemessene Bewegung Ø {p.get('active')} kcal/Tag; "
-           f"heute bisher ~{t.get('tdee_today')} kcal." if (p := t.get("parts")) else ""),
+           f"heute bisher ~{t.get('tdee_today')} kcal." if (p := t.get("parts")) else "")
+        + _phase_line(snap.get("gewichtsphase")),
         "",
         f"LAUFEN: letzte erfasste Woche ({cur_week}) {r.get('week_km')} km / {r.get('week_runs')} Läufe, "
         f"Pace {_pace(r.get('pace'))}, VO2max {r.get('vo2max')}. "
