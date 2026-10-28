@@ -9,7 +9,7 @@ Reine Funktionen über die DB —
 speisen wie alle Metriken REST + Coach + MCP."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -160,6 +160,23 @@ def _rides() -> pd.DataFrame:
     return df[(df["speed"] >= 4) & (df["speed"] <= 60)].copy()
 
 
+def _detected_rides() -> pd.DataFrame:
+    """Move IQ rides (watch-detected, no GPS/km) that no recorded ride covers: recorded wins.
+    Columns started_at, ended_at, dur_min."""
+    from .. import garmin_moveiq
+
+    df = garmin_moveiq.detected_rides()
+    if df.empty:
+        return pd.DataFrame(columns=["started_at", "ended_at", "dur_min"])
+    hc = _read(f"SELECT started_at, ended_at FROM exercise_sessions WHERE exercise_type = {BIKE}",
+               parse_dates=["started_at", "ended_at"]).dropna(subset=["started_at"])
+    hc["ended_at"] = hc["ended_at"].fillna(hc["started_at"])
+    for windows in (hc, _garmin_rides(), _indoor_windows()):
+        df = _drop_overlapping(df, windows)
+    df = df.rename(columns={"minutes": "dur_min"})
+    return df[["started_at", "ended_at", "dur_min"]].reset_index(drop=True)
+
+
 def cycling_weekly(weeks: int = 12) -> list[dict]:
     """Wochen-Radvolumen (km) + Anzahl Fahrten der letzten N Wochen."""
     df = _rides()
@@ -198,7 +215,7 @@ def cycling_summary(now: datetime | None = None) -> dict:
     # Imported session timestamps are naive local wall times.
     if not df.empty:
         df = df[df["started_at"] <= pd.Timestamp(local_now.replace(tzinfo=None))]
-    window = {"window_start": start.isoformat(), "to_date": today.isoformat()}
+    window = {"window_start": start.isoformat(), "to_date": today.isoformat(), "detected": _detected_summary(start)}
     if df.empty:
         return {"total_km": 0.0, "rides": 0, "km_30d": 0.0, "avg_speed": None,
                 "last_day": None, "last_ride": None, **window}
@@ -214,6 +231,20 @@ def cycling_summary(now: datetime | None = None) -> dict:
                       "dur_min": int(round(latest["dur_min"])), "speed": round(float(latest["speed"]), 1)},
         **window,
     }
+
+
+def _detected_summary(start: date) -> dict:
+    """Watch-detected rides since `start` (km unknown, so they stay out of the km figures)."""
+    try:
+        df = _detected_rides()
+    except Exception:  # noqa: BLE001 -- optional source
+        df = pd.DataFrame()
+    df = df[df["started_at"] >= pd.Timestamp(start)] if not df.empty else df
+    if df.empty:
+        return {"rides": 0, "minutes": 0, "last": None}
+    last = df.iloc[-1]
+    return {"rides": int(len(df)), "minutes": int(round(float(df["dur_min"].sum()))),
+            "last": {"date": last["started_at"].isoformat(), "dur_min": int(round(float(last["dur_min"])))}}
 
 
 # ---------------- Ruhepuls ----------------

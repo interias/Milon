@@ -58,8 +58,12 @@ export default function Gesundheit() {
       <h2 className="text-sm font-semibold">Radfahren · letzte 30 Tage</h2>
       {cycling ? <>
         <p className="mt-3 font-display text-2xl font-extrabold">{de(cycling.km_30d, 1)} <span className="text-sm font-normal text-muted">km erfasst</span></p>
-        <p className="mt-1 text-xs text-muted">{dm(cycling.window_start)}–{dm(cycling.to_date)} · getrackte Fahrten aus Health Connect</p>
+        <p className="mt-1 text-xs text-muted">{dm(cycling.window_start)}–{dm(cycling.to_date)} · aufgezeichnete Fahrten (Health Connect, Garmin)</p>
         {cycling.last_ride ? <p className="mt-3 text-sm">Letzte Fahrt: {de(cycling.last_ride.km, 1)} km · {cycling.last_ride.dur_min} min · {new Date(cycling.last_ride.date).toLocaleDateString("de-DE")}</p> : <p className="mt-3 text-xs text-muted">Noch keine geeignete Fahrt erfasst.</p>}
+        {cycling.detected && cycling.detected.rides > 0 && <p className="mt-2 text-sm">
+          Von der Uhr erkannt: {cycling.detected.rides} {cycling.detected.rides === 1 ? "Fahrt" : "Fahrten"} · {cycling.detected.minutes} min
+          <span className="block text-xs text-muted">ohne Strecke (Move IQ, ab ~10 min) – zählen bei den aktiven Kalorien mit{cycling.detected.last ? `, zuletzt ${new Date(cycling.detected.last.date).toLocaleDateString("de-DE")} (${cycling.detected.last.dur_min} min)` : ""}</span>
+        </p>}
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
     <WalkpadCard />

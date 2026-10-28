@@ -292,7 +292,7 @@ def _pull_rides(api, full: bool, indoor: dict | None = None) -> dict:
 
 
 def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = False) -> dict:
-    from .. import garmin_activity, garmin_daily, garmin_indoor, garmin_weather, garmin_load, walkpad
+    from .. import garmin_activity, garmin_daily, garmin_indoor, garmin_moveiq, garmin_weather, garmin_load, walkpad
 
     outcomes = {}
     indoor: dict = {"items": [], "complete": False}
@@ -303,6 +303,8 @@ def _pull_metrics(api, activities: list[dict], full: bool, force_daily: bool = F
                                                            listing_complete=indoor["complete"])),
         ("activities", lambda: garmin_activity.sync_activities(api, activities, full=full)),
         ("daily", lambda: garmin_daily.sync_daily(api, full=full, force=force_daily)),
+        # Optional: rides the watch detected without a recording (Move IQ), for active calories.
+        ("moveiq", lambda: garmin_moveiq.sync_moveiq(api, full=full)),
         ("weather", lambda: garmin_weather.sync_weather(api, activities, full=full)),
         ("running_tolerance", lambda: garmin_load.sync_tolerance(api, full=full, force=force_daily)),
         # Optional: upload pad walks as FIT, read watch steps inside their windows.

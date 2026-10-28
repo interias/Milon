@@ -159,7 +159,7 @@ def _weeks(df: pd.DataFrame, start: date) -> list[dict]:
 
 # ---------------- Fahrten als Trainingstage ----------------
 def ride_sessions() -> pd.DataFrame:
-    """Alle Fahrten, die als Training zählen: Indoor-Fahrten (alle) + Outdoor-Fahrten (HC/Garmin)
+    """Alle Fahrten, die als Training zählen: Indoor-Fahrten (alle) + Outdoor-Fahrten (HC/Garmin/Move IQ)
     ab MIN_OUTDOOR_RIDE_MIN Minuten. Spalten: started_at, day, minutes, kind (indoor|outdoor), title.
     Nur Zählung/Anzeige — mit Last hat das nichts zu tun (siehe `fitness`)."""
     rows: list[dict] = []
@@ -171,6 +171,9 @@ def ride_sessions() -> pd.DataFrame:
     if not outdoor.empty:
         for r in outdoor[outdoor["dur_min"] >= MIN_OUTDOOR_RIDE_MIN].itertuples():
             rows.append({"started_at": r.started_at, "minutes": float(r.dur_min), "kind": "outdoor", "title": "Rad"})
+    detected = health._detected_rides()  # von der Uhr erkannt (Move IQ), gleiche Mindestdauer
+    for r in detected[detected["dur_min"] >= MIN_OUTDOOR_RIDE_MIN].itertuples():
+        rows.append({"started_at": r.started_at, "minutes": float(r.dur_min), "kind": "outdoor", "title": "Rad (erkannt)"})
     df = pd.DataFrame(rows, columns=["started_at", "minutes", "kind", "title"])
     df["started_at"] = pd.to_datetime(df["started_at"])
     df["day"] = df["started_at"].dt.date

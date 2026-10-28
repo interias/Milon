@@ -132,6 +132,7 @@ export type StepsHealth = {
 export type CyclingHealth = {
   last_ride: CyclingRide | null; window_start: string; to_date: string;
   total_km: number; rides: number; km_30d: number; avg_speed: number | null; last_day: string | null;
+  detected?: { rides: number; minutes: number; last: { date: string; dur_min: number } | null };
 };
 export type HealthOverview = { steps: StepsHealth; cycling: CyclingHealth };
 export type SleepPoint = { external_id: string; date: string; started_at: string; ended_at: string; asleep_hours: number | null; window_hours: number; awake_minutes: number | null; nap: boolean; main_sleep: boolean; source_package: string; stage_coverage: number | null };

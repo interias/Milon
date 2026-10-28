@@ -273,6 +273,10 @@ def _other_minutes() -> dict[date, float]:
             out[s.date()] = out.get(s.date(), 0.0) + max(0.0, min(120.0, (e - s).total_seconds() / 60))
     for d, minutes in pad_minutes.items():
         out[d] = out.get(d, 0.0) + min(240.0, minutes)
+    # Von der Uhr erkannte Fahrten (Move IQ) ersetzen die früheren Samsung-Pendelfahrten aus HC.
+    detected = health._detected_rides()
+    for s, minutes in zip(detected["started_at"], detected["dur_min"]):
+        out[s.date()] = out.get(s.date(), 0.0) + min(120.0, float(minutes))
     return out
 
 
