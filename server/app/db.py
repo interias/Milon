@@ -22,6 +22,7 @@ def init_db() -> None:
     from . import circumferences  # noqa: F401 -- keep manual measurements independent of imports
     from . import garmin_routes  # noqa: F401 -- routes supplement existing sessions
     from . import garmin_indoor  # noqa: F401 -- indoor/Zwift rides, no coordinates
+    from . import garmin_moveiq  # noqa: F401 -- watch-detected activities (Move IQ), no coordinates
     from . import garmin_activity, garmin_daily  # noqa: F401 -- source-owned Garmin records
     from . import garmin_weather, run_context, run_reference, coach_actions  # noqa: F401
     from . import garmin_load  # noqa: F401 -- optional Garmin running tolerance

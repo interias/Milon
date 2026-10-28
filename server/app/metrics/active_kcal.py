@@ -6,6 +6,8 @@ Alles netto, also über dem Ruheumsatz (1 MET = 1 kcal je kg und Stunde), damit 
 - Laufen: ACSM-Laufformel 0,2 ml O₂/kg/m (≈ 1 kcal/kg/km).
 - Rad indoor: gemessene Arbeit kJ / (20 % Wirkungsgrad × 4,184) minus Ruheanteil; ohne Watt MET 6,8.
 - Rad draußen: MET nach Tempo (Compendium: < 16 km/h 4,0 · < 19 6,8 · < 22,5 8,0 · sonst 10,0).
+- Rad erkannt (Move IQ, ohne Tempo): MET 4,0 wie die langsamste Stufe (Pendelfahrt ~13 km/h); nur Fahrten,
+  die keine aufgezeichnete Fahrt überlappt.
 - Laufband: ACSM mit Steigung (`walkpad.energy`), alle Walks.
 - Gym (Hevy): MET 3,5 (Krafttraining, mehrere Übungen, 8–15 Wdh.).
 Garmins activeKilocalories steht nur als Vergleich daneben. Nur Anzeige — nie zum adaptiven TDEE addieren."""
@@ -27,6 +29,7 @@ RUN_ML_PER_KG_M = 0.2
 RUN_CADENCE = 165               # Schritte/min, um Laufschritte aus den Tagesschritten zu nehmen
 BIKE_EFFICIENCY = 0.20         # Laborwerte bei ~100 W und ~90 U/min liegen bei 16–20 % (Moseley & Jeukendrup 2001)
 INDOOR_NO_POWER_MET = 6.8
+DETECTED_RIDE_MET = 4.0         # Compendium 01010: Radfahren < 16 km/h, Freizeit/Pendeln
 GYM_MET = 3.5
 PARTS = ("everyday", "run", "ride", "walkpad", "gym")
 
@@ -83,6 +86,12 @@ def compute(start: date, end: date) -> tuple[dict[date, dict], dict[date, int]]:
         day = r.started_at.date()
         if start <= day <= end and (kg := _kg(weights, day)):
             _add(out, day, "ride", (_ride_met(r.speed) - 1) * kg * r.dur_min / 60)
+
+    detected = _safe(health._detected_rides)
+    for r in detected.itertuples() if not detected.empty else []:
+        day = r.started_at.date()
+        if start <= day <= end and (kg := _kg(weights, day)):
+            _add(out, day, "ride", (DETECTED_RIDE_MET - 1) * kg * r.dur_min / 60)
 
     with engine.connect() as con:
         walks = con.exec_driver_sql(

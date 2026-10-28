@@ -53,7 +53,7 @@ def _no_real_world_db(monkeypatch, _world_engine):
 
 @pytest.fixture(scope="session")
 def _ride_engine(tmp_path_factory):
-    from app import bike_plan, garmin_indoor  # noqa: F401 -- registriert garmin_indoor_*/bike_plan_* vor create_all
+    from app import bike_plan, garmin_indoor, garmin_moveiq  # noqa: F401 -- registriert garmin_indoor_*/bike_plan_*/garmin_moveiq* vor create_all
     engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('rides') / 'rides.db'}",
                            connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
@@ -65,8 +65,9 @@ def _ride_engine(tmp_path_factory):
 def _no_real_ride_db(monkeypatch, _ride_engine):
     """Fahrten zählen als Trainingstage (activity.*, weekly_journal); cycling/health lesen sie über ihr
     eigenes engine und dürfen in Tests nie data/tracker.db öffnen. Tests mit eigener DB setzen es danach selbst."""
-    from app import bike_plan
+    from app import bike_plan, garmin_moveiq
     from app.metrics import cycling, health
+    monkeypatch.setattr(garmin_moveiq, "engine", _ride_engine)  # erkannte Fahrten (Move IQ)
     monkeypatch.setattr(cycling, "engine", _ride_engine)
     monkeypatch.setattr(health, "engine", _ride_engine)
     monkeypatch.setattr(bike_plan, "engine", _ride_engine)  # Morgenbriefing liest den Rad-Plan
