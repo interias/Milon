@@ -189,6 +189,8 @@ export type Tdee = {
   model?: { rho: number; tef: number; since: string };
   today?: string; tdee_base?: number; active_kcal_today?: number; tdee_today?: number;
   intake_today?: number | null;
+  // Prognose für den ganzen Tag; Bewegung = bisher, mindestens typisch (`active_avg`)
+  tdee_forecast?: number; active_avg?: number; intake_today_last?: string | null;
 };
 export type RunWeekOverview = {
   week_start: string; previous_week_start: string;

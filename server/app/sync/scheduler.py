@@ -148,7 +148,8 @@ def start_scheduler() -> None:
     sch.add_job(sync_garmin, "interval", minutes=15, id="garmin", replace_existing=True)
     sch.add_job(sync_briefing, "interval", minutes=5, id="briefing", replace_existing=True)
     sch.add_job(sync_weekly_report, "interval", minutes=30, id="weekly_report", replace_existing=True)
-    sch.add_job(sync_fddb, "cron", hour=4, minute=30, id="fddb", replace_existing=True)
+    # Tagsüber alle 30 min, damit „heute gegessen“ auf der Übersicht aktuell ist
+    sch.add_job(sync_fddb, "cron", hour="4-23", minute="0,30", id="fddb", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())
     sch.add_job(sync_hc_drive, "cron", hour=5, minute=0, id="hc_drive", replace_existing=True)

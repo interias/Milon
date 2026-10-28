@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+from sqlalchemy import text
 
 from ..config import settings
 from ..db import engine
@@ -119,7 +120,18 @@ def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
         "tdee_base": last["base"] + last["tef"],
         "tdee_today": now["expenditure_day"],
         "intake_today": now["intake"],
+        # Prognose für den ganzen Tag: Grundverbrauch + typische Verdauung + Bewegung (bisher, mindestens typisch)
+        "tdee_forecast": last["base"] + last["tef"] + max(now["active_day"], last["active_avg"]),
+        "active_avg": last["active_avg"],
+        "intake_today_last": _last_meal_today(now["date"]),
     }
+
+
+def _last_meal_today(day: str) -> str | None:
+    """Uhrzeit (HH:MM) des letzten Esseintrags an `day` — zeigt, wie aktuell „gegessen“ ist."""
+    df = _read(text("SELECT MAX(eaten_at) AS t FROM nutrition_entries WHERE date(eaten_at) = :d"), params={"d": day})
+    t = None if df.empty else df["t"].iloc[0]
+    return None if t is None or pd.isna(t) else str(t)[11:16]
 
 
 def tdee_trend(window_days: int = 14, days: int = 180, smooth_days: int = 14,

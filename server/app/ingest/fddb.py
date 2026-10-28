@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+from datetime import date, datetime, time, timedelta
 
 import httpx
 import pandas as pd
@@ -25,6 +26,7 @@ ACCOUNT = "https://fddb.info/db/i18n/account/?lang=de"
 LOGIN = "https://fddb.info/db/i18n/account/?lang=de&action=login"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Milon/0.1"
 KJ_PER_KCAL = 4.184
+RECENT_DAYS = 3  # diese Tage ersetzt jeder Import ganz: Einträge werden tagsüber geändert/gelöscht
 
 
 def _num(x) -> float | None:
@@ -110,9 +112,13 @@ def import_fddb(full: bool = False) -> dict:
         uniq.append(d)
 
     with Session(engine) as s:
+        before = count_rows(s, NutritionEntry, SOURCE)
         if full:
             s.execute(delete(NutritionEntry).where(NutritionEntry.source == SOURCE))
-        before = count_rows(s, NutritionEntry, SOURCE)
+            before = 0
+        else:
+            cutoff = datetime.combine(date.today() - timedelta(days=RECENT_DAYS - 1), time.min)
+            s.execute(delete(NutritionEntry).where(NutritionEntry.source == SOURCE, NutritionEntry.eaten_at >= cutoff))
         upsert(s, NutritionEntry, uniq, ["eaten_at", "fddb_id", "kcal"])  # Append: nur neue Eintraege
         s.commit()
         after = count_rows(s, NutritionEntry, SOURCE)
