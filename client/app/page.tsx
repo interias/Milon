@@ -10,6 +10,7 @@ import { CheckIn, CHECKINS_CHANGED } from "@/components/CheckIn";
 import { HeroWidget } from "@/components/HeroWidget";
 import { WeatherCard } from "@/components/WeatherCard";
 import { BriefingCard } from "@/components/BriefingCard";
+import { TodayKcal } from "@/components/TodayKcal";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { WeekLine } from "@/components/WeekPlan";
 import type { WeekPlan, WeekToday } from "@/lib/api";
@@ -149,7 +150,7 @@ export default function Overview() {
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
     <div className="grid gap-4 xl:grid-cols-3">
-      <div className="min-w-0 xl:col-span-2"><WeatherCard /><WeeklyReportCard /><BriefingCard /></div>
+      <div className="min-w-0 xl:col-span-2"><WeatherCard /><TodayKcal /><WeeklyReportCard /><BriefingCard /></div>
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:flex xl:flex-col">
         <KpiTile title="Aktivität" subtitle={kcal?.today ? "Aktive Kalorien heute" : "Aktive Kalorien"} href="/gesundheit"
           value={kcalDay ? de0(kcalDay.total) : null} unit="kcal"
