@@ -82,7 +82,9 @@ export type StrengthSummary = {
 };
 export type Overview = { body: BodySummary; running: RunSummary; strength: StrengthSummary };
 
-export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null; band_low?: number | null; band_high?: number | null; phase?: string | null };
+export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null; band_low?: number | null; band_high?: number | null; phase?: string | null;
+  fit?: number | null; rate_pct?: number | null; rate_ci?: number | null; zone?: WeightZone | null; sure?: boolean | null; edge?: boolean | null };
+export type WeightZone = "fast_loss" | "cut" | "cut_gentle" | "slight_loss" | "stable" | "bulk_slow" | "bulk" | "fast_gain";
 export type WeightPhasePreset = { preset: string; kind: "cut" | "maintain" | "bulk"; name: string; rate_min_pct: number; rate_max_pct: number };
 export type WeightPhase = WeightPhasePreset & { id: number; start: string; end: string | null };
 export type WeightRate = {
@@ -90,6 +92,7 @@ export type WeightRate = {
   window_days: number; from_date: string; n: number; span_days: number;
   rate: { kg_per_week: number; ci_kg: number; pct_per_week: number; ci_pct: number; pct_per_month: number; weight: number } | null;
   verdict: "im" | "below" | "above" | "wenig_daten" | "keine_phase"; certain?: boolean; label: string; kcal_per_day?: number;
+  zone?: { key: WeightZone; label: string };
 };
 export type WeeklyWeight = { week: string; weight: number };
 export type TdeePoint = { date: string; tdee: number; tdee_avg: number; tdee_sd?: number; intake: number; intake_avg: number; estimate_days: number };
