@@ -15,9 +15,9 @@ type TrendPoint = {
 type Observation = { date: string; value: number | null; detail?: string };
 const timestamp = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00Z`).getTime();
 const finite = (value: number | null | undefined): value is number => value != null && Number.isFinite(value);
-const connected = (a: TrendPoint | undefined, b: TrendPoint | undefined) => !!a && !!b
+const linked = (maxGapDays: number) => (a: TrendPoint | undefined, b: TrendPoint | undefined) => !!a && !!b
   && finite(a.value) && finite(b.value) && a.segment_id === b.segment_id
-  && timestamp(b.date) - timestamp(a.date) <= 56 * 86400000;
+  && timestamp(b.date) - timestamp(a.date) <= maxGapDays * 86400000;
 const hasInterval = (point: TrendPoint) => finite(point.low) && finite(point.high);
 
 function axis(values: number[]) {
@@ -35,14 +35,17 @@ function axis(values: number[]) {
   return { ...best, ticks: Array.from({ length: best.count }, (_, i) => best.low + i * best.step) };
 }
 
-export function RunTrendChart({ points, unit, label, observations = [], showPoints = true, intervalLabel = "95%-Intervall" }: {
+export function RunTrendChart({ points, unit, label, observations = [], showPoints = true, intervalLabel = "95%-Intervall", maxGapDays = 56 }: {
   points: TrendPoint[];
   unit: string;
   label: string;
   observations?: Observation[];
   showPoints?: boolean;
   intervalLabel?: string;
+  /** Longer gaps between points break the line and band. */
+  maxGapDays?: number;
 }) {
+  const connected = linked(maxGapDays);
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(280);
   const [selected, setSelected] = useState<number | null>(null);
