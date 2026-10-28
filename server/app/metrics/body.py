@@ -41,22 +41,29 @@ def _intake_daily() -> pd.Series:
 
 
 def weight_trend(days: int = 180) -> list[dict]:
-    """Daily weight, EWMA (span 10) and mean of the last seven calendar days."""
+    """Daily weight, EWMA (span 10), mean of the last seven calendar days and the target corridor
+    of the weight phase (`band_low/band_high/phase`, only from a phase start)."""
+    from . import weight_phase
     s = _weight_daily()
     if s.empty:
         return []
     ewma = s.interpolate().ewm(span=10).mean()
     avg7 = s.rolling(7, min_periods=1).mean()
+    band = weight_phase.corridor(avg7)
     cutoff = s.index.max() - pd.Timedelta(days=days)
     out = []
     for d in s.index:
         if d < cutoff:
             continue
+        low, high, phase = band.get(d, (None, None, None))
         out.append({
             "date": d.date().isoformat(),
             "weight": None if pd.isna(s[d]) else round(float(s[d]), 2),
             "ewma": round(float(ewma[d]), 2),
             "avg7": None if pd.isna(avg7[d]) else round(float(avg7[d]), 2),
+            "band_low": low,
+            "band_high": high,
+            "phase": phase,
         })
     return out
 

@@ -11,6 +11,7 @@ import { EnergyBalance } from "@/components/EnergyBalance";
 import { BodyCircumferences } from "@/components/BodyCircumferences";
 import { BodyProgress } from "@/components/BodyProgress";
 import { BodyComposition } from "@/components/BodyComposition";
+import { WeightRate } from "@/components/WeightRate";
 import { de, dm } from "@/lib/format";
 
 export default function Koerper() {
@@ -20,13 +21,18 @@ export default function Koerper() {
   const [rawWeight, setRawWeight] = useState(false);
   const [details, setDetails] = useState(false);
   const [measurementsRevision, setMeasurementsRevision] = useState(0);
+  const [phaseRevision, setPhaseRevision] = useState(0);
   useEffect(() => {
     let active = true;
     const failed = (key: string) => { if (active) setErrors((previous) => [...previous, key]); };
     api.bodySummary().then((value) => { if (active) setSummary(value); }).catch(() => failed("summary"));
-    api.bodyWeight(180).then((value) => { if (active) setWeight(value); }).catch(() => failed("weight"));
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    let active = true;
+    api.bodyWeight(180).then((value) => { if (active) setWeight(value); }).catch(() => { if (active) setErrors((previous) => [...previous, "weight"]); });
+    return () => { active = false; };
+  }, [phaseRevision]);
   const delta = summary?.weight_delta7;
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : "Wird geladen …";
   return <>
@@ -42,10 +48,12 @@ export default function Koerper() {
         <p className="mt-2 text-xs text-muted">{summary.weight_date ? `Letzte Messung: ${de(summary.weight_kg, 1)} kg · ${dm(summary.weight_date)}` : "Noch keine Gewichtsmessung"}</p>
         {summary.weight_date && <p className="mt-1 text-xs text-muted">{summary.weight_days7}/7 Messtage · Vergleichsfenster {summary.previous_weight_days7}/7</p>}
       </> : <p role="status" className="mt-3 text-xs text-muted">{state("summary")}</p>}
-      {weight ? <RunTrendChart label="Gewicht · 7-Tage-Mittel" unit="kg" showPoints={false}
-        points={weight.map((p) => ({ date: p.date, value: p.avg7, detail: "7-Tage-Mittel aus vorhandenen Messungen" }))}
+      <WeightRate onChange={() => setPhaseRevision((value) => value + 1)} />
+      {weight ? <RunTrendChart label="Gewicht · 7-Tage-Mittel" unit="kg" showPoints={false} intervalLabel="Zielkorridor"
+        points={weight.map((p) => ({ date: p.date, value: p.avg7, low: p.band_low, high: p.band_high,
+          detail: p.phase ? `7-Tage-Mittel · Phase ${p.phase}` : "7-Tage-Mittel aus vorhandenen Messungen" }))}
         observations={rawWeight ? weight.map((p) => ({ date: p.date, value: p.weight, detail: "Einzelmesswert" })) : []} /> : <p role="status" className="mt-4 text-xs text-muted">{state("weight")}</p>}
-      <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
+      <div className="mt-2 flex flex-wrap justify-between gap-3 text-xs text-muted"><span>Bis zu 180 Tage · Lücken bleiben sichtbar{weight?.some((p) => p.band_low != null) ? " · Band: Zielkorridor der Phase" : ""}</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawWeight} onChange={(e) => setRawWeight(e.target.checked)} />Rohwerte</label></div>
     </Card>
     <BodyComposition revision={measurementsRevision} />
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">

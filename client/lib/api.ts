@@ -82,7 +82,15 @@ export type StrengthSummary = {
 };
 export type Overview = { body: BodySummary; running: RunSummary; strength: StrengthSummary };
 
-export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null };
+export type WeightPoint = { date: string; weight: number | null; ewma: number; avg7: number | null; band_low?: number | null; band_high?: number | null; phase?: string | null };
+export type WeightPhasePreset = { preset: string; kind: "cut" | "maintain" | "bulk"; name: string; rate_min_pct: number; rate_max_pct: number };
+export type WeightPhase = WeightPhasePreset & { id: number; start: string; end: string | null };
+export type WeightRate = {
+  phase: WeightPhase | null; phases: WeightPhase[]; presets: WeightPhasePreset[];
+  window_days: number; from_date: string; n: number; span_days: number;
+  rate: { kg_per_week: number; ci_kg: number; pct_per_week: number; ci_pct: number; pct_per_month: number; weight: number } | null;
+  verdict: "im" | "below" | "above" | "wenig_daten" | "keine_phase"; certain?: boolean; label: string; kcal_per_day?: number;
+};
 export type WeeklyWeight = { week: string; weight: number };
 export type TdeePoint = { date: string; tdee: number; tdee_avg: number; tdee_sd?: number; intake: number; intake_avg: number; estimate_days: number };
 export type StepsPoint = { date: string; steps: number };
@@ -678,6 +686,9 @@ export const api = {
   overview: () => get<Overview>("/metrics/overview"),
   // Körper
   bodyWeight: (days = 180) => get<WeightPoint[]>(`/metrics/body/weight?days=${days}`),
+  bodyWeightRate: () => get<WeightRate>("/metrics/body/weight-rate"),
+  setWeightPhase: (start: string, preset: string) => send<WeightPhase>("POST", "/metrics/body/weight-phases", { start, preset }),
+  deleteWeightPhase: (id: number) => send<{ deleted: number }>("DELETE", `/metrics/body/weight-phases/${id}`),
   bodyTdee: () => get<Tdee>("/metrics/body/tdee"),
   bodyComposition: () => get<BodyComposition>("/metrics/body/composition"),
   bodyTdeeTrend: (windowDays = 14, days = 180) => get<TdeePoint[]>(`/metrics/body/tdee-trend?window_days=${windowDays}&days=${days}`),

@@ -137,3 +137,15 @@ def _no_real_waists(monkeypatch):
     import pandas as pd
     from app.metrics import composition
     monkeypatch.setattr(composition, "_waists", lambda: pd.Series(dtype=float))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_weight_phase_db(monkeypatch, tmp_path_factory):
+    """body.weight_trend liest Gewichtsphasen; Tests nie aus data/tracker.db (je Test eine leere DB)."""
+    from app.metrics import weight_phase
+    engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('phases') / 'phases.db'}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine, tables=[weight_phase.WeightPhase.__table__])
+    monkeypatch.setattr(weight_phase, "engine", engine)
+    yield
+    engine.dispose()

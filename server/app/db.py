@@ -32,6 +32,7 @@ def init_db() -> None:
     from . import hero_import  # noqa: F401 -- own GPX dungeons and walked tracks
     from . import bike_plan  # noqa: F401 -- imported bike training block (local only)
     from .metrics import week_plan  # noqa: F401 -- gym-day overrides outside a bike plan
+    from .metrics import weight_phase  # noqa: F401 -- cut/maintain/bulk phases with a rate corridor
     from . import walkpad  # noqa: F401 -- walking pad sessions from the host recorder
 
     SQLModel.metadata.create_all(engine)
