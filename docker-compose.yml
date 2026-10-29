@@ -46,6 +46,13 @@ services:
     depends_on:
       server:
         condition: service_started
+    # Statische Datei statt Seite: billig und ohne Backend-Abhängigkeit (für tailscale: service_healthy)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/img/empty.png"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     # mem_limit: 256m
 
   # Statischer Bericht zur Heldenreise (report/), später auf Cloudflare Pages.
@@ -56,3 +63,28 @@ services:
     ports:
       - "${REPORT_PORT:-8090}:80"
     restart: unless-stopped
+
+  # HTTPS im eigenen Tailnet (Geolocation/Wake Lock im Expeditionsmodus brauchen einen
+  # sicheren Kontext): tritt als "milon" bei und proxied https://milon.<tailnet>.ts.net an
+  # den Client. Kein veröffentlichter Port, nie Funnel (nur tailnet).
+  # Nur mit `--profile tailscale`, damit Tests und Nebenstacks keinen Key brauchen.
+  tailscale:
+    image: tailscale/tailscale:v1.104.4
+    profiles: ["tailscale"]
+    hostname: milon
+    environment:
+      # Nur für die erste Anmeldung nötig; das State-Volume behält sie.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./ops/tailscale:/config:ro
+    depends_on:
+      client:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:

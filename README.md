@@ -155,6 +155,22 @@ Die API ist über `/api` erreichbar, ihr Schema unter `/api/openapi.json`.
 Das Proxy-Ziel wird beim Frontend-Build eingebaut (`API_PROXY_TARGET=http://server:8000`).
 Bei Änderungen an Code oder Zieladresse ist ein Rebuild erforderlich.
 
+### HTTPS im eigenen Tailnet (optional)
+
+Ortung und Wake Lock im Expeditionsmodus brauchen HTTPS. Der Dienst `tailscale` im Profil
+`tailscale` tritt dem eigenen Tailnet als Gerät `milon` bei und leitet
+`https://milon.<tailnet>.ts.net` an den Client weiter (Konfiguration: `ops/tailscale/serve.json`).
+
+1. Tailscale-Konsole: MagicDNS und HTTPS Certificates einschalten.
+2. Unter Settings → Keys einen Auth-Key erzeugen (nicht ephemeral, pre-approved, keine Tags)
+   und als `TS_AUTHKEY=` in die Root-`.env` eintragen.
+3. Starten: `docker compose --profile tailscale up -d`.
+4. Unter Machines bei `milon` „Disable key expiry“ setzen. Die Anmeldung liegt im Volume
+   `tailscale-state`, der Key wird danach nicht mehr gebraucht.
+
+Die Freigabe ist nur im Tailnet sichtbar. **Tailscale Funnel nie einschalten** — Milon hat
+keine Nutzeranmeldung. Ohne `--profile tailscale` startet der Stack wie bisher ohne Key.
+
 ### Konfiguration
 
 | Datei | Wichtige Einstellungen |
