@@ -129,6 +129,15 @@ def test_ingest_idempotent_and_validated(db):
         walkpad.ingest({**s, "id": "wp-future", "started_at": 4_000_000_000, "ended_at": 4_000_003_600})
 
 
+def test_ingest_mid_walk_connect_counts_unseen_start(db):
+    """Recorder joined after 60 min: only the last minutes have samples, the pad counters cover the rest."""
+    samples = [[3600.0 + i, 3.5, 3500 + i * 3.5 / 3.6, None] for i in range(150)]
+    s = {"id": "wp-late", "started_at": T0, "ended_at": T0 + 3750, "elapsed_s": 3750,
+         "distance_m": 3646, "samples": samples}
+    row, created = walkpad.ingest(s)
+    assert created and row["minutes"] == pytest.approx(62.5, abs=0.5)
+
+
 def test_fit_activity_decodes(db):
     walkpad.ingest({**recorded(), "kcal": 80})
     with Session(db) as ses:

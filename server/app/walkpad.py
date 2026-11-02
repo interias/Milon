@@ -161,6 +161,8 @@ def ingest(payload: dict, now: datetime | None = None) -> tuple[dict, bool]:
         raise ValueError("Session zu kurz (unter 100 m).")
     samples = _clean_samples(payload.get("samples", []), duration)
     moving = _moving_seconds(samples) if len(samples) > 1 else 0.0
+    if moving > 0 and samples[0][0] > 10:  # recorder connected mid-walk: the pad counters cover the unseen start
+        moving += samples[0][0]
     if moving <= 0:
         elapsed = payload.get("elapsed_s")
         moving = float(elapsed) if isinstance(elapsed, (int, float)) and 0 < elapsed <= duration + 60 else duration
