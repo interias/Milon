@@ -684,6 +684,19 @@ export type WalkpadControlState = {
   recorder_online: boolean; connected: boolean; status: "running" | "paused" | "stopped" | null;
   speed_kmh: number | null; target_kmh: number | null; device: string | null; updated_at: number | null;
   max_kmh: number; min_kmh: number; last_result: { id: number; ok: boolean; message: string; at: number } | null;
+  live: WalkpadLive | null;
+};
+export type WalkpadLive = {
+  elapsed_s: number | null; distance_m: number | null; kcal_pad: number | null; hr_bpm: number | null; avg_hr: number | null;
+  max_speed_kmh: number | null; idle_s: number | null; since_packet_s: number | null;
+  avg_speed_kmh: number | null; pace_s_per_km: number | null; steps: number; cadence_spm: number | null;
+  kcal: number | null; kcal_incline: number | null; incline_pct: number; elevation_m: number;
+};
+export type WalkpadDayBucket = { sessions: number; minutes: number; km: number; steps: number; kcal: number; elevation_m: number; avg_speed_kmh: number | null };
+export type WalkpadDaily = {
+  days: number; from: string; to: string; series: (WalkpadDayBucket & { date: string })[];
+  total: WalkpadDayBucket & { active_days: number; per_active_day_min: number | null; longest_min: number | null; best_day: string | null };
+  previous: WalkpadDayBucket | null;
 };
 export type WalkpadCommand = { action: "start" | "pause" | "stop" | "speed" | "faster" | "slower"; kmh?: number; step?: number; confirm?: boolean };
 
@@ -720,6 +733,7 @@ export const api = {
   healthSteps: (days = 30) => get<StepsTrendPoint[]>(`/metrics/health/steps?days=${days}`),
   healthStepsWeekly: (weeks = 12) => get<StepsWeek[]>(`/metrics/health/steps-weekly?weeks=${weeks}`),
   walkpad: (weeks = 12) => get<WalkpadOverview>(`/walkpad?weeks=${weeks}`),
+  walkpadDaily: (days = 37) => get<WalkpadDaily>(`/walkpad/daily?days=${days}`),
   walkpadControl: () => get<WalkpadControlState>("/walkpad/control"),
   walkpadCommand: (body: WalkpadCommand) => send<{ state: WalkpadControlState }>("POST", "/walkpad/control", body),
   walkpadManual: (body: { started_at: string; minutes: number; speed_kmh: number; incline_pct: number }) => send<WalkpadSessionRow>("POST", "/walkpad/manual", body),

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { api, type WalkpadControlState } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, type WalkpadControlState, type WalkpadDaily } from "@/lib/api";
 import { Card, PageTitle } from "@/components/ui";
+import { WalkpadDailyStats, WalkpadLiveStats } from "@/components/WalkpadStats";
 import { de } from "@/lib/format";
 
 const STATUS: Record<string, string> = { running: "läuft", paused: "pausiert", stopped: "gestoppt" };
@@ -14,6 +15,21 @@ export default function Laufband() {
   const [error, setError] = useState<string | null>(null);
   const [confirmStart, setConfirmStart] = useState(false);
   const [kmh, setKmh] = useState("3.5");
+  const [daily, setDaily] = useState<WalkpadDaily | null>(null);
+  const [revision, setRevision] = useState(0);
+  const hadLive = useRef(false);
+
+  // Session vorbei (Recorder liefert keinen Live-Stand mehr) → Statistik neu laden; sonst jede Minute.
+  useEffect(() => {
+    const live = !!st?.live;
+    if (hadLive.current && !live) setRevision((r) => r + 1);
+    hadLive.current = live;
+  }, [st?.live]);
+  useEffect(() => {
+    const t = setInterval(() => setRevision((r) => r + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const todayRow = daily?.series.at(-1) ?? null;
 
   useEffect(() => {
     let active = true;
@@ -63,9 +79,12 @@ export default function Laufband() {
       {confirmStart && <button type="button" className="mt-2 text-xs text-muted underline underline-offset-4" onClick={() => setConfirmStart(false)}>Abbrechen</button>}
       <p className="mt-2 text-[11px] text-muted">Das Pad startet nach ~3 s Countdown mit 1,0 km/h; das Wunschtempo (Feld oben) setzt der Recorder, sobald das Band läuft.</p>
 
+      {ready && <WalkpadLiveStats live={st?.live ?? null} speed={st?.speed_kmh ?? null} today={todayRow} />}
+
       {error && <p className="mt-3 text-sm text-bad">{error}</p>}
       {result && <p className={`mt-3 text-xs ${result.ok ? "text-muted" : "text-bad"}`}>Letzter Befehl: {result.ok ? "ausgeführt" : result.message}</p>}
     </Card>
+    <WalkpadDailyStats days={37} revision={revision} onLoaded={setDaily} />
     <p className="mt-4 text-xs text-muted">
       Befehle älter als 3 s verwirft der Recorder. Bricht die Verbindung ab, läuft das Band im zuletzt gesetzten Tempo weiter – es wird nie automatisch schneller.
       Sessions und Schritte stehen auf <Link href="/gesundheit" className="underline underline-offset-4">Gesundheit</Link>.

@@ -286,3 +286,49 @@ def test_manual_api(db, monkeypatch):
     assert http.post("/walkpad/manual", json={"started_at": "2026-10-20T09:40:00", "minutes": 10, "speed_kmh": 3.5}).status_code == 422
     assert http.delete(f"/walkpad/sessions/{r.json()['id']}").status_code == 200
     assert http.delete("/walkpad/sessions/nope").status_code == 404
+
+
+def test_tracker_live_snapshot():
+    t = ftms.SessionTracker()
+    assert t.live(T0) is None
+    t.packet(ftms.parse_treadmill_data(packet(3.0, 500, 600, 30, 0)), T0)  # mid-walk connect
+    dist = walk(t, T0, 60, speed=3.6, dist0=500, el0=600)
+    t.packet(ftms.parse_treadmill_data(packet(3.6, int(dist), 661, 40, 112)), T0 + 61)
+    live = t.live(T0 + 63)
+    assert live["elapsed_s"] == 661 and live["distance_m"] == int(dist)
+    assert live["kcal_pad"] == 40 and live["hr_bpm"] == 112 and live["avg_hr"] == 112
+    assert live["max_speed_kmh"] == pytest.approx(3.6) and live["idle_s"] == 2
+
+
+def test_live_view_over_control_api(db, monkeypatch):
+    from app import walkpad_control
+    from app.main import app
+    walkpad_control.reset()
+    monkeypatch.setattr(settings, "walkpad_token", "secret")
+    monkeypatch.setattr(settings, "walkpad_incline_pct", 6.0)
+    monkeypatch.setattr(walkpad, "_weight_cache", None)
+    monkeypatch.setattr(walkpad, "_weights", lambda: pd.Series([80.0], index=[pd.Timestamp("2026-01-01")]))
+    http = TestClient(app)
+    live = {"elapsed_s": 1200, "distance_m": 1200, "kcal_pad": 50, "hr_bpm": None, "bogus": 1, "idle_s": -3}
+    http.post("/walkpad/control/state", json={"connected": True, "status": "running", "speed_kmh": 3.6, "live": live},
+              headers={"X-Walkpad-Token": "secret"})
+    got = http.get("/walkpad/control").json()["live"]
+    assert "bogus" not in got and got["idle_s"] is None
+    assert got["avg_speed_kmh"] == pytest.approx(3.6) and got["pace_s_per_km"] == 1000
+    assert got["steps"] == round(1200 / 0.65) and got["cadence_spm"] == round(60 / 0.65)
+    assert got["elevation_m"] == 72 and got["kcal"] > got["kcal_incline"] > 0
+    walkpad_control.reset()
+
+
+def test_daily_series_and_previous_span(db):
+    walkpad.ingest(recorded(30))                                     # 2026-10-20
+    old = recorded(20)
+    old.update(id="wp-old", started_at=old["started_at"] - 40 * 86400, ended_at=old["ended_at"] - 40 * 86400)
+    walkpad.ingest(old)                                              # 2026-09-10 → previous span
+    out = walkpad.daily(days=37, today=date(2026, 10, 21))
+    assert len(out["series"]) == 37 and out["series"][-1]["date"] == "2026-10-21"
+    day = next(s for s in out["series"] if s["date"] == "2026-10-20")
+    assert day["sessions"] == 1 and day["minutes"] == pytest.approx(30, abs=0.5)
+    assert out["total"]["active_days"] == 1 and out["total"]["best_day"] == "2026-10-20"
+    assert out["previous"]["sessions"] == 1 and out["previous"]["minutes"] == pytest.approx(20, abs=0.5)
+    assert out["total"]["avg_speed_kmh"] == pytest.approx(3.2, abs=0.05)

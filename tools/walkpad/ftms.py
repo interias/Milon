@@ -117,6 +117,24 @@ class SessionTracker:
         if a is not None and (now - a.last_packet >= DISCONNECT_END_S or now - a.last_motion >= IDLE_END_S):
             self._finish()
 
+    def live(self, now: float) -> dict | None:
+        """Snapshot of the running session for the remote-control status (None between sessions)."""
+        a = self.active
+        if a is None:
+            return None
+        kcal = a.last.get("kcal")
+        speeds = [s[1] for s in a.samples if s[1] > 0]
+        hrs = [s[3] for s in a.samples if s[3]]
+        latest_hr = a.samples[-1][3] if a.samples else None
+        return {
+            "elapsed_s": (a.last.get("elapsed_s") or 0) - a.base.get("elapsed_s", 0),
+            "distance_m": (a.last.get("distance_m") or 0) - a.base.get("distance_m", 0),
+            "kcal_pad": kcal - a.base.get("kcal", 0) if kcal is not None else None,
+            "hr_bpm": latest_hr or None, "avg_hr": round(sum(hrs) / len(hrs)) if hrs else None,
+            "max_speed_kmh": round(max(speeds), 2) if speeds else None,
+            "idle_s": round(max(0.0, now - a.last_motion)), "since_packet_s": round(max(0.0, now - a.last_packet), 1),
+        }
+
     def flush(self) -> None:
         """End the running session now (recorder shutdown)."""
         if self.active is not None:

@@ -109,7 +109,7 @@ async def run() -> None:
 
     async def report() -> None:
         if remote:
-            await asyncio.to_thread(_call, control_url + "/state", token, dict(pad))
+            await asyncio.to_thread(_call, control_url + "/state", token, {**pad, "live": tracker.live(time.time())})
 
     def match(device, adv) -> bool:
         if address:

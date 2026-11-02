@@ -60,6 +60,7 @@ def state(now: float | None = None) -> dict:
                 "status": _state.get("status") if online else None, "speed_kmh": _state.get("speed_kmh"),
                 "target_kmh": _state.get("target_kmh"), "device": _state.get("device"),
                 "updated_at": _state.get("updated_at"), "max_kmh": max_kmh(), "min_kmh": MIN_KMH,
+                "live": _state.get("live") if online else None,
                 "last_result": _results[max(_results)] if _results else None}
 
 
@@ -131,8 +132,24 @@ def report_state(payload: dict) -> dict:
         for key in ("connected", "status", "speed_kmh", "target_kmh", "device"):
             if key in payload and not (key == "target_kmh" and pending_speed):  # keep the optimistic target
                 _state[key] = payload[key]
+        if "live" in payload:
+            _state["live"] = _clean_live(payload["live"])
         _state["updated_at"] = _seen
     return state()
+
+
+LIVE_KEYS = ("elapsed_s", "distance_m", "kcal_pad", "hr_bpm", "avg_hr", "max_speed_kmh", "idle_s", "since_packet_s")
+
+
+def _clean_live(live) -> dict | None:
+    """The recorder's snapshot of the running session: known numeric fields only, negatives dropped."""
+    if not isinstance(live, dict):
+        return None
+    out = {}
+    for key in LIVE_KEYS:
+        v = live.get(key)
+        out[key] = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v < 1e7 else None
+    return out
 
 
 def report_result(cmd_id: int, ok: bool, message: str) -> None:

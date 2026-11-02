@@ -62,7 +62,8 @@ def post_session(background: BackgroundTasks, payload: dict[str, Any] = Body(...
 # ---------------- remote control (UI ↔ server ↔ recorder) ----------------
 @router.get("/control")
 def control_state() -> dict:
-    return walkpad_control.state()
+    st = walkpad_control.state()
+    return {**st, "live": walkpad.live_view(st["live"], st["speed_kmh"])}
 
 
 @router.post("/control")
@@ -71,7 +72,7 @@ def control_command(body: ControlInput) -> dict:
         cmd = walkpad_control.enqueue(body.action, kmh=body.kmh, step=body.step, confirm=body.confirm)
     except walkpad_control.ControlError as e:
         raise HTTPException(e.status, str(e)) from None
-    return {"queued": cmd, "state": walkpad_control.state()}
+    return {"queued": cmd, "state": control_state()}
 
 
 @router.get("/control/next", dependencies=[Depends(recorder_token)])
@@ -115,6 +116,11 @@ def delete_session(sid: str) -> dict:
 @router.get("")
 def overview(weeks: int = 12) -> dict:
     return walkpad.overview(weeks=max(1, min(weeks, 104)))
+
+
+@router.get("/daily")
+def daily(days: int = 37) -> dict:
+    return walkpad.daily(days=max(7, min(days, 365)))
 
 
 @router.get("/sessions/{sid}")

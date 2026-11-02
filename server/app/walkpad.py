@@ -384,6 +384,71 @@ def overview(weeks: int = 12, recent: int = 8, today: date | None = None) -> dic
     }
 
 
+def daily(days: int = 37, today: date | None = None) -> dict:
+    """Day by day over the last `days` days (today included) plus totals and the same span before."""
+    today = today or datetime.now(_tz()).date()
+    first = today - timedelta(days=days - 1)
+    with Session(engine) as db:
+        rows = list(db.exec(select(WalkpadSession).where(
+            WalkpadSession.started_at >= datetime.combine(first - timedelta(days=days), datetime.min.time()))))
+    weights = _weights()
+    items = [_row(r, weights) for r in rows]
+
+    def bucket(sel: list[dict]) -> dict:
+        minutes = sum(x["minutes"] for x in sel)
+        km = sum(x["distance_km"] for x in sel)
+        return {"sessions": len(sel), "minutes": round(minutes, 1), "km": round(km, 2),
+                "steps": sum(x["steps"] for x in sel), "kcal": round(sum(x["kcal"] or 0 for x in sel)),
+                "elevation_m": sum(x["elevation_m"] for x in sel),
+                "avg_speed_kmh": round(km / (minutes / 60), 2) if minutes else None}
+
+    series = []
+    for i in range(days):
+        d = first + timedelta(days=i)
+        series.append({"date": d.isoformat(), **bucket([x for x in items if x["date"] == d.isoformat()])})
+    inside = [x for x in items if x["date"] >= first.isoformat()]
+    before = [x for x in items if x["date"] < first.isoformat()]
+    active = [s for s in series if s["sessions"]]
+    total = bucket(inside)
+    total.update(active_days=len(active),
+                 per_active_day_min=round(total["minutes"] / len(active), 1) if active else None,
+                 longest_min=max((x["minutes"] for x in inside), default=None),
+                 best_day=max(active, key=lambda s: s["minutes"])["date"] if active else None)
+    return {"days": days, "from": first.isoformat(), "to": today.isoformat(), "series": series,
+            "total": total, "previous": bucket(before) if before else None}
+
+
+_weight_cache: tuple[date, float, float | None] | None = None
+
+
+def _weight_today(today: date) -> float | None:
+    """7-day weight for the live view; cached 10 min because the remote control polls every second."""
+    global _weight_cache
+    from .metrics import cycling
+    now = datetime.now().timestamp()
+    if _weight_cache is None or _weight_cache[0] != today or now - _weight_cache[1] > 600:
+        w = _weights()
+        _weight_cache = (today, now, cycling._weight_at(w, today) if w is not None else None)
+    return _weight_cache[2]
+
+
+def live_view(live: dict | None, speed_kmh: float | None) -> dict | None:
+    """Recorder snapshot + what the server knows: estimated steps, cadence, ACSM kcal, pace, elevation."""
+    if not live:
+        return None
+    dist, elapsed = live.get("distance_m") or 0.0, live.get("elapsed_s") or 0.0
+    incline = settings.walkpad_incline_pct
+    avg = dist / elapsed * 3.6 if elapsed > 0 and dist > 0 else None
+    stride = settings.walkpad_stride_m
+    e = energy(dist, elapsed, incline, _weight_today(datetime.now(_tz()).date()))
+    return {**live, "avg_speed_kmh": round(avg, 2) if avg else None,
+            "pace_s_per_km": round(3600 / avg) if avg else None,
+            "steps": steps_of(dist),
+            "cadence_spm": round((speed_kmh or 0) / 3.6 * 60 / stride) if speed_kmh and stride > 0 else None,
+            "kcal": e["kcal"], "kcal_incline": e["kcal_incline"], "incline_pct": incline,
+            "elevation_m": round(dist * incline / 100)}
+
+
 def detail(sid: str) -> dict | None:
     with Session(engine) as db:
         row = db.get(WalkpadSession, sid)
