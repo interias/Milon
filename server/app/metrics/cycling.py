@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import inspect, text
 
-from .. import garmin_indoor
+from .. import garmin_indoor, zwift_worlds
 from ..config import settings
 from ..db import engine
 from . import stats
@@ -348,7 +348,46 @@ def ride_detail(activity_id: str) -> dict | None:
         "garmin_power_zones": r["power_zones"], "garmin_hr_zones": r["hr_zones"],
         "hr_dropout": _r(r["hr_dropout"], 3),
         "series": _display(r["series"]),
+        "track": _track_view(_stored_tracks([activity_id]).get(activity_id, {})),
     })
+
+
+# ---------------- Zwift-Karte ----------------
+def _stored_tracks(ids: list[str] | None = None) -> dict[str, dict]:
+    """activity_id → {"world", "segments"} aus track_json (Kartenpositionen 0..1, keine Koordinaten)."""
+    with engine.connect() as con:
+        if not inspect(con).has_table("garmin_indoor_rides"):
+            return {}
+        where, params = "", {}
+        if ids is not None:
+            where = "WHERE activity_id IN (" + ", ".join(f":p{i}" for i in range(len(ids))) + ")"
+            params = {f"p{i}": v for i, v in enumerate(ids)}
+        rows = con.execute(text(f"SELECT activity_id, track_json FROM garmin_indoor_rides {where}"), params)
+        found = {str(a): json.loads(js or "{}") for a, js in rows}
+    return {a: t for a, t in found.items() if t.get("world") in zwift_worlds.BY_SLUG and t.get("segments")}
+
+
+def _track_view(track: dict) -> dict | None:
+    if not track:
+        return None
+    slug = track["world"]
+    return {"world": slug, "name": zwift_worlds.BY_SLUG[slug][1], "aspect": round(zwift_worlds.aspect(slug), 4),
+            "segments": track["segments"]}
+
+
+def tracks(world: str) -> dict | None:
+    """Alle Fahrten einer Zwift-Welt mit Spur (neueste zuerst); None = unbekannte Welt."""
+    if world not in zwift_worlds.BY_SLUG:
+        return None
+    found = {a: t for a, t in _stored_tracks().items() if t["world"] == world}
+    df = indoor_rides()
+    df = df[df["activity_id"].astype(str).isin(found)].sort_values("started_at", ascending=False) \
+        if not df.empty else df
+    rides = [{"activity_id": str(r["activity_id"]), "title": r["title"], "route": r["route"],
+              "date": r["started_at"].isoformat(), "km": _r(r["distance_km"], 1),
+              "segments": found[str(r["activity_id"])]["segments"]} for _, r in df.iterrows()]
+    return _clean({"world": world, "name": zwift_worlds.BY_SLUG[world][1],
+                   "aspect": round(zwift_worlds.aspect(world), 4), "rides": rides})
 
 
 # ---------------- Leistungskurve ----------------
@@ -613,10 +652,13 @@ def worlds() -> dict:
                 "hours": _r(frame["duration_seconds"].fillna(0).sum() / 3600, 1),
                 "last": frame["started_at"].max().date().isoformat()}
 
+    tracked = {a: t["world"] for a, t in _stored_tracks().items()}
     result = []
     for world, frame in named.groupby("world"):
         routes = [{"route": route, **agg(part)} for route, part in frame.groupby(frame["route"].fillna("–"))]
-        result.append({"world": world, **agg(frame),
+        known = zwift_worlds.BY_NAME.get(world)
+        result.append({"world": world, "slug": known[0] if known else None,
+                       "tracks": sum(1 for a in frame["activity_id"].astype(str) if a in tracked), **agg(frame),
                        "routes": sorted(routes, key=lambda x: (-x["rides"], x["route"]))})
     result.sort(key=lambda x: (-x["rides"], x["world"]))
     return _clean({"worlds": result, "other_rides": int(len(df) - len(named))})

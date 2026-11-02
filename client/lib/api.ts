@@ -46,7 +46,8 @@ export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename
 // Zwift-Workout (.zwo) einer Plan-Einheit, über den /api-Proxy.
 export const bikeZwoUrl = (id: number) => `${BASE}/bike-plan/session/${id}.zwo`;
 // Strecken-Download eines entdeckten Verlieses (GPX-Track bzw. FIT-Course), über den /api-Proxy.
-export const dungeonFileUrl = (key: string, ext: "gpx" | "fit") => `${BASE}/hero/world/dungeon/${encodeURIComponent(key)}.${ext}`;
+export const zwiftMapUrl = (world: string) => `${BASE}/metrics/cycling/map/${encodeURIComponent(world)}.jpg`;
+export const dungeonFileUrl =(key: string, ext: "gpx" | "fit") => `${BASE}/hero/world/dungeon/${encodeURIComponent(key)}.${ext}`;
 // Live-Endpunkte der Expedition: Token im Header X-Hero-Token (nur auf dem Gerät, nie im Code).
 export class LiveError extends Error {
   constructor(public status: number, path: string) { super(`${path} → ${status}`); }
@@ -660,9 +661,17 @@ export type CycRideDetail = CycRide & {
   zones: (CycZone & { seconds: number | null })[];
   garmin_power_zones: unknown; garmin_hr_zones: unknown; hr_dropout: number | null;
   series: { t: number; power_w?: number | null; cadence_rpm?: number | null; hr_bpm?: number | null; speed_m_s?: number | null; altitude_m?: number | null }[];
+  track: CycTrack | null;
+};
+/** Spur auf dem Zwift-Kartenbild: Positionen 0..1 ab der linken oberen Ecke, keine Koordinaten. */
+export type CycSegments = [number, number][][];
+export type CycTrack = { world: string; name: string; aspect: number; segments: CycSegments };
+export type CycWorldTracks = {
+  world: string; name: string; aspect: number;
+  rides: { activity_id: string; title: string; route: string | null; date: string; km: number | null; segments: CycSegments }[];
 };
 export type CycWorlds = {
-  worlds: { world: string; rides: number; km: number; elevation_m: number; hours: number; last: string;
+  worlds: { world: string; slug: string | null; tracks: number; rides: number; km: number; elevation_m: number; hours: number; last: string;
     routes: { route: string; rides: number; km: number; elevation_m: number; hours: number; last: string }[] }[];
   other_rides: number;
 };
@@ -801,6 +810,7 @@ export const api = {
   cycRides: (limit = 20) => get<CycRide[]>(`/metrics/cycling/rides?limit=${limit}`),
   cycRide: (id: string) => get<CycRideDetail>(`/metrics/cycling/ride/${encodeURIComponent(id)}`),
   cycWorlds: () => get<CycWorlds>("/metrics/cycling/worlds"),
+  cycTracks: (world: string) => get<CycWorldTracks>(`/metrics/cycling/tracks/${encodeURIComponent(world)}`),
   runEf: () => get<EfTrend>("/metrics/running/ef"),
   runBestEfforts: (top = 3) => get<BestEfforts>(`/metrics/running/best-efforts?top=${top}`),
   runAchievements: () => get<Achievements>("/metrics/running/achievements"),

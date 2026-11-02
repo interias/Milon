@@ -7,6 +7,7 @@ import { api, type CycCurve, type CycEfficiency, type CycRideDetail } from "@/li
 import { Card, CardTitle, Loading, ApiError } from "@/components/ui";
 import { AreaTrend } from "@/components/charts";
 import { Empty, LogCurve, RideZoneBar, fmtWhen, hasPower, rideTitle } from "@/components/Cycling";
+import { ZwiftMap } from "@/components/ZwiftMap";
 import { de, de0 } from "@/lib/format";
 
 function Stat({ label, value, unit, sub }: { label: string; value: string; unit?: string; sub?: string }) {
@@ -80,6 +81,11 @@ export default function RideDetailPage() {
     </section>
 
     <div className="mt-4 grid items-start gap-4 [&>*]:min-w-0">
+      {ride.track && <Card>
+        <CardTitle title={`Strecke in ${ride.track.name}`} sub="Deine Fahrt auf der Zwift-Karte — grün = Start, dunkel = Ziel" />
+        <ZwiftMap world={ride.track.world} name={ride.track.name} aspect={ride.track.aspect}
+          tracks={[{ id: ride.activity_id, segments: ride.track.segments, highlight: true }]} />
+      </Card>}
       <Card>
         <CardTitle title="Verlauf" sub="Leistung, Puls und Trittfrequenz über die Fahrzeit" />
         {s.length < 2 ? <Empty height={100}>keine Sekunden-Daten gespeichert</Empty> : <div className="space-y-5">

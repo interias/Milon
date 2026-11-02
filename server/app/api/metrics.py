@@ -4,9 +4,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 
+from .. import zwift_worlds
 from ..metrics import week_plan, weight_phase
 from ..metrics import achievements, active_kcal, activity, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
@@ -265,6 +266,27 @@ def cycling_ride(activity_id: str) -> dict:
 @router.get("/cycling/worlds")
 def cycling_worlds() -> dict:
     return cycling.worlds()
+
+
+@router.get("/cycling/tracks/{world}")
+def cycling_tracks(world: str) -> dict:
+    """Alle Fahrten einer Zwift-Welt als Spuren auf der Karte (Positionen 0..1)."""
+    result = cycling.tracks(world)
+    if result is None:
+        raise HTTPException(404, "Unbekannte Zwift-Welt")
+    return result
+
+
+@router.get("/cycling/map/{world}.jpg")
+def cycling_map(world: str) -> Response:
+    """Kartenbild einer Zwift-Welt (einmal von Zwifts CDN geholt, lokal zwischengespeichert)."""
+    try:
+        image = zwift_worlds.map_image(world)
+    except Exception as exc:  # noqa: BLE001 -- CDN unreachable or not an image
+        raise HTTPException(502, "Kartenbild nicht erreichbar") from exc
+    if image is None:
+        raise HTTPException(404, "Unbekannte Zwift-Welt")
+    return Response(image, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
 
 
 @router.get("/health/resting-hr")

@@ -8,6 +8,7 @@ import { AreaTrend, MultiTrend } from "@/components/charts";
 import { TrendBadge } from "@/components/RunningMoreAnalyses";
 import { CurveTable, EFTP_SOURCE, Empty, LogCurve, RideRow, WeeklyZones, WkgHrChart, hasPower } from "@/components/Cycling";
 import { PlanTodayCard } from "@/components/BikePlan";
+import { ZwiftAtlas } from "@/components/ZwiftMap";
 import { de, de0, dm } from "@/lib/format";
 
 const LIST_LIMIT = 20;
@@ -191,7 +192,8 @@ export default function Rad() {
       </Card>
 
       <Card>
-        <CardTitle title="Zwift-Welten & Routen" sub="Gefahrene Welten und Routen — ohne Karte, nur Zähler" />
+        <CardTitle title="Zwift-Welten & Routen" sub="Deine Fahrten auf der Zwift-Karte, darunter Welten und Routen mit Zählern" />
+        {worlds && <ZwiftAtlas worlds={worlds.worlds} />}
         {worlds ? (worlds.worlds.length ? <div className="divide-y divide-line">
           {worlds.worlds.map((w) => (
             <details key={w.world} className="py-2">
