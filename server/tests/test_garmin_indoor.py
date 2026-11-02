@@ -206,6 +206,16 @@ def test_hr_plausibility_flags_dropouts_and_low_average():
     assert few["hr_valid"]
 
 
+def test_hr_dropout_ignores_paused_stretches_without_samples():
+    """A 20-min pause (Zwift records nothing) is no HR dropout: only recorded seconds count."""
+    summary = garmin_indoor.normalize_summary(zwift(8, minutes=50))
+    details = details_for("2025-01-02T17:00:00", 3000, power=lambda s: 200.0, hr=lambda s: 140.0)
+    rows = details["activityDetailMetrics"]
+    details["activityDetailMetrics"] = rows[:900] + rows[2100:]
+    values = garmin_indoor.build_values(summary, garmin_indoor.normalize_series(summary, details))
+    assert values["hr_dropout"] == 0 and values["hr_valid"]
+
+
 # ---------------- dedup / outdoor km ----------------
 def add_hc_ride(engine, external_id, start, minutes, km):
     with Session(engine) as session:

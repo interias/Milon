@@ -250,8 +250,9 @@ def build_values(summary: dict, series: dict) -> dict:
     max_hr = summary["max_hr"]
     dropout = None
     if series.get("t"):
-        length = int(math.floor(series["t"][-1])) + 1
-        dropout = 1.0 if not hr.size else float(np.isnan(hr).sum() / length)
+        # only recorded seconds count: a pause without any sample is no strap dropout
+        recorded = ~np.isnan(grid({"t": series["t"], "on": [1.0] * len(series["t"])}, "on"))
+        dropout = 1.0 if not hr.size else float((np.isnan(hr) & recorded).sum() / max(1, recorded.sum()))
         if hr.size and not np.isnan(hr).all():
             avg_hr = avg_hr if avg_hr is not None else float(np.nanmean(hr))
             max_hr = max_hr if max_hr is not None else float(np.nanmax(hr))
