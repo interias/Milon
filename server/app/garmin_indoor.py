@@ -1,8 +1,9 @@
 """Garmin indoor/virtual rides (Zwift, trainer, watch indoor cycling) — power and heart-rate records.
 
 Kept apart from GarminRoute/GarminRide on purpose: the world map, dungeons and mounts read those GPS
-tables, and Zwift's coordinates are fictional. Virtual lat/lon are never read, stored or returned —
-neither from the detail series nor from a polyline (details are requested with maxpoly=0)."""
+tables, and Zwift's coordinates are fictional. Virtual lat/lon are never stored or returned: the detail
+series' lat/lon only pass through zwift_worlds.track, which keeps positions on a Zwift map image (0..1)
+when the ride lies inside one known Zwift world, else nothing. No polyline is requested (maxpoly=0)."""
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ import numpy as np
 from sqlalchemy.dialects.sqlite import insert
 from sqlmodel import Field, Session, SQLModel, select
 
+from . import zwift_worlds
 from .config import settings
 from .db import engine
 
@@ -24,7 +26,7 @@ HR_MIN_AVG = 60          # Ø-HF below this is a strap/optical dropout, not a ri
 HR_MAX_DROPOUT = 0.20    # more than 20 % seconds without HR → no heart-rate metric uses the ride
 CURVE_SECONDS = (1, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600)
 SERIES_KEYS = ("power_w", "cadence_rpm", "hr_bpm", "speed_m_s", "altitude_m")
-_CHANNELS = {  # descriptor key → (series key, low, high); lat/lon descriptors are ignored on purpose
+_CHANNELS = {  # descriptor key → (series key, low, high); lat/lon only feed normalize_track
     "directPower": ("power_w", 0, 2500),
     "directBikeCadence": ("cadence_rpm", 0, 250),
     "directHeartRate": ("hr_bpm", 25, 250),
@@ -35,7 +37,7 @@ _ZWIFT_TITLE = re.compile(r"^\s*zwift\s*[-–—:]\s*(?P<rest>.+?)\s*$", re.IGNO
 
 
 class GarminIndoorRide(SQLModel, table=True):
-    """One indoor ride; no coordinate column exists by design."""
+    """One indoor ride; no coordinate column exists by design (track_json holds map positions)."""
     __tablename__ = "garmin_indoor_rides"
 
     activity_id: str = Field(primary_key=True)
@@ -65,6 +67,7 @@ class GarminIndoorRide(SQLModel, table=True):
     power_zones_json: str = "[]"       # Garmin powerTimeInZone_1..7 (seconds, Garmin's own FTP)
     hr_zones_json: str = "[]"          # Garmin hrTimeInZone_1..5 (seconds)
     series_json: str = "{}"            # column-wise {"t": [...], power_w/cadence_rpm/hr_bpm/speed_m_s/altitude_m}
+    track_json: str = "{}"             # {"world": slug, "segments": [[[x, y], …]]} on the Zwift map, 0..1
     synced_at: datetime
 
 
@@ -228,6 +231,23 @@ def normalize_series(summary: dict, details: dict) -> dict:
     return series if series["t"] else {}
 
 
+def normalize_track(details: dict) -> dict:
+    """Detail lat/lon → Zwift map positions (zwift_worlds.track); the coordinates are not kept."""
+    descriptors = details.get("metricDescriptors") or []
+    indices = {d.get("key"): d.get("metricsIndex") for d in descriptors if isinstance(d, dict)}
+    lat_i, lon_i = indices.get("directLatitude"), indices.get("directLongitude")
+    if not isinstance(lat_i, int) or not isinstance(lon_i, int):
+        return {}
+    points = []
+    for row in details.get("activityDetailMetrics") or []:
+        raw = row.get("metrics", []) if isinstance(row, dict) else []
+        if max(lat_i, lon_i) < len(raw):
+            lat, lon = _number(raw[lat_i], -90, 90), _number(raw[lon_i], -180, 180)
+            if lat is not None and lon is not None and (lat, lon) != (0.0, 0.0):
+                points.append((lat, lon))
+    return zwift_worlds.track(points)
+
+
 def build_values(summary: dict, series: dict) -> dict:
     """Derived per-ride values: work, NP fallback, 60-min curve point, HR plausibility."""
     power = grid(series, "power_w") if series.get("power_w") else np.array([], float)
@@ -337,6 +357,11 @@ def sync_indoor(api, activities: list[dict], full: bool = False, listing_complet
                     and len(details.get("activityDetailMetrics", [])) < reported):
                 details = api.get_activity_details(summary["activity_id"], maxchart=int(reported), maxpoly=0)
             values = build_values(summary, normalize_series(summary, details))
+            ride_track = normalize_track(details)
+            values["track_json"] = _json(ride_track)
+            if ride_track and values["world"] is None:  # workouts: the title names no world, the map does
+                # the rest of such a title is a workout name, not a route (Traumreiche count routes)
+                values["world"], values["route"] = zwift_worlds.BY_SLUG[ride_track["world"]][1], None
             save_indoor_ride(values)
             result["imported"] += 1
             result["without_power"] += int(values["avg_power_w"] is None)
