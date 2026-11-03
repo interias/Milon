@@ -46,7 +46,7 @@ export const mediaUrl = (filename: string) => `${BASE}/media/progress/${filename
 // Zwift-Workout (.zwo) einer Plan-Einheit, über den /api-Proxy.
 export const bikeZwoUrl = (id: number) => `${BASE}/bike-plan/session/${id}.zwo`;
 // Strecken-Download eines entdeckten Verlieses (GPX-Track bzw. FIT-Course), über den /api-Proxy.
-export const zwiftMapUrl = (world: string) => `${BASE}/metrics/cycling/map/${encodeURIComponent(world)}.jpg`;
+export const zwiftMapUrl = (world: string) => `${BASE}/metrics/cycling/map/${encodeURIComponent(world)}.jpg?v=2`; // v2: turned images
 export const dungeonFileUrl =(key: string, ext: "gpx" | "fit") => `${BASE}/hero/world/dungeon/${encodeURIComponent(key)}.${ext}`;
 // Live-Endpunkte der Expedition: Token im Header X-Hero-Token (nur auf dem Gerät, nie im Code).
 export class LiveError extends Error {

@@ -97,3 +97,26 @@ def test_track_endpoints(synced):
     assert worlds[0]["slug"] == "watopia" and worlds[0]["tracks"] == 2
     for body in (world, detail):
         assert not any(k in json.dumps(body) for k in ('"lat', '"lon', "Latitude", "Longitude"))
+
+
+def test_map_image_of_newer_worlds_is_turned_upright(tmp_path, monkeypatch):
+    from PIL import Image
+
+    raw = Image.new("RGB", (80, 60), "white")
+    raw.paste((255, 0, 0), (0, 0, 10, 10))  # mark the top-left corner of the published image
+    png = io.BytesIO()
+    raw.save(png, "PNG")
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(zwift_worlds, "MAP_DIR", tmp_path / "maps")
+    monkeypatch.setattr(zwift_worlds.urllib.request, "urlopen", lambda request, timeout: Reply(png.getvalue()))
+    image = Image.open(io.BytesIO(zwift_worlds.map_image("makuri-islands")))
+    assert image.size == (60, 80)  # three quarter turns clockwise
+    assert image.getpixel((3, 76))[0] > 200 and image.getpixel((3, 76))[1] < 80  # top-left → bottom-left
+    assert (tmp_path / "maps" / "makuri-islands-turn3.jpg").exists()
