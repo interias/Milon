@@ -108,7 +108,7 @@ def _workout(s, ext, when, rows):
 
 def test_next_training_week_count_and_name_fallback(plan_db):
     with Session(plan_db) as s:
-        # Diese Woche einmal OK (mit Template-IDs): OK und UK haben je eine Einheit offen.
+        # Diese Woche einmal OK A (mit Template-IDs, ohne eigene Übung → erste Variante): OK B und UK offen.
         _workout(s, "a", datetime(2026, 11, 2, 16), [
             ("Rudern sitzend (Maschine)", "1DF4A847", "warmup", 40, 12, None),
             ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
@@ -117,13 +117,14 @@ def test_next_training_week_count_and_name_fallback(plan_db):
         # Altbestand ohne Template-ID (englischer Name) zählt über den Namen.
         _workout(s, "b", datetime(2026, 10, 28, 16), [
             ("Leg Press (Machine)", None, "normal", 153, 13, 8),
-            ("Lying Leg Curl (Machine)", None, "normal", 46, 15, 9),
+            ("Seated Leg Curl (Machine)", None, "normal", 46, 15, 9),
         ])
         s.commit()
     r = sp.next_training(date(2026, 11, 4))
-    ok, uk = r["plans"]
-    assert (ok["done"], uk["done"]) == (1, 0)
-    assert r["next"] == "ok"  # Gleichstand offener Einheiten → Oberkörper zuerst
+    ok, ok_b, uk = r["plans"]
+    assert (ok["done"], ok_b["done"], uk["done"]) == (1, 0, 0)
+    assert ok_b["program"] == "ok" and uk["program"] == "uk"
+    assert r["next"] == "ok_b"  # Gleichstand offener Einheiten → Oberkörper B vor Unterkörper
     legpress = next(e for e in uk["exercises"] if e["key"] == "legpress")
     assert legpress["last"]["date"] == "2026-10-28"
     assert uk["last_date"] == "2026-10-28"
@@ -145,3 +146,31 @@ def test_weekly_volume_counts_hard_sets_fractionally(plan_db):
     assert v["Rücken"]["this_week"] == 2 and v["Bizeps"]["this_week"] == 1
     assert v["Seitliche Schulter"]["avg_4w"] == 0.2  # 1 Satz in den 4 Wochen davor
     assert v["Seitliche Schulter"]["planned"] == 8 and v["Gesäß"]["planned"] == 6
+
+
+def test_classify_tells_upper_body_variants_apart(plan_db):
+    with Session(plan_db) as s:
+        _workout(s, "a", datetime(2026, 11, 2, 16), [
+            ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
+            ("Butterfly (Pec Deck)", "9DCE2D64", "normal", 82, 12, 9),
+        ])
+        _workout(s, "b", datetime(2026, 11, 4, 16), [
+            ("MTS Incline Press", "806def2a-0d7f-4b99-a200-893c01b6e00d", "normal", 60, 10, 8),
+            ("Face Pull", "BE640BA0", "normal", 30, 15, 9),
+        ])
+        _workout(s, "c", datetime(2026, 11, 5, 16), [
+            ("Beinpresse (Maschine)", "C7973E0E", "normal", 153, 12, 8),
+            ("Beinbeugen sitzend", "11A123F3", "normal", 61, 12, 9),
+        ])
+        s.commit()
+    kinds = sp._classify(sp._read_sets())
+    assert sorted(kinds.values()) == ["ok", "ok_b", "uk"]
+
+
+def test_upper_body_b_has_five_mts_sets_and_face_pulls():
+    b = next(p for p in sp.PLANS if p.key == "ok_b")
+    keys = [ex.key for ex in b.exercises]
+    assert "fly" not in keys and "rear_fly" not in keys and "face_pull" in keys
+    assert next(ex for ex in b.exercises if ex.key == "mts").sets == 5
+    uk = next(p for p in sp.PLANS if p.key == "uk")
+    assert next(ex for ex in uk.exercises if ex.key == "legcurl").templates == ("11A123F3",)

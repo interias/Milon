@@ -1,5 +1,5 @@
-"""Schreibt den Trainingsplan (metrics.strength_plan) als Hevy-Routinen „Milon OK“/„Milon UK“
-in den Routinen-Ordner „Milon“. Nur diese beiden Routinen werden angelegt bzw. überschrieben
+"""Schreibt den Trainingsplan (metrics.strength_plan) als Hevy-Routinen „Milon OK“/„Milon OK B“/
+„Milon UK“ in den Routinen-Ordner „Milon“. Nur diese Routinen werden angelegt bzw. überschrieben
 (PUT ersetzt die Übungsliste komplett); andere Routinen bleiben unberührt. Ist der Inhalt seit
 dem letzten Schreiben gleich (Hash in sync_state 'hevy_routines'.cursor), geht kein Request raus.
 Die Hevy-API kennt kein RPE in Routinen → Ziel-RIR und Begründung stehen in der Übungsnotiz."""

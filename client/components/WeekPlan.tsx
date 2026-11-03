@@ -136,7 +136,7 @@ function GymPicker({ d, onSet }: { d: WeekDay; onSet: (p: "ok" | "uk" | null) =>
   return (
     <label className="flex items-center gap-1 text-[11px] text-muted">Kraft an diesem Tag
       <select value={value} onChange={(e) => onSet((e.target.value || null) as "ok" | "uk" | null)} className="rounded border border-line bg-surface px-1 py-0.5 text-base sm:text-[11px]" aria-label={`Kraft am ${dm(d.date)}`}>
-        <option value="">kein Krafttraining</option><option value="ok">Milon OK</option><option value="uk">Milon UK</option>
+        <option value="">kein Krafttraining</option><option value="ok">Milon OK (A/B)</option><option value="uk">Milon UK</option>
       </select>
     </label>
   );

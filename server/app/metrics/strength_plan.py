@@ -1,4 +1,4 @@
-"""Trainingsplan „Nächstes Training“: zwei feste Programme (Oberkörper/Unterkörper) mit
+"""Trainingsplan „Nächstes Training“: feste Programme (Oberkörper A/B, Unterkörper) mit
 doppelter Progression und konstanten Wiederholungen. Wiederholungen werden auf die Ziel-RPE je
 Satz umgerechnet (RPE 10 × 12 Wdh. ≈ RPE 8 × 10 Wdh.), damit Sätze bis zum Versagen nicht als
 Fortschritt durchgehen.
@@ -67,6 +67,7 @@ class Ladder:
 # Beinpresse 45°: 53-kg-Schlitten + Plattenpaare (2 × 2,5 kg). RDL: 20-kg-Stange + Plattenpaare (5 kg).
 # Kurzhanteln: Gesamtgewicht beider Hanteln, Hanteln in 2,5-kg-Stufen → 5 kg. Stirndrücken: 2,5 kg.
 # MTS: zwei getrennte Stacks in 2,5-kg-Stufen, geloggt wird die Summe → 5 kg.
+# Face Pull (Seilzug): Stack-Stufen unbekannt → 2,5 kg angenommen.
 def _select(anchor: float) -> Ladder:
     return Ladder(7.0, anchor, (0.0, 2.5, 5.0))
 
@@ -94,35 +95,54 @@ class Plan:
     name: str
     per_week: int
     exercises: tuple[PlanExercise, ...]
+    family: str = ""                    # Varianten desselben Programms (Kraft-Tag „ok“/„uk“); leer = key
+
+    @property
+    def program(self) -> str:
+        return self.family or self.key
+
+
+_ROW = PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
+                    ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True,
+                    muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5)))
+_LATERAL = PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
+                        ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 20), 90, _select(25),
+                        muscles=(("Seitliche Schulter", 1),))
+_PULLDOWN = PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
+                         ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0),
+                         muscles=(("Rücken", 1), ("Bizeps", .5)))
+_HAMMER = PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
+                       ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
+                       2, (10, 15), 90, Ladder(5.0), superset=1, muscles=(("Bizeps", 1),))
+_SKULL = PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
+                      ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 2, (10, 15), 90, Ladder(2.5),
+                      superset=1, muscles=(("Trizeps", 1),))
+
+
+def _mts(sets: int) -> PlanExercise:
+    return PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
+                        ("MTS Incline Press",), sets, (8, 12), 150, Ladder(5.0), warmup=True,
+                        muscles=(("Brust", 1), ("Trizeps", .5)))
 
 
 PLANS: tuple[Plan, ...] = (
-    Plan("ok", "Milon OK", "Oberkörper", 2, (
-        PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
-                     ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True,
-                     muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5))),
-        PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
-                     ("MTS Incline Press",), 3, (8, 12), 150, Ladder(5.0), warmup=True,
-                     muscles=(("Brust", 1), ("Trizeps", .5))),
-        PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
-                     ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 20), 90, _select(25),
-                     muscles=(("Seitliche Schulter", 1),)),
-        PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
-                     ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0),
-                     muscles=(("Rücken", 1), ("Bizeps", .5))),
+    Plan("ok", "Milon OK", "Oberkörper A", 1, (
+        _ROW, _mts(3), _LATERAL, _PULLDOWN,
         PlanExercise("fly", "Butterfly (Maschine)", ("78683336", "9DCE2D64"),
                      ("Fliegende (Maschine)", "Butterfly (Pec Deck)"), 2, (10, 15), 90, _select(82), superset=0,
                      muscles=(("Brust", 1),)),
         PlanExercise("rear_fly", "Reverse Butterfly (Maschine)", ("D8281C62",),
                      ("Reverse Fliegende (Maschine)", "Rear Delt Reverse Fly (Machine)"), 2, (10, 15), 90, _select(40),
                      superset=0, muscles=(("Hintere Schulter", 1),)),
-        PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
-                     ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
-                     2, (10, 15), 90, Ladder(5.0), superset=1, muscles=(("Bizeps", 1),)),
-        PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
-                     ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 2, (10, 15), 90, Ladder(2.5),
-                     superset=1, muscles=(("Trizeps", 1),)),
+        _HAMMER, _SKULL,
     )),
+    # Variante ohne Butterfly: Brustvolumen über 5 Sätze MTS, hintere Schulter per Face Pull am Seilzug.
+    Plan("ok_b", "Milon OK B", "Oberkörper B", 1, (
+        _ROW, _mts(5), _LATERAL, _PULLDOWN,
+        PlanExercise("face_pull", "Face Pull (Seilzug)", ("BE640BA0",), ("Face Pull",), 3, (12, 20), 90,
+                     Ladder(2.5), muscles=(("Hintere Schulter", 1),)),
+        _HAMMER, _SKULL,
+    ), family="ok"),
     Plan("uk", "Milon UK", "Unterkörper", 1, (
         PlanExercise("legpress", "Beinpresse (Maschine)", ("C7973E0E",),
                      ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True,
@@ -130,8 +150,8 @@ PLANS: tuple[Plan, ...] = (
         PlanExercise("rdl", "Romanian Deadlift (Langhantel)", ("2B4B7310",),
                      ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 4, (8, 12), 150, Ladder(5.0),
                      last_rpe=9.0, muscles=(("Beinbeuger", 1), ("Gesäß", 1))),
-        PlanExercise("legcurl", "Liegendes Beinbeugen (Maschine)", ("B8127AD1",),
-                     ("Liegendes Beinbeugen (Maschine)", "Lying Leg Curl (Machine)"), 4, (10, 15), 90, _select(39),
+        PlanExercise("legcurl", "Beinbeugen sitzend (Maschine)", ("11A123F3",),
+                     ("Beinbeugen sitzend", "Seated Leg Curl (Machine)"), 4, (10, 15), 90, _select(40),
                      superset=0, muscles=(("Beinbeuger", 1),)),
         PlanExercise("legext", "Beinstrecker (Maschine)", ("75A4F6C4",),
                      ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 4, (10, 15), 90, _select(61),
@@ -292,15 +312,23 @@ def _result(ex: PlanExercise, weight: float | None, reps: list[int], targets: li
 
 
 def _classify(df: pd.DataFrame) -> dict[int, str]:
-    """Workout → Plan ('ok'/'uk') nach Anteil der Arbeitssätze; mindestens 2 Planübungen."""
-    key_plan = {ex.key: p.key for p in PLANS for ex in p.exercises}
+    """Workout → Plan-Key nach Anteil der Arbeitssätze; mindestens 2 Übungen des Programms.
+    Varianten eines Programms (ok/ok_b) trennen die Übungen, die nur eine Variante hat; ohne
+    solche gilt die erste Variante."""
+    key_program = {ex.key: p.program for p in PLANS for ex in p.exercises}
     work = df[df["set_type"].isin(WORK_TYPES)]
     out = {}
     for wid, g in work.groupby("workout_id"):
-        plans = Counter(key_plan[k] for k in g["key"])
-        best, n = plans.most_common(1)[0]
-        if g[g["key"].map(key_plan) == best]["key"].nunique() >= 2:
-            out[int(wid)] = best
+        programs = Counter(key_program[k] for k in g["key"])
+        best, n = programs.most_common(1)[0]
+        keys = set(g["key"][g["key"].map(key_program) == best])
+        if len(keys) < 2:
+            continue
+        variants = [p for p in PLANS if p.program == best]
+        own = {p.key: {ex.key for ex in p.exercises} - set().union(*({e.key for e in v.exercises}
+                                                                       for v in variants if v is not p))
+               for p in variants}
+        out[int(wid)] = max(variants, key=lambda p: len(own[p.key] & keys)).key
     return out
 
 
@@ -317,7 +345,7 @@ def _duration_min(plan: Plan) -> int:
 
 
 def next_training(today: date | None = None) -> dict:
-    """Beide Programme mit Vorschlag je Übung + Wochenstand (Mo–So) und welches als Nächstes dran ist."""
+    """Alle Programme mit Vorschlag je Übung + Wochenstand (Mo–So) und welches als Nächstes dran ist."""
     today = today or datetime.now().date()
     df = _read_sets()
     monday = today - timedelta(days=today.weekday())
@@ -331,7 +359,7 @@ def next_training(today: date | None = None) -> dict:
         exercises = [suggest(ex, _session_sets(df[df["key"] == ex.key]) if not df.empty else [], today)
                      for ex in p.exercises]
         plans.append({
-            "key": p.key, "title": p.title, "name": p.name, "per_week": p.per_week, "done": done,
+            "key": p.key, "program": p.program, "title": p.title, "name": p.name, "per_week": p.per_week, "done": done,
             "last_date": days[-1].isoformat() if days else None,
             "duration_min": _duration_min(p), "exercises": exercises,
         })
