@@ -1,7 +1,9 @@
 """Zwift worlds: map bounds, ride tracks as map positions, cached map images.
 
 Bounds and image URLs come from the MIT-licensed package zwift-data 2.1.2 (© 2021 Andi Pätzold,
-github.com/andipaetzold/zwift-data). A world's map image spans exactly its bounds, linear in lat/lon.
+github.com/andipaetzold/zwift-data). A world's map image spans exactly its bounds, linear in lat/lon,
+once it is turned upright: Zwift publishes the newer worlds' images a quarter turn off (QUARTER_TURNS,
+as in zwiftmap's pre-turned copies and the domestique project's world table).
 
 A track is stored as positions on the map image (x, y in 0..1 from the top-left corner), never as
 latitude/longitude. Positions are only kept for rides whose points lie inside one known world, so a
@@ -38,6 +40,8 @@ WORLDS = [
     ("paris", "Paris", (48.9058, 2.2561), (48.82945, 2.3722), "MiniMap_Champs.png"),
     ("scotland", "Scotland", (55.67595, -5.2802), (55.61845, -5.17798), "MiniMap_Scotland.png"),
 ]
+# quarter turns clockwise the CDN image needs before the bounds describe it
+QUARTER_TURNS = {"makuri-islands": 3, "france": 3, "paris": 3, "scotland": 3}
 BY_SLUG = {w[0]: w for w in WORLDS}
 BY_NAME = {w[1]: w for w in WORLDS}
 IMAGE_URL = "https://cdn.zwift.com/static/images/maps/{}"
@@ -88,7 +92,8 @@ def map_image(slug: str) -> bytes | None:
     world = BY_SLUG.get(slug)
     if world is None:
         return None
-    path = MAP_DIR / f"{slug}.jpg"
+    turns = QUARTER_TURNS.get(slug, 0)
+    path = MAP_DIR / (f"{slug}.jpg" if not turns else f"{slug}-turn{turns}.jpg")  # never reuse an unturned cache
     if path.exists():
         return path.read_bytes()
     with _fetch_gate:
@@ -99,7 +104,7 @@ def map_image(slug: str) -> bytes | None:
         req = urllib.request.Request(IMAGE_URL.format(world[4]), headers={"User-Agent": "Milon/1.0"})
         with urllib.request.urlopen(req, timeout=60) as response:
             raw = response.read()
-        image = Image.open(io.BytesIO(raw)).convert("RGB")
+        image = Image.open(io.BytesIO(raw)).convert("RGB").rotate(-90 * turns, expand=True)
         image.thumbnail((MAP_MAX_EDGE, MAP_MAX_EDGE))
         out = io.BytesIO()
         image.save(out, "JPEG", quality=85, optimize=True)
