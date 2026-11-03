@@ -78,7 +78,7 @@ export function NextTraining() {
         <h2 className="text-sm font-semibold">Nächstes Training</h2>
         <p className="mt-1 text-xs text-muted">Woche ab {dm(data.week_start)}: {data.plans.map((plan) => `${plan.name} ${plan.done}/${plan.per_week}`).join(" · ")}</p>
       </div>
-      <div className="flex gap-1" role="tablist" aria-label="Trainingsplan">
+      <div className="flex flex-wrap gap-1" role="tablist" aria-label="Trainingsplan">
         {data.plans.map((plan) => <button key={plan.key} type="button" role="tab" aria-selected={active.key === plan.key} onClick={() => setTab(plan.key)}
           className={`rounded border px-3 py-1.5 text-xs font-semibold ${active.key === plan.key ? "border-accent bg-accent text-white" : "border-line text-muted"}`}>
           {plan.name}{plan.key === data.next && <span className="ml-1.5 rounded-sm bg-white/90 px-1 text-[10px] text-accent">dran</span>}
@@ -96,7 +96,7 @@ export function NextTraining() {
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <button type="button" onClick={write} disabled={writing} className="rounded border border-line px-3 py-2 text-sm disabled:opacity-60">{writing ? "Schreibe …" : "Jetzt nach Hevy schreiben"}</button>
-      <p className="text-xs text-muted" role="status">{message ?? "Wird nach jedem Hevy-Sync automatisch als Routine „Milon OK/UK“ gesetzt."}</p>
+      <p className="text-xs text-muted" role="status">{message ?? "Wird nach jedem Hevy-Sync automatisch als Routinen „Milon OK“, „Milon OK B“ und „Milon UK“ gesetzt."}</p>
     </div>
   </Card>;
 }

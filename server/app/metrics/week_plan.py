@@ -121,10 +121,23 @@ def _workouts(first: date, last: date) -> list[dict]:
                                              Workout.started_at < datetime.combine(last + timedelta(days=1),
                                                                                    datetime.min.time()))).all()
     kinds = _safe(lambda: strength_plan._classify(strength_plan._read_sets()), {})
+    family = {p.key: p.program for p in strength_plan.PLANS}
     return [{"id": w.id, "day": w.started_at.date(), "title": w.title or "Krafttraining",
              "minutes": round((w.ended_at - w.started_at).total_seconds() / 60) if w.ended_at else None,
-             "program": kinds.get(w.id), "start": w.started_at.isoformat(),
+             "program": family.get(kinds.get(w.id)), "variant": kinds.get(w.id), "start": w.started_at.isoformat(),
              "end": (w.ended_at or w.started_at + timedelta(hours=1)).isoformat()} for w in rows if w.started_at]
+
+
+def _variant_queue(plans: dict, nxt: str | None, fresh: bool) -> dict[str, list[str]]:
+    """Je Programm (ok/uk) die offenen Varianten der Woche, die als Nächstes dran ist zuerst.
+    `fresh` = künftige Woche: alle Varianten offen."""
+    out: dict[str, list[str]] = {}
+    for p in plans.values():
+        n = p["per_week"] - (0 if fresh else p["done"])
+        out.setdefault(p.get("program") or p["key"], []).extend([p["key"]] * max(0, n))
+    for q in out.values():
+        q.sort(key=lambda k: not fresh and k != nxt)
+    return out
 
 
 def _prescription(plans: dict, key: str) -> list[str]:
@@ -176,6 +189,7 @@ def week(offset: int = 0, today: date | None = None) -> dict:
     workouts = _workouts(first, last)
     nxt = _safe(lambda: strength_plan.next_training(today), {"plans": []})
     plans = {p["key"]: p for p in nxt.get("plans") or []}
+    queue = _variant_queue(plans, nxt.get("next"), fresh=first > today)
 
     main_sleep = _safe(lambda: sleep._main_by_day(sleep._sleep_rows(7 + (today - first).days, today)), {})
     entries = {e["day"]: e for e in _safe(lambda: checkins.list_entries(7 + max(0, (today - first).days), max(today, last)), [])}
@@ -238,9 +252,16 @@ def week(offset: int = 0, today: date | None = None) -> dict:
                 used_workouts.add(hit["id"])
             color = ("green" if hit["program"] in (program, None) else "yellow") if hit \
                 else ("sick" if sick and (past or is_today) else "red" if past else "open")
-            items.append({"type": "gym", "planned": True, "title": PROGRAM_TITLE[program], "program": program,
+            if hit and hit["program"] == program:
+                variant = hit["variant"]
+            elif not hit and not past and queue.get(program):
+                variant = queue[program].pop(0)
+            else:
+                variant = None
+            title = (plans.get(variant) or {}).get("title") or PROGRAM_TITLE[program]
+            items.append({"type": "gym", "planned": True, "title": title, "program": program, "variant": variant,
                           "label": plan_gym.get(key), "color": color, "done": hit, "day": key,
-                          "prescription": _prescription(plans, program) if not past and not hit else [],
+                          "prescription": _prescription(plans, variant or program) if not past and not hit else [],
                           "href": "/kraft"})
             totals["gym_planned"] += 1
             totals["gym_matched"] += hit is not None

@@ -54,6 +54,9 @@ def test_without_plan_uses_default_gym_schema(db):
     assert _items(w, START + timedelta(days=9)) == [("gym", "Milon UK", "open")]  # heute bleibt offen
     assert _items(w, START + timedelta(days=11)) == [("gym", "Milon OK", "open")]
     assert w["plan"] is None and w["totals"]["gym_planned"] == 3 and w["totals"]["missed"] == 1
+    nxt = week_plan.week(1, today=START + timedelta(days=9))     # kommende Woche: OK A und OK B verteilt
+    assert [(i["title"], i["variant"]) for d in nxt["days"] for i in d["items"] if i["type"] == "gym"] == [
+        ("Milon OK", "ok"), ("Milon UK", "uk"), ("Milon OK B", "ok_b")]
 
 
 def test_plan_week_colors_unplanned_and_sick(db):
