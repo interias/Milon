@@ -420,8 +420,13 @@ export type PlanSet = { type: "warmup" | "normal"; weight_kg: number | null; rep
 export type PlanExercise = {
   key: string; name: string; template_id: string; rep_range: [number, number]; rest_seconds: number;
   superset: number | null; weight_kg: number | null; step_up_kg: number | null; sets: PlanSet[];
-  action: "increase" | "hold" | "decrease" | "deload" | "pause" | "start" | "new";
-  reason: string; rir_note: string; last: { date: string; summary: string } | null;
+  action: "increase" | "hold" | "decrease" | "pause" | "start" | "new";
+  reason: string; rir_note: string; last: { date: string; summary: string; reps: number[]; hit: number } | null;
+  rule: { min_reps: number; target_reps: number; default: [number, number]; custom: boolean; lines: string[] };
+};
+export type StrengthRule = {
+  key: string; name: string; names: string[]; sets: number;
+  min_reps: number; target_reps: number; default: [number, number]; custom: boolean;
 };
 export type TrainingPlan = {
   key: string; title: string; name: string; per_week: number; done: number;
@@ -879,6 +884,10 @@ export const api = {
   strengthIndex: (period = "3m") => get<StrengthIndex>(`/metrics/strength/index?period=${period}`),
   strengthEnergy: () => get<StrengthEnergy>(`/metrics/strength/energy`),
   strengthPlan: () => get<NextTraining>("/metrics/strength/plan"),
+  strengthRules: () => get<StrengthRule[]>("/metrics/strength/rules"),
+  setStrengthRule: (key: string, min_reps: number, target_reps: number) =>
+    send<StrengthRule>("PUT", `/metrics/strength/rules/${encodeURIComponent(key)}`, { min_reps, target_reps }),
+  resetStrengthRule: (key: string) => send<StrengthRule>("DELETE", `/metrics/strength/rules/${encodeURIComponent(key)}`),
   strengthVolume: () => get<WeeklyVolume>("/metrics/strength/volume"),
   writeHevyRoutines: () => post<Record<string, unknown>>("/ingest/hevy-routines"),
   // Coach

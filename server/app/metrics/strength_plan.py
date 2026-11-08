@@ -1,29 +1,24 @@
 """Trainingsplan „Nächstes Training“: feste Programme (Oberkörper A/B, Unterkörper) mit
-doppelter Progression und konstanten Wiederholungen. Wiederholungen werden auf die Ziel-RPE je
-Satz umgerechnet (RPE 10 × 12 Wdh. ≈ RPE 8 × 10 Wdh.), damit Sätze bis zum Versagen nicht als
-Fortschritt durchgehen.
+doppelter Progression nach geschafften Wiederholungen.
 
-Regeln (im Grilling mit dem User festgelegt, belegt über „harte Sätze“ 0–3 RIR):
-- Gleiche Wdh. in allen Sätzen, RIR sinkt: Satz 1 RPE 8, mittlere RPE 9, letzter `last_rpe`
-  (10 = bis zum Versagen erlaubt; RDL 9).
-- Ziel = erster Satz der letzten Einheit, umgerechnet auf RPE 8.
-- Steigern: alle Sätze am oberen Ende des Bereichs. Halten: alle Sätze am Ziel → Ziel + 1, sonst
-  dasselbe Ziel. Zurück: ein Satz unter dem unteren Ende → eine Stufe leichter.
-- Plateau: 3 Einheiten (ab PLAN_START) auf demselben Gewicht ohne Wiederholungsgewinn → eine Stufe leichter.
+Regeln (vom User 2026-11-08 festgelegt, je Übung einstellbar über `StrengthRule`):
+- Je Übung Ziel-Wdh. und Mindest-Wdh. (Standard = `PlanExercise.reps`).
+- Schwerer: alle geplanten Sätze der letzten Einheit (Hauptgewicht) ≥ Ziel-Wdh. → eine Stufe hoch.
+- Leichter: ein Satz unter der Mindest-Wdh. → eine Stufe runter. Sonst gleiches Gewicht.
 - Pause > 21 Tage → eine Stufe leichter; > 90 Tage oder neu → Start aus dem e1RM der letzten 180 Tage.
-Fehlende RPE zählt als eine Stufe über dem Ziel (steigern erst bei Wdh. über dem oberen Ende)."""
+- RIR sinkt über die Sätze (Satz 1 RPE 8, mittlere 9, letzter `last_rpe`) — nur Leitplanke beim
+  Training, zählt nicht für die Entscheidung."""
 from __future__ import annotations
 
-import math
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 import pandas as pd
+from sqlmodel import Field, Session, SQLModel, select
 
 from ..db import engine
 
-PLAN_START = date(2026, 10, 23)  # Plateau-Regel zählt nur Einheiten im neuen RIR-Schema
 PAUSE_DAYS = 21
 STALE_DAYS = 90
 E1RM_DAYS = 180
@@ -106,7 +101,7 @@ _ROW = PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
                     ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True,
                     muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5)))
 _LATERAL = PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
-                        ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 20), 90, _select(25),
+                        ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 15), 90, _select(25),
                         muscles=(("Seitliche Schulter", 1),))
 _PULLDOWN = PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
                          ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0),
@@ -162,6 +157,67 @@ MUSCLES = ("Brust", "Rücken", "Seitliche Schulter", "Hintere Schulter", "Bizeps
            "Quadrizeps", "Beinbeuger", "Gesäß")
 VOLUME_BAND = (10, 20)  # harte Sätze je Muskel und Woche (Schoenfeld 2017, Pelland 2025)
 HARD_RPE = 7.0          # ≤ 3 RIR zählt als harter Satz; fehlende RPE zählt mit
+REP_LIMIT = 50
+
+
+class StrengthRule(SQLModel, table=True):
+    """Eigene Progressionsregel je Planübung (Plan-Übungsschlüssel); fehlt sie, gilt `PlanExercise.reps`."""
+    __tablename__ = "strength_rules"
+
+    key: str = Field(primary_key=True)
+    min_reps: int
+    target_reps: int
+
+
+def _exercises() -> dict[str, PlanExercise]:
+    """Planübungen je Schlüssel; Varianten teilen Übungen (z. B. MTS) — die erste Definition zählt für die Wdh."""
+    out: dict[str, PlanExercise] = {}
+    for p in PLANS:
+        for ex in p.exercises:
+            out.setdefault(ex.key, ex)
+    return out
+
+
+def rules() -> dict[str, tuple[int, int]]:
+    """Gespeicherte Regeln: Schlüssel → (Mindest-Wdh., Ziel-Wdh.)."""
+    with Session(engine) as db:
+        return {r.key: (r.min_reps, r.target_reps) for r in db.exec(select(StrengthRule)).all()}
+
+
+def rule_list() -> list[dict]:
+    """Alle Planübungen mit aktueller Regel und den Namen, unter denen Hevy sie führt (für den Übungskatalog)."""
+    own = rules()
+    out = []
+    for key, ex in _exercises().items():
+        lo, hi = own.get(key, ex.reps)
+        out.append({"key": key, "name": ex.name, "names": list(ex.names), "sets": ex.sets,
+                    "min_reps": lo, "target_reps": hi, "default": list(ex.reps), "custom": key in own})
+    return out
+
+
+def set_rule(key: str, min_reps: int, target_reps: int) -> dict:
+    """Regel speichern; KeyError bei unbekannter Übung, ValueError bei unplausiblen Wdh."""
+    if key not in _exercises():
+        raise KeyError(key)
+    if not 1 <= min_reps <= target_reps <= REP_LIMIT:
+        raise ValueError(f"Wiederholungen: 1 ≤ Mindest-Wdh. ≤ Ziel-Wdh. ≤ {REP_LIMIT}.")
+    with Session(engine) as db:
+        row = db.get(StrengthRule, key) or StrengthRule(key=key, min_reps=min_reps, target_reps=target_reps)
+        row.min_reps, row.target_reps = min_reps, target_reps
+        db.add(row)
+        db.commit()
+    return next(r for r in rule_list() if r["key"] == key)
+
+
+def reset_rule(key: str) -> dict:
+    if key not in _exercises():
+        raise KeyError(key)
+    with Session(engine) as db:
+        row = db.get(StrengthRule, key)
+        if row:
+            db.delete(row)
+            db.commit()
+    return next(r for r in rule_list() if r["key"] == key)
 
 
 def _read_sets() -> pd.DataFrame:
@@ -199,12 +255,6 @@ def _main_weight(weights: list[float]) -> float:
     return max(w for w, c in counts.items() if c == top)
 
 
-def _reps_for(e1: float, weight: float, target: float, lo: int, hi: int) -> int:
-    """Wdh. bei `weight` und Ziel-RPE aus einem e1RM (Epley rückwärts)."""
-    to_failure = 30.0 * (e1 / weight - 1.0)
-    return max(lo, min(hi, math.floor(to_failure - (10.0 - target) + 1e-9)))
-
-
 def _session_sets(df: pd.DataFrame) -> list[dict]:
     """Je Workout die Arbeitssätze dieser Übung: [{date, sets:[(w, r, rpe)]}], chronologisch."""
     work = df[df["set_type"].isin(WORK_TYPES) & (df["weight_kg"] > 0) & (df["reps"] > 0)]
@@ -218,96 +268,83 @@ def _session_sets(df: pd.DataFrame) -> list[dict]:
     return sorted(out, key=lambda s: s["date"])
 
 
-def _adjusted(sets: list[tuple], targets: list[float]) -> list[float]:
-    """Wdh. umgerechnet auf die Ziel-RPE je Satz (fehlende RPE = Ziel + 1)."""
-    return [r - ((rpe if rpe is not None else t + 1.0) - t) for (_, r, rpe), t in zip(sets, targets)]
+def _sets_word(n: int) -> str:
+    return "Satz" if n == 1 else "Sätze"
 
 
-def suggest(ex: PlanExercise, sessions: list[dict], today: date) -> dict:
-    """Vorschlag für die nächste Einheit einer Übung."""
-    lo, hi = ex.reps
+def suggest(ex: PlanExercise, sessions: list[dict], today: date,
+            rule: tuple[int, int] | None = None) -> dict:
+    """Vorschlag für die nächste Einheit einer Übung; `rule` = (Mindest-Wdh., Ziel-Wdh.)."""
+    lo, hi = rule or ex.reps
     targets = _targets(ex)
     recent = [s for s in sessions if (today - s["date"]).days <= STALE_DAYS]
-    weight: float | None
-    reps: list[int]
-    last = None
     if not recent:
         window = [st for s in sessions if (today - s["date"]).days <= E1RM_DAYS for st in s["sets"]]
         if not window:
-            return _result(ex, None, [lo] * ex.sets, targets, "new",
-                           "Noch keine Daten – Startgewicht selbst wählen, 2 Wdh. im Tank lassen.", None)
+            return _result(ex, None, lo, hi, targets, "new",
+                           "Noch keine Daten – Startgewicht selbst wählen.", None)
         e1 = max(w * (1 + min(r + (10 - (rpe or 10)), 15) / 30) for w, r, rpe in window)
-        mid = (lo + hi) // 2
-        weight = ex.ladder.floor(e1 / (1 + (mid + 2) / 30))
-        reps = [_reps_for(e1, weight, targets[0], lo, hi)] * ex.sets
-        return _result(ex, weight, reps, targets, "start",
+        weight = ex.ladder.floor(e1 / (1 + (hi + 2) / 30))  # Ziel-Wdh. mit ~2 Wdh. Reserve
+        return _result(ex, weight, lo, hi, targets, "start",
                        f"Über {STALE_DAYS} Tage nicht trainiert – Start aus geschätztem 1RM ({_de(round(e1, 1))} kg).",
                        None)
 
     last = recent[-1]
     w = _main_weight([st[0] for st in last["sets"]])
     at_w = [st for st in last["sets"] if abs(st[0] - w) < 0.01][:ex.sets]
-    adj = _adjusted(at_w, targets)
-    full = len(adj) == ex.sets
-    while len(adj) < ex.sets:  # fehlende Sätze: einen weniger als der vorige
-        adj.append((adj[-1] if adj else lo) - 1)
-    first_e1 = w * (1 + (adj[0] + 10 - targets[0]) / 30)
-    goal = math.floor(adj[0] + 1e-9)
-    shown = f"{_de(w)} kg × " + "/".join(str(r) for _, r, _ in at_w)
+    done = [r for _, r, _ in at_w]
+    shown = f"{_de(w)} kg × " + "/".join(str(r) for r in done)
     if any(rpe is not None for *_, rpe in at_w):
         shown += " @ " + "/".join(_de(rpe) if rpe is not None else "–" for *_, rpe in at_w)
+    hit = sum(r >= hi for r in done)
 
-    if full and all(a >= hi for a in adj):
+    if len(done) == ex.sets and hit == ex.sets:
         action, new_w = "increase", ex.ladder.up(w)
-        reason = f"Alle Sätze am oberen Ende ({hi}) → +{_de(round(new_w - w, 2))} kg."
-    elif any(a < lo for a in adj[:len(at_w)]):
+        reason = f"Alle {ex.sets} Sätze ≥ {hi} Wdh. → +{_de(round(new_w - w, 2))} kg."
+    elif any(r < lo for r in done):
         action, new_w = "decrease", ex.ladder.down(w)
-        reason = f"Ein Satz unter {lo} Wdh. (auf Ziel-RPE gerechnet) → eine Stufe leichter."
-    elif _plateau(ex, sessions, w, targets):
-        action, new_w = "deload", ex.ladder.down(w)
-        reason = "3 Einheiten ohne Fortschritt → eine Stufe leichter und neu aufbauen."
-    elif full and min(adj) >= goal:
-        action, new_w, goal = "hold", w, goal + 1
-        reason = "Alle Sätze am Ziel → eine Wdh. mehr."
+        reason = f"Ein Satz unter {lo} Wdh. → eine Stufe leichter."
     else:
         action, new_w = "hold", w
-        reason = "Noch nicht alle Sätze am Ziel → gleiches Ziel wiederholen."
+        reason = (f"{hit} von {ex.sets} Sätzen ≥ {hi} Wdh. → gleiches Gewicht."
+                  if len(done) == ex.sets else
+                  f"Nur {len(done)} von {ex.sets} Sätzen mit {_de(w)} kg erfasst → gleiches Gewicht.")
     pause = (today - last["date"]).days
-    if pause > PAUSE_DAYS and action not in ("decrease", "deload"):
+    if pause > PAUSE_DAYS and action != "decrease":
         new_w = ex.ladder.down(w)
         action = "pause"
         reason = f"{pause} Tage Pause → eine Stufe leichter."
-    rep = max(lo, min(hi, goal)) if action == "hold" else _reps_for(first_e1, new_w, targets[0], lo, hi)
-    reps = [rep] * ex.sets
-    last_info = {"date": last["date"].isoformat(), "summary": shown}
-    return _result(ex, new_w, reps, targets, action, f"Letztes Mal {shown}. {reason}", last_info)
+    last_info = {"date": last["date"].isoformat(), "summary": shown, "reps": done, "hit": hit}
+    return _result(ex, new_w, lo, hi, targets, action, f"Letztes Mal {shown}. {reason}", last_info)
 
 
-def _plateau(ex: PlanExercise, sessions: list[dict], w: float, targets: list[float]) -> bool:
-    plan = [s for s in sessions if s["date"] >= PLAN_START][-3:]
-    if len(plan) < 3:
-        return False
-    means = []
-    for s in plan:
-        at_w = [st for st in s["sets"] if abs(st[0] - w) < 0.01][:ex.sets]
-        if len(at_w) < ex.sets:
-            return False
-        means.append(sum(_adjusted(at_w, targets)) / ex.sets)
-    return means[-1] <= means[0]
+def _rule_lines(ex: PlanExercise, weight: float | None, lo: int, hi: int, targets: list[float]) -> list[str]:
+    up = f" → {_de(ex.ladder.up(weight))} kg" if weight else " → eine Stufe schwerer"
+    down = f" → {_de(ex.ladder.down(weight))} kg" if weight else " → eine Stufe leichter"
+    return [
+        f"Schwerer: alle {ex.sets} {_sets_word(ex.sets)} ≥ {hi} Wdh.{up}",
+        f"Leichter: ein Satz unter {lo} Wdh.{down}",
+        "Sonst: gleiches Gewicht, Wiederholungen sammeln",
+        f"Pause über {PAUSE_DAYS} Tage: eine Stufe leichter",
+        "RIR " + " → ".join(_de(10 - t) for t in targets) + ": Leitplanke beim Training, zählt nicht für die Regel",
+    ]
 
 
-def _result(ex: PlanExercise, weight: float | None, reps: list[int], targets: list[float],
+def _result(ex: PlanExercise, weight: float | None, lo: int, hi: int, targets: list[float],
             action: str, reason: str, last: dict | None) -> dict:
     sets = []
     if ex.warmup and weight:
         sets.append({"type": "warmup", "weight_kg": ex.ladder.floor(weight * 0.6), "reps": 12, "rpe": None})
-    sets += [{"type": "normal", "weight_kg": weight, "reps": r, "rpe": t} for r, t in zip(reps, targets)]
-    rir = "Gleiche Wdh. in allen Sätzen, RIR " + " → ".join(_de(10 - t) for t in targets)
+    sets += [{"type": "normal", "weight_kg": weight, "reps": hi, "rpe": t} for t in targets]
+    rir = (f"Ziel {ex.sets} × {hi} Wdh., dann schwerer; unter {lo} leichter. RIR "
+           + " → ".join(_de(10 - t) for t in targets) + " als Leitplanke")
     return {
         "key": ex.key, "name": ex.name, "template_id": ex.templates[0],
-        "rep_range": list(ex.reps), "rest_seconds": ex.rest, "superset": ex.superset,
+        "rep_range": [lo, hi], "rest_seconds": ex.rest, "superset": ex.superset,
         "weight_kg": weight, "step_up_kg": round(ex.ladder.up(weight) - weight, 2) if weight else None,
         "sets": sets, "action": action, "reason": reason, "rir_note": rir, "last": last,
+        "rule": {"min_reps": lo, "target_reps": hi, "default": list(ex.reps), "custom": (lo, hi) != ex.reps,
+                 "lines": _rule_lines(ex, weight, lo, hi, targets)},
     }
 
 
@@ -351,13 +388,14 @@ def next_training(today: date | None = None) -> dict:
     monday = today - timedelta(days=today.weekday())
     kinds = _classify(df) if not df.empty else {}
     starts = df.groupby("workout_id")["started_at"].first() if not df.empty else pd.Series(dtype="datetime64[ns]")
+    own = rules()
     plans = []
     for p in PLANS:
         mine = [wid for wid, k in kinds.items() if k == p.key]
         days = sorted(starts[mine].dt.date) if mine else []
         done = sum(1 for d in days if monday <= d <= today)
-        exercises = [suggest(ex, _session_sets(df[df["key"] == ex.key]) if not df.empty else [], today)
-                     for ex in p.exercises]
+        exercises = [suggest(ex, _session_sets(df[df["key"] == ex.key]) if not df.empty else [], today,
+                             own.get(ex.key)) for ex in p.exercises]
         plans.append({
             "key": p.key, "program": p.program, "title": p.title, "name": p.name, "per_week": p.per_week, "done": done,
             "last_date": days[-1].isoformat() if days else None,

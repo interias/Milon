@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type TonnagePoint, type Exercise, type StrengthIndex } from "@/lib/api";
+import { api, type TonnagePoint, type Exercise, type StrengthIndex, type StrengthRule } from "@/lib/api";
 import { Card, PageTitle } from "@/components/ui";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { StrengthDetails } from "@/components/StrengthDetails";
 import { NextTraining } from "@/components/NextTraining";
 import { WeeklyVolume } from "@/components/WeeklyVolume";
+import { RULES_EVENT, ruleChip } from "@/components/StrengthRule";
 import { de, dm } from "@/lib/format";
 
 const MUSCLE_ICON: Record<string, string> = {
@@ -16,6 +17,7 @@ const MUSCLE_ICON: Record<string, string> = {
   Bizeps: "bizeps", Trizeps: "trizeps", Core: "core",
 };
 const PERIODS = [["1m", "1M"], ["3m", "3M"], ["6m", "6M"], ["12m", "12M"]];
+const CATALOG_KEY = "milon.kraft.catalog.open";
 const month = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString("de-DE", { month: "short", year: "numeric" });
 
 export default function Kraft() {
@@ -29,6 +31,22 @@ export default function Kraft() {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [details, setDetails] = useState(false);
+  const [rules, setRules] = useState<Map<string, StrengthRule>>(new Map());
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const load = () => api.strengthRules().then((value) => { if (active) setRules(new Map(value.flatMap((r) => [r.name, ...r.names].map((n) => [n, r] as const)))); }).catch(() => {});
+    load();
+    window.addEventListener(RULES_EVENT, load);
+    return () => { active = false; window.removeEventListener(RULES_EVENT, load); };
+  }, []);
+  useEffect(() => {
+    try { setCatalogOpen(localStorage.getItem(CATALOG_KEY) === "1"); } catch { /* ohne Speicher eingeklappt */ }
+  }, []);
+  const toggleCatalog = () => setCatalogOpen((open) => {
+    try { localStorage.setItem(CATALOG_KEY, open ? "0" : "1"); } catch { /* nur Komfort */ }
+    return !open;
+  });
   useEffect(() => {
     let active = true;
     const failed = (key: string) => { if (active) setErrors((values) => [...values, key]); };
@@ -102,19 +120,22 @@ export default function Kraft() {
 
     <Card className="mt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 className="text-sm font-semibold">Übungen</h2><p className="mt-1 text-xs text-muted">{showAll ? "Gesamte Historie" : "In den letzten 90 Tagen trainiert"} · {filtered.length} angezeigt</p></div>
-        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />Alle Übungen</label>
+        <button type="button" onClick={toggleCatalog} aria-expanded={catalogOpen} className="text-left">
+          <h2 className="text-sm font-semibold">Übungen <span className="text-muted">{catalogOpen ? "▾" : "▸"}</span></h2>
+          <p className="mt-1 text-xs text-muted">{showAll ? "Gesamte Historie" : "In den letzten 90 Tagen trainiert"} · {filtered.length} {catalogOpen ? "angezeigt" : "Übungen · aufklappen"}</p>
+        </button>
+        {catalogOpen && <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showAll} onChange={(event) => setShowAll(event.target.checked)} />Alle Übungen</label>}
       </div>
-      <input aria-label="Übung suchen" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Übung suchen …" className="my-4 w-full rounded border border-line bg-surface-alt px-3 py-2 text-base sm:text-sm" />
+      {catalogOpen && <><input aria-label="Übung suchen" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Übung suchen …" className="my-4 w-full rounded border border-line bg-surface-alt px-3 py-2 text-base sm:text-sm" />
       {exercises == null ? <p className="text-sm text-muted" role="status">{status("exercises", false)}</p> : groups.size === 0 ? <p className="text-sm text-muted">Keine passende Übung. Über „Alle Übungen“ ist auch die ältere Historie erreichbar.</p> : <div className="space-y-4">{Array.from(groups, ([muscle, items]) => <section key={muscle}>
         <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-accent">
           {MUSCLE_ICON[muscle] && <img src={`/img/muscle/${MUSCLE_ICON[muscle]}.png`} alt="" className="h-5 w-5 object-contain" />}{muscle}
         </h3>
         {items.map((exercise) => <Link key={exercise.exercise} href={`/kraft/${encodeURIComponent(exercise.exercise)}`} className="flex items-center justify-between gap-3 border-b border-line py-2 hover:bg-surface-alt">
-          <div className="min-w-0"><p className="text-sm">{records.has(exercise.exercise) && <span title="Bestleistung in den letzten 30 Tagen">🏆 </span>}{exercise.exercise}</p><p className="mt-0.5 text-xs text-muted">Zuletzt {new Date(`${exercise.last}T12:00:00`).toLocaleDateString("de-DE")}</p></div>
+          <div className="min-w-0"><p className="text-sm">{records.has(exercise.exercise) && <span title="Bestleistung in den letzten 30 Tagen">🏆 </span>}{exercise.exercise}</p><p className="mt-0.5 text-xs text-muted">Zuletzt {new Date(`${exercise.last}T12:00:00`).toLocaleDateString("de-DE")}{rules.get(exercise.exercise) && <span className="text-accent"> · {ruleChip(rules.get(exercise.exercise)!)}</span>}</p></div>
           <div className="shrink-0 text-right"><p className="text-sm font-semibold tabular-nums">{de(exercise.e1rm, 1)} kg</p><p className="text-[11px] text-muted">geschätztes 1RM ›</p></div>
         </Link>)}
-      </section>)}</div>}
+      </section>)}</div>}</>}
     </Card>
     {details && <RunAnalysisDialog title="Weitere Kraftanalysen" onClose={() => setDetails(false)}><StrengthDetails index={index} /></RunAnalysisDialog>}
   </>;

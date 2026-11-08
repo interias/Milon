@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { api, type NextTraining as Data, type PlanExercise } from "@/lib/api";
 import { Card } from "@/components/ui";
 import { de, dm } from "@/lib/format";
+import { RuleEditor } from "@/components/StrengthRule";
 
 const ACTION: Record<PlanExercise["action"], [string, string]> = {
   increase: ["↑ schwerer", "border-good text-good"],
   hold: ["= halten", "border-line text-muted"],
   decrease: ["↓ leichter", "border-warn text-warn"],
-  deload: ["↓ neu aufbauen", "border-warn text-warn"],
   pause: ["↓ nach Pause", "border-warn text-warn"],
   start: ["Start", "border-accent text-accent"],
   new: ["neu", "border-accent text-accent"],
@@ -17,7 +17,7 @@ const ACTION: Record<PlanExercise["action"], [string, string]> = {
 const rir = (rpe: number | null) => rpe == null ? "–" : de(10 - rpe, 0);
 const kg = (value: number | null) => value == null ? "– kg" : `${de(value, value % 1 ? 1 : 0)} kg`;
 
-function ExerciseRow({ ex }: { ex: PlanExercise }) {
+function ExerciseRow({ ex, onChange }: { ex: PlanExercise; onChange: () => void }) {
   const warmup = ex.sets.filter((set) => set.type === "warmup");
   const work = ex.sets.filter((set) => set.type === "normal");
   const [label, tone] = ACTION[ex.action];
@@ -29,11 +29,21 @@ function ExerciseRow({ ex }: { ex: PlanExercise }) {
     </div>
     <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
       <span className="font-display text-xl font-extrabold text-accent">{kg(ex.weight_kg)}</span>
-      <span className="text-sm">{new Set(work.map((set) => set.reps)).size === 1 ? `${work.length} × ${work[0]?.reps}` : work.map((set) => set.reps).join(" / ")} Wdh.</span>
+      <span className="text-sm">Ziel {work.length} × {ex.rule.target_reps} Wdh.</span>
       <span className="text-xs text-muted">RIR {work.map((set) => rir(set.rpe)).join(" → ")}</span>
     </div>
     {warmup.length > 0 && <p className="mt-0.5 text-xs text-muted">Aufwärmen {warmup.map((set) => `${kg(set.weight_kg)} × ${set.reps}`).join(", ")}</p>}
+    {ex.last && <p className="mt-1 text-xs tabular-nums">
+      <span className="text-muted">Letztes Mal: </span>
+      {ex.last.reps.map((reps, i) => <span key={i} className={reps >= ex.rule.target_reps ? "font-semibold text-good" : reps < ex.rule.min_reps ? "font-semibold text-warn" : ""}>{i > 0 && " / "}{reps}</span>)}
+      <span className="text-muted"> Wdh. · {ex.last.hit} von {work.length} am Ziel</span>
+    </p>}
     <p className="mt-1 text-xs text-muted">{ex.reason}</p>
+    <details className="mt-1 text-xs">
+      <summary className="cursor-pointer text-accent">Regel{ex.rule.custom ? " (eigene)" : ""}</summary>
+      <ul className="mt-2 list-disc space-y-0.5 pl-4 text-muted">{ex.rule.lines.map((line) => <li key={line}>{line}</li>)}</ul>
+      <div className="mt-3"><RuleEditor rule={{ ...ex.rule, key: ex.key }} sets={work.length} onSaved={onChange} /></div>
+    </details>
   </div>;
 }
 
@@ -43,11 +53,13 @@ export function NextTraining() {
   const [tab, setTab] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
   useEffect(() => {
     let active = true;
     api.strengthPlan().then((value) => { if (active) setData(value); }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, []);
+  }, [version]);
+  const reload = () => setVersion((v) => v + 1);
 
   async function write() {
     setWriting(true);
@@ -85,14 +97,14 @@ export function NextTraining() {
         </button>)}
       </div>
     </div>
-    <p className="mt-3 text-xs text-muted">~{active.duration_min} min{active.last_date ? ` · zuletzt ${dm(active.last_date)}` : ""} · gleiche Wdh. in allen Sätzen, Reserve sinkt bis zum letzten Satz (RIR 0 = Versagen erlaubt)</p>
+    <p className="mt-3 text-xs text-muted">~{active.duration_min} min{active.last_date ? ` · zuletzt ${dm(active.last_date)}` : ""} · schaffen alle Sätze die Ziel-Wdh., wird es schwerer · RIR ist die Leitplanke (0 = Versagen erlaubt), zählt aber nicht für die Regel</p>
     <div className="mt-2 divide-y divide-line">
       {blocks.map((block) => block.length > 1
         ? <div key={block[0].key} className="py-1">
           <p className="pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent">Supersatz · {block[0].sets.filter((set) => set.type === "normal").length} Runden</p>
-          <div className="border-l-2 border-accent-2 pl-3">{block.map((ex) => <ExerciseRow key={ex.key} ex={ex} />)}</div>
+          <div className="border-l-2 border-accent-2 pl-3">{block.map((ex) => <ExerciseRow key={ex.key} ex={ex} onChange={reload} />)}</div>
         </div>
-        : <ExerciseRow key={block[0].key} ex={block[0]} />)}
+        : <ExerciseRow key={block[0].key} ex={block[0]} onChange={reload} />)}
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <button type="button" onClick={write} disabled={writing} className="rounded border border-line px-3 py-2 text-sm disabled:opacity-60">{writing ? "Schreibe …" : "Jetzt nach Hevy schreiben"}</button>

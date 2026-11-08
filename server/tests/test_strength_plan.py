@@ -25,27 +25,34 @@ def test_select_ladder_uses_drop_weights():
     assert ladder.floor(36) == 35.5
 
 
-def test_increase_when_all_sets_at_top_on_target_rpe():
-    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, 8), (54, 12, 8), (54, 12, 9)])], TODAY)
+def test_increase_when_all_sets_reach_target_reps():
+    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, 10), (54, 12, 10), (54, 12, 10)])], TODAY)
     assert s["action"] == "increase"
     assert s["weight_kg"] == 56.5
     work = [x for x in s["sets"] if x["type"] == "normal"]
-    assert [x["rpe"] for x in work] == [8, 9, 10]
-    assert len({x["reps"] for x in work}) == 1 and 8 <= work[0]["reps"] <= 12
+    assert [x["rpe"] for x in work] == [8, 9, 10]  # RIR bleibt als Leitplanke
+    assert [x["reps"] for x in work] == [12, 12, 12]
     assert s["sets"][0]["type"] == "warmup"
+    assert s["rule"]["lines"][0] == "Schwerer: alle 3 Sätze ≥ 12 Wdh. → 59 kg"
 
 
-def test_failure_reps_are_converted_to_target_rpe():
-    # 3 × 12 bei RPE 10: Satz 1 ≈ 10 Wdh. bei RPE 8, alle Sätze halten das → Ziel 11 für alle.
-    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, 10), (54, 12, 10), (54, 12, 10)])], TODAY)
-    assert s["action"] == "hold"
-    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [11, 11, 11]
+def test_rpe_does_not_change_the_decision():
+    easy = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, 6)] * 3)], TODAY)
+    blank = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(54, 12, None)] * 3)], TODAY)
+    assert easy["action"] == blank["action"] == "increase"
 
 
-def test_same_goal_when_later_set_misses_it():
-    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 11, 8), (61, 11, 8.5), (61, 8, 9.5)])], TODAY)
+def test_hold_until_every_set_reaches_target():
+    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 12, 9), (61, 12, 10), (61, 10, 10)])], TODAY)
     assert s["action"] == "hold" and s["weight_kg"] == 61
-    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [11, 11, 11]
+    assert [x["reps"] for x in s["sets"] if x["type"] == "normal"] == [12, 12, 12]
+    assert "2 von 3 Sätzen ≥ 12 Wdh." in s["reason"]
+    assert s["last"]["hit"] == 2
+
+
+def test_missing_sets_hold():
+    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 12, 9), (61, 12, 10)])], TODAY)
+    assert s["action"] == "hold" and "Nur 2 von 3" in s["reason"]
 
 
 def test_rir_falls_across_sets_with_rdl_and_four_set_exceptions():
@@ -54,15 +61,16 @@ def test_rir_falls_across_sets_with_rdl_and_four_set_exceptions():
     assert sp._targets(RDL) == [8, 9, 9, 9]
 
 
-def test_missing_rpe_needs_reps_above_top():
-    at_top = [_session(TODAY - timedelta(days=3), [(54, 12, None)] * 3)]
-    above = [_session(TODAY - timedelta(days=3), [(54, 13, None)] * 3)]
-    assert sp.suggest(ROW, at_top, TODAY)["action"] == "hold"
-    assert sp.suggest(ROW, above, TODAY)["action"] == "increase"
+def test_lateral_raise_targets_15_and_custom_rule_overrides():
+    sessions = [_session(TODAY - timedelta(days=3), [(27.5, 17, 7.5), (27.5, 15, 8.5), (27.5, 15, 9.5), (27.5, 15, 10)])]
+    assert sp.suggest(LATERAL, sessions, TODAY)["action"] == "increase"
+    custom = sp.suggest(LATERAL, sessions, TODAY, rule=(10, 17))
+    assert custom["action"] == "hold" and custom["rule"]["custom"] is True
+    assert [x["reps"] for x in custom["sets"]] == [17] * 4
 
 
-def test_decrease_when_a_set_falls_below_range():
-    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 10, 8), (61, 9, 8), (61, 6, 9)])], TODAY)
+def test_decrease_when_a_set_falls_below_minimum():
+    s = sp.suggest(ROW, [_session(TODAY - timedelta(days=3), [(61, 10, 8), (61, 9, 8), (61, 7, 9)])], TODAY)
     assert s["action"] == "decrease"
     assert s["weight_kg"] == 59
 
@@ -73,13 +81,6 @@ def test_long_pause_steps_down_and_stale_starts_from_e1rm():
     stale = sp.suggest(ROW, [_session(TODAY - timedelta(days=120), [(61, 10, 10)] * 3)], TODAY)
     assert stale["action"] == "start" and stale["weight_kg"] < 61
     assert sp.suggest(ROW, [], TODAY)["action"] == "new"
-
-
-def test_plateau_after_three_plan_sessions_without_gain():
-    days = [sp.PLAN_START + timedelta(days=d) for d in (0, 4, 8)]
-    sessions = [_session(d, [(54, 10, 8), (54, 10, 8), (54, 9, 9)]) for d in days]
-    s = sp.suggest(ROW, sessions, days[-1] + timedelta(days=3))
-    assert s["action"] == "deload" and s["weight_kg"] == 52
 
 
 def test_superset_isolation_two_sets_without_warmup():
@@ -174,3 +175,38 @@ def test_upper_body_b_has_five_mts_sets_and_face_pulls():
     assert next(ex for ex in b.exercises if ex.key == "mts").sets == 5
     uk = next(p for p in sp.PLANS if p.key == "uk")
     assert next(ex for ex in uk.exercises if ex.key == "legcurl").templates == ("11A123F3",)
+
+
+def test_rules_are_stored_used_and_reset(plan_db):
+    with Session(plan_db) as s:
+        _workout(s, "a", datetime(2026, 11, 2, 16), [
+            ("Seitheben (Maschine)", "D5D0354D", "normal", 27.5, 15, 9),
+            ("Seitheben (Maschine)", "D5D0354D", "normal", 27.5, 15, 9),
+            ("Seitheben (Maschine)", "D5D0354D", "normal", 27.5, 15, 9),
+            ("Seitheben (Maschine)", "D5D0354D", "normal", 27.5, 15, 10),
+            ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
+        ])
+        s.commit()
+    lateral = lambda: next(e for e in sp.next_training(date(2026, 11, 4))["plans"][0]["exercises"] if e["key"] == "lateral")
+    assert lateral()["action"] == "increase"
+    rule = sp.set_rule("lateral", 12, 18)
+    assert rule["custom"] and rule["target_reps"] == 18
+    assert lateral()["action"] == "hold"
+    assert sp.reset_rule("lateral")["target_reps"] == 15
+    assert lateral()["action"] == "increase"
+    with pytest.raises(ValueError):
+        sp.set_rule("lateral", 16, 15)
+    with pytest.raises(KeyError):
+        sp.set_rule("nope", 8, 12)
+    assert {r["key"] for r in sp.rule_list()} >= {"row", "mts", "lateral", "face_pull", "legcurl"}
+
+
+def test_rule_api(plan_db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.put("/metrics/strength/rules/row", json={"min_reps": 6, "target_reps": 10}).json()["target_reps"] == 10
+    assert c.put("/metrics/strength/rules/row", json={"min_reps": 12, "target_reps": 10}).status_code == 422
+    assert c.put("/metrics/strength/rules/nope", json={"min_reps": 6, "target_reps": 10}).status_code == 404
+    assert next(r for r in c.get("/metrics/strength/rules").json() if r["key"] == "row")["custom"] is True
+    assert c.delete("/metrics/strength/rules/row").json()["custom"] is False
