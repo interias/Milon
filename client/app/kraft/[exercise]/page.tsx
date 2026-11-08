@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type ExerciseDetail } from "@/lib/api";
+import { api, type ExerciseDetail, type StrengthRule } from "@/lib/api";
 import { Card } from "@/components/ui";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de, dm } from "@/lib/format";
+import { RuleEditor } from "@/components/StrengthRule";
 
 const PERIODS = [["1m", "1 Monat"], ["3m", "3 Monate"], ["12m", "12 Monate"], ["all", "Gesamt"]];
 const METRICS = {
@@ -29,6 +30,13 @@ export default function ExerciseDetailPage() {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState(false);
+  const [rule, setRule] = useState<StrengthRule | null | undefined>(undefined);
+  useEffect(() => {
+    let active = true;
+    api.strengthRules().then((list) => { if (active) setRule(list.find((r) => r.name === name || r.names.includes(name)) ?? null); })
+      .catch(() => { if (active) setRule(null); });
+    return () => { active = false; };
+  }, [name]);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -69,6 +77,11 @@ export default function ExerciseDetailPage() {
         <button type="button" className="mt-4 rounded border border-line px-3 py-2 text-sm" onClick={() => setDetails(true)}>Bestleistungen & Details</button>
       </>}
     </Card>
+    {rule && <Card className="mt-4">
+      <h2 className="text-sm font-semibold">Progressionsregel{rule.custom ? " · eigene" : ""}</h2>
+      <p className="mt-1 mb-3 text-xs text-muted">Gilt für „Nächstes Training“ und die Hevy-Routine. Gezählt werden nur die geschafften Wiederholungen der Arbeitssätze mit dem Hauptgewicht; die RIR-Vorgabe ist nur Leitplanke.</p>
+      <RuleEditor key={`${rule.min_reps}-${rule.target_reps}-${rule.custom}`} rule={rule} sets={null} onSaved={setRule} />
+    </Card>}
     {details && stats && <RunAnalysisDialog title="Bestleistungen & Details" onClose={() => setDetails(false)}>
       <p className="mb-4 text-xs text-muted">Gewählter Zeitraum: {dm(stats.first_date)}–{dm(stats.last_date)} · {stats.sessions} Trainingstage · {stats.sets} Arbeitssätze</p>
       <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">

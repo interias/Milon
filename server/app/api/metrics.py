@@ -467,6 +467,34 @@ def strength_next_training() -> dict:
     return strength_plan.next_training()
 
 
+class StrengthRuleInput(BaseModel):
+    min_reps: int
+    target_reps: int
+
+
+@router.get("/strength/rules")
+def strength_rules() -> list[dict]:
+    return strength_plan.rule_list()
+
+
+@router.put("/strength/rules/{key}")
+def strength_rule_set(key: str, body: StrengthRuleInput) -> dict:
+    try:
+        return strength_plan.set_rule(key, body.min_reps, body.target_reps)
+    except KeyError:
+        raise HTTPException(404, "Unbekannte Planübung.")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.delete("/strength/rules/{key}")
+def strength_rule_reset(key: str) -> dict:
+    try:
+        return strength_plan.reset_rule(key)
+    except KeyError:
+        raise HTTPException(404, "Unbekannte Planübung.")
+
+
 @router.get("/strength/volume")
 def strength_volume() -> dict:
     return strength_plan.weekly_volume()
