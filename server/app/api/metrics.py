@@ -1,7 +1,7 @@
 """Metrik-Endpunkte für das Dashboard. Dünne Wrapper über die reine metrics/-Schicht."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .. import zwift_worlds
 from ..metrics import week_plan, weight_phase
-from ..metrics import achievements, active_kcal, activity, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
+from ..metrics import achievements, active_kcal, activity, day_badge, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -120,6 +120,15 @@ def activity_recent(limit: int = 8) -> list[dict]:
 @router.get("/activity/active-kcal")
 def activity_active_kcal(days: int = Query(default=14, ge=1, le=365)) -> dict:
     return active_kcal.daily(days)
+
+
+@router.get("/activity/day-badge")
+def activity_day_badge(day: date | None = None) -> dict:
+    """Tages-Badge „Heute geschafft“; Routen nur als anonyme Linienform (siehe metrics/day_badge.py)."""
+    today = day_badge._today()
+    if day is not None and not today - timedelta(days=366) <= day <= today:
+        raise HTTPException(422, "Tag muss im letzten Jahr liegen und darf nicht in der Zukunft sein.")
+    return day_badge.badge(day)
 
 
 @router.get("/activity/consistency")
