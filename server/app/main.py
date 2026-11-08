@@ -14,6 +14,7 @@ from .api import sync_inventory, overview_history, route_segments, weather
 from .api import hero as hero_api
 from .api import bike_plan as bike_plan_api
 from .api import walkpad as walkpad_api
+from .compute_gate import ComputeGate
 from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
 from .sync import scheduler
@@ -28,6 +29,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Milon API", version="0.1.0", lifespan=lifespan)
+
+# Vor CORS registriert = innen: CORS-Preflights warten nie an der Schranke.
+app.add_middleware(ComputeGate)
 
 app.add_middleware(
     CORSMiddleware,
