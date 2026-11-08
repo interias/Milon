@@ -10,6 +10,7 @@ from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
 from ..config import settings
+from ..data_cache import cached
 from ..db import engine
 from ..garmin_activity import GarminActivity
 from ..garmin_routes import GarminRoute
@@ -98,6 +99,7 @@ def _run(sessions, windows, boundaries, day):
     return {**result, "value": point["hr"], "runs": point["runs"], "status": point["status"]}
 
 
+@cached
 def history(*, now: datetime | None = None):
     local = _now(now)
     inputs = _inputs(local.replace(tzinfo=None))

@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from ..config import settings
+from ..data_cache import cached
 from ..db import engine
 
 KCAL_PER_KG = 7700  # Energiegehalt 1 kg Körpermasse (Faustwert)
@@ -72,6 +73,7 @@ def weight_trend(days: int = 180) -> list[dict]:
     return out
 
 
+@cached
 def adaptive_tdee(window_days: int = 14, smooth_days: int = 14) -> dict:
     """Verbrauch aus dem lernenden Modell (`expenditure`): typischer Tag (Ø Essen und Bewegung der letzten
     14 Tage) mit Unsicherheit, Zerlegung und heute. `window_days`/`smooth_days` bleiben nur für alte Aufrufer."""

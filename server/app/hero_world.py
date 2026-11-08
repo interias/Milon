@@ -20,6 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import numpy as np
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
@@ -285,6 +286,23 @@ def _sight(x: float, y: float, sight: float = SIGHT_M) -> list[tuple[int, int]]:
     return out
 
 
+def _sight_many(xs: list[float], ys: list[float], sight: float = SIGHT_M) -> list[tuple[int, int]]:
+    """`_sight` für viele Punkte auf einmal (numpy); Treffer in derselben Reihenfolge wie Punkt für Punkt."""
+    x, y = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+    k = int(sight // CELL_M) + 1
+    span = np.arange(-k, k + 1)
+    di, dj = np.repeat(span, 2 * k + 1), np.tile(span, 2 * k + 1)  # i außen, j innen wie in `_sight`
+    ci, cj = np.floor(x / CELL_M).astype(np.int64), np.floor(y / CELL_M).astype(np.int64)
+    ii, jj = ci[:, None] + di, cj[:, None] + dj
+    cx, cy = (ii + 0.5) * CELL_M, (jj + 0.5) * CELL_M
+    ok = (np.hypot(cx - x[:, None], cy - y[:, None]) <= sight) & (np.hypot(cx, cy) <= WORLD_RADIUS_M)
+    ok[:, (di == 0) & (dj == 0)] = False  # eigene Zelle steht vorn, mit eigener Bedingung
+    keys_i = np.concatenate([ci[:, None], ii], axis=1)
+    keys_j = np.concatenate([cj[:, None], jj], axis=1)
+    mask = np.concatenate([(np.hypot(x, y) <= WORLD_RADIUS_M)[:, None], ok], axis=1)
+    return list(zip(keys_i[mask].tolist(), keys_j[mask].tolist()))
+
+
 def _loop_cells(meters: list[tuple[float, float]]) -> list[tuple[int, int]]:
     """Zellen im Inneren einer geschlossenen Runde (gerade-ungerade-Regel, Hin-und-zurück bleibt leer)."""
     if len(meters) < 10 or math.hypot(meters[0][0] - meters[-1][0], meters[0][1] - meters[-1][1]) > LOOP_CLOSE_M:
@@ -327,16 +345,16 @@ def _closest(cells: dict, points: list[tuple[float, float]]) -> int | None:
 
 def _reveal(meters: list[tuple[float, float]], day: str, cells: dict, sight: float = SIGHT_M) -> None:
     """Sichtweite entlang der Spur + Inneres geschlossener Runden aufdecken (Zelle → frühester Tag)."""
-    if len(meters) == 1:
-        for key in _sight(*meters[0], sight):
-            cells[key] = min(cells.get(key, day), day)
+    xs, ys = ([meters[0][0]], [meters[0][1]]) if len(meters) == 1 else ([], [])
     for (x1, y1), (x2, y2) in zip(meters, meters[1:]):
         steps = max(1, int(math.hypot(x2 - x1, y2 - y1) // (CELL_M / 2)))
         for i in range(steps + 1):
-            x, y = x1 + (x2 - x1) * i / steps, y1 + (y2 - y1) * i / steps
-            for key in _sight(x, y, sight):
-                cells[key] = min(cells.get(key, day), day)
-    for key in _loop_cells(meters):  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
+            xs.append(x1 + (x2 - x1) * i / steps)
+            ys.append(y1 + (y2 - y1) * i / steps)
+    # erst je Spur sammeln (gleicher Tag), Reihenfolge des ersten Treffers bleibt
+    seen = dict.fromkeys(_sight_many(xs, ys, sight)) if xs else {}
+    seen.update(dict.fromkeys(_loop_cells(meters)))  # geschlossene Runde: Fläche dazwischen ist mit aufgedeckt
+    for key in seen:
         cells[key] = min(cells.get(key, day), day)
 
 

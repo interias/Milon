@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from . import running
+from ..data_cache import cached
 
 log = logging.getLogger(__name__)
 
@@ -254,6 +255,7 @@ def _rarity_dot(pts):
     return _rarity(pts)
 
 
+@cached
 def evaluate() -> dict:
     c = _build_context()
     specs = _specs()

@@ -156,3 +156,15 @@ def test_ride_finds_give_half_xp_and_gold(db, monkeypatch):
     src = [(c, s) for _, c, s in gold if s.startswith("Erkundung")]
     assert sorted(src) == sorted([(hero_economy.GOLD, "Erkundung zu Rad"), (2 * hero_economy.GOLD, "Erkundung"),
                                   (int(1.5 * hero_economy.GOLD), "Erkundung zu Rad")])
+
+
+def test_sight_many_matches_sight_point_by_point():
+    import random
+    from app import hero_world as hw
+
+    rnd = random.Random(7)
+    pts = [(rnd.uniform(-31_000, 31_000), rnd.uniform(-31_000, 31_000)) for _ in range(400)]
+    pts += [(0.0, 0.0), (75.0, 75.0), (hw.WORLD_RADIUS_M - 1, 0.0), (150.0 * 3, -150.0 * 2)]
+    for sight in (hw.SIGHT_M, hw.RIDE_SIGHT_M):
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        assert hw._sight_many(xs, ys, sight) == [c for p in pts for c in hw._sight(*p, sight)]
