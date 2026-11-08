@@ -21,6 +21,7 @@ from sqlmodel import Field, Session, SQLModel, select
 
 from .. import bike_plan
 from ..config import settings
+from ..data_cache import cached
 from ..db import engine
 from ..models import Workout
 
@@ -155,6 +156,7 @@ def _prescription(plans: dict, key: str) -> list[str]:
     return out
 
 
+@cached
 def week(offset: int = 0, today: date | None = None) -> dict:
     """Kalenderwoche `offset` relativ zur aktuellen (−1 = Vorwoche, +1 = nächste)."""
     from . import cycling, endurance, running, sleep, strength_plan

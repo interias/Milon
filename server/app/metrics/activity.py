@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from ..config import settings
+from ..data_cache import cached
 from ..db import engine
 from .. import walkpad
 from . import endurance, running, strength
@@ -108,6 +109,7 @@ def _sick_days(start: date, end: date) -> set[date]:
     return {date.fromisoformat(str(row[0])[:10]) for row in rows}
 
 
+@cached
 def consistency(days: int = 140, step_goal: int = 10000) -> dict:
     """Tages-Heatmap der Trainingskonsistenz + aktuelle Streak. Level je Tag:
     3 = Kraft/Lauf, 2 = Schrittziel erreicht, 1 = halbes Schrittziel, 0 = nichts."""

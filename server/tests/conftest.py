@@ -1,9 +1,13 @@
 import pytest
 from sqlmodel import SQLModel, create_engine
 
+from app import data_cache
 from app import models  # noqa: F401 - registriert die Tabellen in SQLModel.metadata
 from app.coach import client
 from app.config import settings
+
+# Tests tauschen Engines je Modul aus; der Datenstand-Schlüssel sähe das nicht.
+data_cache.ENABLED = False
 
 
 @pytest.fixture(autouse=True)

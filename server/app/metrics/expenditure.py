@@ -22,6 +22,8 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from ..data_cache import cached
+
 TEF = 0.10                    # Verdauung: Anteil der Zufuhr
 RHO = 7700.0                  # kcal je kg Gewichtsänderung
 WATER_PHI = 0.4               # Autokorrelation der Waagenschwankung (echte Daten: 0,35 an Tag 1)
@@ -117,6 +119,7 @@ def _active_series(start: date, end: date) -> pd.Series:
     return pd.Series({pd.Timestamp(d): sum(v.values()) for d, v in parts.items()}, dtype=float).sort_index()
 
 
+@cached
 def model(until: date | None = None) -> list[dict]:
     from . import body
     weight, intake = body._weight_daily().dropna(), body._intake_daily().dropna()

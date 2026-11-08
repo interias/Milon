@@ -198,8 +198,8 @@ def _weights() -> pd.Series:
 def _weight_at(weights: pd.Series, day: date) -> float | None:
     if weights.empty:
         return None
-    upto = weights[weights.index <= pd.Timestamp(day)]
-    return float(upto.iloc[-1]) if not upto.empty else None
+    i = weights.index.searchsorted(pd.Timestamp(day), side="right")  # Index ist sortiert (_weights)
+    return float(weights.iloc[i - 1]) if i else None
 
 
 def _with_load(df: pd.DataFrame) -> pd.DataFrame:

@@ -18,6 +18,7 @@ import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
 from ..db import engine
+from ..data_cache import cached
 
 PAUSE_DAYS = 21
 STALE_DAYS = 90
@@ -258,14 +259,14 @@ def _main_weight(weights: list[float]) -> float:
 def _session_sets(df: pd.DataFrame) -> list[dict]:
     """Je Workout die Arbeitssätze dieser Übung: [{date, sets:[(w, r, rpe)]}], chronologisch."""
     work = df[df["set_type"].isin(WORK_TYPES) & (df["weight_kg"] > 0) & (df["reps"] > 0)]
-    out = []
-    for _, g in work.groupby("workout_id", sort=False):
-        out.append({
-            "date": g["started_at"].iloc[0].date(),
-            "sets": [(float(r.weight_kg), int(r.reps), None if pd.isna(r.rpe) else float(r.rpe))
-                     for r in g.itertuples()],
-        })
-    return sorted(out, key=lambda s: s["date"])
+    sessions: dict = {}  # workout_id → Session, in Reihenfolge des ersten Auftretens (wie groupby sort=False)
+    for wid, started, w, r, rpe in zip(work["workout_id"].tolist(), work["started_at"].tolist(),
+                                       work["weight_kg"].tolist(), work["reps"].tolist(), work["rpe"].tolist()):
+        s = sessions.get(wid)
+        if s is None:
+            s = sessions[wid] = {"date": started.date(), "sets": []}
+        s["sets"].append((float(w), int(r), None if pd.isna(rpe) else float(rpe)))
+    return sorted(sessions.values(), key=lambda s: s["date"])
 
 
 def _sets_word(n: int) -> str:
@@ -354,18 +355,24 @@ def _classify(df: pd.DataFrame) -> dict[int, str]:
     solche gilt die erste Variante."""
     key_program = {ex.key: p.program for p in PLANS for ex in p.exercises}
     work = df[df["set_type"].isin(WORK_TYPES)]
+    by_workout: dict = {}
+    for wid, key in zip(work["workout_id"].tolist(), work["key"].tolist()):
+        by_workout.setdefault(wid, []).append(key)
+    variants_of = {prog: [p for p in PLANS if p.program == prog] for prog in {p.program for p in PLANS}}
+    own_of = {prog: {p.key: {ex.key for ex in p.exercises} - set().union(*({e.key for e in v.exercises}
+                                                                            for v in variants if v is not p))
+                     for p in variants}
+              for prog, variants in variants_of.items()}
     out = {}
-    for wid, g in work.groupby("workout_id"):
-        programs = Counter(key_program[k] for k in g["key"])
+    for wid in sorted(by_workout):  # wie groupby: nach workout_id
+        workout_keys = by_workout[wid]
+        programs = Counter(key_program[k] for k in workout_keys)
         best, n = programs.most_common(1)[0]
-        keys = set(g["key"][g["key"].map(key_program) == best])
+        keys = {k for k in workout_keys if key_program[k] == best}
         if len(keys) < 2:
             continue
-        variants = [p for p in PLANS if p.program == best]
-        own = {p.key: {ex.key for ex in p.exercises} - set().union(*({e.key for e in v.exercises}
-                                                                       for v in variants if v is not p))
-               for p in variants}
-        out[int(wid)] = max(variants, key=lambda p: len(own[p.key] & keys)).key
+        own = own_of[best]
+        out[int(wid)] = max(variants_of[best], key=lambda p: len(own[p.key] & keys)).key
     return out
 
 
@@ -381,6 +388,7 @@ def _duration_min(plan: Plan) -> int:
     return round(seconds / 60)
 
 
+@cached
 def next_training(today: date | None = None) -> dict:
     """Alle Programme mit Vorschlag je Übung + Wochenstand (Mo–So) und welches als Nächstes dran ist."""
     today = today or datetime.now().date()
@@ -389,13 +397,13 @@ def next_training(today: date | None = None) -> dict:
     kinds = _classify(df) if not df.empty else {}
     starts = df.groupby("workout_id")["started_at"].first() if not df.empty else pd.Series(dtype="datetime64[ns]")
     own = rules()
+    by_key = {k: _session_sets(g) for k, g in df.groupby("key", sort=False)} if not df.empty else {}
     plans = []
     for p in PLANS:
         mine = [wid for wid, k in kinds.items() if k == p.key]
         days = sorted(starts[mine].dt.date) if mine else []
         done = sum(1 for d in days if monday <= d <= today)
-        exercises = [suggest(ex, _session_sets(df[df["key"] == ex.key]) if not df.empty else [], today,
-                             own.get(ex.key)) for ex in p.exercises]
+        exercises = [suggest(ex, by_key.get(ex.key, []), today, own.get(ex.key)) for ex in p.exercises]
         plans.append({
             "key": p.key, "program": p.program, "title": p.title, "name": p.name, "per_week": p.per_week, "done": done,
             "last_date": days[-1].isoformat() if days else None,

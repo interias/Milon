@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from ..db import engine
+from ..data_cache import cached
 
 
 def _read(sql: str, **kw) -> pd.DataFrame:
@@ -101,6 +102,7 @@ def _monthly_backbone(df: pd.DataFrame):
     return raw, basket, months, contrib
 
 
+@cached
 def strength_index(period: str = "3m") -> dict:
     """Gesamtstärke-Index (Basis 100 = Trainingsstart), WÖCHENTLICH aufgelöst & DRIFT-FREI.
     Hybrid (per Methoden-Panel an echten Daten validiert): der validierte monatliche Kettenindex
@@ -310,6 +312,7 @@ def strength_energy() -> dict:
     }
 
 
+@cached
 def personal_records(days: int = 120, limit: int = 25) -> list[dict]:
     """Feed neuer Bestleistungen: je Übung ein PR, wenn der Tages-e1RM ODER das Top-Gewicht
     ein neues Allzeithoch übertrifft (erste Session = Baseline, kein PR). Neueste zuerst."""

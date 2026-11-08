@@ -11,6 +11,7 @@ import numpy as np
 from sqlmodel import Session, select
 
 from ..config import settings, watch_source_for
+from ..data_cache import cached
 from ..db import engine
 from ..garmin_activity import GarminActivity, OUTDOOR_RUN_TYPES, _display_series
 from ..garmin_routes import GarminRoute
@@ -298,6 +299,7 @@ def compare(first, second):
         return {"first": _brief(a, True), "second": _brief(b, True), "comparison": result}
 
 
+@cached
 def weekly_zones(weeks=8, today=None):
     today = today or datetime.now(ZoneInfo(settings.timezone)).date()
     monday = today - timedelta(days=today.weekday())
