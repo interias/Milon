@@ -13,6 +13,7 @@ import { BriefingCard } from "@/components/BriefingCard";
 import { TodayKcal } from "@/components/TodayKcal";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { WeekLine } from "@/components/WeekPlan";
+import { DayBadgeCard } from "@/components/DayBadge";
 import type { WeekPlan, WeekToday } from "@/lib/api";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
@@ -204,6 +205,7 @@ export default function Overview() {
     <OverviewHistory onSelect={setHistoryPoint} />
     {historyPoint && <div className="mt-4"><HistoryCards point={historyPoint} /></div>}
     <WeekCard />
+    <DayBadgeCard />
 
     <div className="mt-4">
       <Card className="flex flex-col">

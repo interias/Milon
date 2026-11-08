@@ -66,6 +66,17 @@ export const coachImageUrl = (path: string) => `${BASE}${path}`;
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
 export type ActiveKcalDay = { date: string; total: number; everyday: number; run: number; ride: number; walkpad: number; gym: number; steps: number | null; garmin: number | null; provisional: boolean };
 export type ActiveKcal = { stride_m: number; gym_met: number; today: ActiveKcalDay | null; latest: ActiveKcalDay | null; avg7: number | null; avg7_days: number; series: ActiveKcalDay[] };
+export type BadgeShape = [number, number][];
+export type DayBadgeRun = { time: string; km: number | null; minutes: number | null; pace_s: number | null; avg_hr: number | null; shape: BadgeShape | null };
+export type DayBadgeRide = { kind: "outdoor" | "indoor" | "detected"; time: string; km: number | null; minutes: number | null; world: string | null; avg_power_w: number | null; elevation_m: number | null; shape: BadgeShape | null };
+export type DayBadgeStrength = { time: string; title: string; minutes: number | null; sets: number; exercises: number; tonnage_kg: number };
+export type DayBadgeWalk = { time: string; minutes: number | null; km: number | null; incline_pct: number | null; steps: number };
+export type DayBadge = {
+  date: string; weekday: string; is_today: boolean; steps: number | null; step_goal: number; active_kcal: number | null;
+  active_minutes: number; sessions: number; km: { run: number; ride: number; zwift: number; walk: number };
+  runs: DayBadgeRun[]; rides: DayBadgeRide[]; strength: DayBadgeStrength[]; walks: DayBadgeWalk[]; empty: boolean;
+  privacy: { trim_m: number; min_shape_m: number };
+};
 export type BodySummary = {
   weight_kg: number | null; weight_avg7: number | null; weight_delta7: number | null;
   tdee: number | null;
@@ -741,6 +752,7 @@ export const api = {
   sleepOverview: (days = 90) => get<SleepOverview>(`/metrics/sleep/overview?days=${days}`),
   sleepPerformance: (kind: "run" | "strength" = "run", source = "current", days = 180) => get<SleepPerformance>(`/metrics/sleep/performance?kind=${kind}&source=${source}&days=${days}`),
   bodySummary: () => get<BodySummary>("/metrics/body/summary"),
+  dayBadge: (day?: string) => get<DayBadge>(`/metrics/activity/day-badge${day ? `?day=${day}` : ""}`),
   activeKcal: (days = 14) => get<ActiveKcal>(`/metrics/activity/active-kcal?days=${days}`),
   // Gesundheit (Schritte + Radfahren)
   healthOverview: () => get<HealthOverview>("/metrics/health/overview"),
