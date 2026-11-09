@@ -29,6 +29,7 @@ from sqlmodel import Field, Session, SQLModel, select
 
 from . import hero_bosses, hero_climb, hero_dreams, hero_economy, hero_events, hero_events_live, hero_extras, hero_keystone, hero_quests, hero_social, hero_world
 from .checkins import local_today
+from .data_cache import cached
 from .db import engine
 
 log = logging.getLogger(__name__)
@@ -1827,6 +1828,7 @@ def _load(today: date) -> dict:
             "stones": _safe(hero_keystone.results, [])}
 
 
+@cached
 def overview(today: date | None = None) -> dict:
     today = today or local_today()
     data = _load(today)

@@ -10,6 +10,7 @@ import numpy as np
 from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
+from ..data_cache import cached
 from ..db import engine
 from ..garmin_activity import GarminActivity
 from ..garmin_routes import GarminRoute
@@ -117,6 +118,7 @@ def group_routes(items, geometry):
     return [{key: value for key, value in group.items() if key != "prepared"} for group in groups]
 
 
+@cached
 def atlas():
     with Session(engine) as session:
         routes = session.exec(select(GarminRoute).options(defer(GarminRoute.segments_json))
