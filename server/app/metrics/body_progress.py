@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from ..circumferences import CircumferenceEntry, DEFINITION_VERSION, DEFINITIONS, local_today
 from ..db import engine
 from ..models import BodyMeasurement, Workout, WorkoutSet
-from .strength import _idx_weights, _muscle_group
+from .strength import _idx_weights, _muscle_group, e1rm
 
 
 def _valid(value) -> bool:
@@ -48,7 +48,8 @@ def progress(weeks: int = 8, measure: str = "abdomen_navel", today: date | None 
         weights = session.exec(select(BodyMeasurement).where(
             BodyMeasurement.measured_at >= datetime.combine(start, time.min),
             BodyMeasurement.measured_at < datetime.combine(end + timedelta(days=1), time.min))).all()
-        sets = session.exec(select(Workout.started_at, WorkoutSet.exercise, WorkoutSet.weight_kg, WorkoutSet.reps)
+        sets = session.exec(select(Workout.started_at, WorkoutSet.exercise, WorkoutSet.weight_kg, WorkoutSet.reps,
+                                   WorkoutSet.rpe)
             .join(WorkoutSet, WorkoutSet.workout_id == Workout.id).where(
                 Workout.started_at >= datetime.combine(start, time.min),
                 Workout.started_at < datetime.combine(end + timedelta(days=1), time.min),
@@ -75,13 +76,13 @@ def progress(weeks: int = 8, measure: str = "abdomen_navel", today: date | None 
     weight_first = _observation(weight_points, start, baseline_end, minimum=3)
     weight_last = _observation(weight_points, current_start, end, minimum=3)
 
-    # Match the existing strength index's capped Epley estimate and muscle-group weights.
+    # Match the strength index's e1RM (reps + RIR, capped) and muscle-group weights.
     daily_lifts: dict[str, dict[date, float]] = defaultdict(dict)
-    for started_at, exercise, weight, reps in sets:
+    for started_at, exercise, weight, reps, rpe in sets:
         if not (_valid(weight) and _valid(reps)):
             continue
         day = started_at.date()
-        estimate = weight * (1 + min(reps, 12) / 30)
+        estimate = e1rm(weight, reps, rpe)
         daily_lifts[exercise][day] = max(daily_lifts[exercise].get(day, 0), estimate)
     first_exercises, last_exercises, comparisons = set(), set(), []
     for exercise, values in sorted(daily_lifts.items()):

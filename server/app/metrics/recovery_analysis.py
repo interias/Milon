@@ -171,7 +171,7 @@ def performance(metric: str = "sleep", kind: str = "run", source: str = "current
                + ("ρ = Spearman-Rangkorrelation mit mittleren Rängen bei Gleichständen. " if metric == "energy" else "r = Pearson-Korrelation ungerundeter Tagespaare. ")
                + "Zeitbereinigung entfernt einen linearen Datumstrend aus beiden Größen (bei Energie aus den Rängen); sie beweist weder Unabhängigkeit noch Ursache. Keine Signifikanztests.")
     method += (" Laufeffizienz = Geschwindigkeit / mittlere HF, nicht vollständig intensitätsbereinigt."
-               if kind == "run" else " Kraftwert = gleich gewichtete logarithmische e1RM-Veränderungen gleicher Übungen gegenüber der letzten Einheit (12 Stunden bis 60 Tage), Epley bis 12 Wiederholungen; neue Übungen ohne Baseline zählen nicht.")
+               if kind == "run" else " Kraftwert = gleich gewichtete logarithmische e1RM-Veränderungen gleicher Übungen gegenüber der letzten Einheit (12 Stunden bis 60 Tage), Epley auf Wdh. + RIR (bis RIR 3), höchstens 12 Wiederholungen; neue Übungen ohne Baseline zählen nicht.")
     return {"metric": metric, "kind": kind, "source": source, "days": days,
             "predictor_label": METRICS[metric][0], "predictor_unit": METRICS[metric][1],
             "timing": "same_day_self_report" if metric == "energy" else "prior_night",

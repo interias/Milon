@@ -32,7 +32,7 @@ def _inputs(cutoff):
                               connection, params=(cutoff.isoformat(sep=" "),), parse_dates=["measured_at"])
         sessions = pd.read_sql(_SESSION_SQL, connection, parse_dates=["started_at", "ended_at"])
         windows = pd.read_sql("SELECT external_id, minute, speed_m_min, hr_bpm, coverage, steady, source FROM run_minutes WHERE model_version='shr-v1'", connection)
-        sets = pd.read_sql("SELECT ws.exercise, ws.weight_kg, ws.reps, w.started_at FROM workout_sets ws "
+        sets = pd.read_sql("SELECT ws.exercise, ws.weight_kg, ws.reps, ws.rpe, w.started_at FROM workout_sets ws "
                            "JOIN workouts w ON w.id=ws.workout_id WHERE w.source='hevy' AND ws.set_type='normal' "
                            "AND ws.weight_kg > 0 AND ws.reps > 0 AND w.started_at <= ?", connection,
                            params=(cutoff.isoformat(sep=" "),), parse_dates=["started_at"])
@@ -43,7 +43,7 @@ def _inputs(cutoff):
         sets["day"] = sets.started_at.dt.floor("D")
         sets["month"] = sets.started_at.dt.to_period("M")
         sets["mg"] = sets.exercise.map(strength._muscle_group)
-        sets["e1rm_c"] = sets.weight_kg * (1 + sets.reps.clip(upper=12) / 30)
+        strength.add_e1rm(sets)
     with Session(engine) as session:
         reference = session.exec(select(RunFitnessReference).order_by(RunFitnessReference.id.desc())).first()
     changes = json.loads(reference.payload).get("sensor_changes", []) if reference else []
