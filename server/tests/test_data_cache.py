@@ -84,3 +84,18 @@ def test_disabled_always_computes(cache_on, monkeypatch):
 
     compute(); compute()
     assert len(calls) == 2
+
+
+def test_new_health_connect_export_invalidates(cache_on, monkeypatch, tmp_path):
+    monkeypatch.setattr(data_cache, "INCOMING_DIR", tmp_path)
+    calls = []
+
+    @data_cache.cached
+    def compute():
+        calls.append(1)
+
+    compute(); compute()
+    assert len(calls) == 1
+    (tmp_path / "health_connect_export.db").write_bytes(b"neu")
+    compute()
+    assert len(calls) == 2

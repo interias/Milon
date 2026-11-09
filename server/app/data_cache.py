@@ -2,8 +2,9 @@
 
 Mehrere Endpunkte rechnen dieselben Bausteine (Verbrauchsmodell, Kraft-Vorschlag, Woche)
 je Aufruf neu. `@cached` merkt sich das Ergebnis unter einem Schlüssel aus Argumenten,
-lokalem Datum, Einstellungen und Datenstand (mtime + Größe von tracker.db; die DB läuft im
-Journal-Modus „delete“, jede Schreib-Transaktion ändert die Datei). Höchstens `TTL`
+lokalem Datum, Einstellungen und Datenstand (mtime + Größe von tracker.db und des
+Health-Connect-Exports; die DB läuft im Journal-Modus „delete“, jede Schreib-Transaktion
+ändert die Datei). `app.cache_warmer` rechnet nach jeder Änderung vor. Höchstens `TTL`
 Sekunden, damit Uhrzeit-Abhängiges (Wetter, „heute offen“) nicht hängen bleibt.
 Rückgabe ist immer eine tiefe Kopie, Aufrufer dürfen sie verändern.
 """
@@ -18,7 +19,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from .config import settings
+from .config import INCOMING_DIR, settings
 
 TTL = 300.0
 ENABLED = True  # Tests schalten ab (conftest), weil sie Engines je Modul austauschen
@@ -28,19 +29,30 @@ _locks: dict = {}
 _guard = threading.Lock()
 
 
-def _data_version() -> tuple:
-    from .db import engine
-    path = engine.url.database
+def _stat(path) -> tuple:
     try:
         st = os.stat(path)
-        return (path, st.st_mtime_ns, st.st_size)
+        return (str(path), st.st_mtime_ns, st.st_size)
+    except FileNotFoundError:
+        return (str(path), None)
     except (OSError, TypeError):
-        return (path, time.time())  # unbekannt → nie treffen
+        return (str(path), time.time())  # unbekannt → nie treffen
+
+
+def _data_version() -> tuple:
+    """tracker.db + Health-Connect-Export (Lauf-Analysen lesen ihn direkt)."""
+    from .db import engine
+    return (_stat(engine.url.database), _stat(INCOMING_DIR / "health_connect_export.db"))
+
+
+def version() -> tuple:
+    """Alles, wovon ein Eintrag abhängt (ohne Argumente) — der Vorwärmer erkennt daran Änderungen."""
+    today = datetime.now(ZoneInfo(settings.timezone)).date()
+    return (today, repr(settings.model_dump()), _data_version())
 
 
 def _key(fn, call: tuple) -> tuple:
-    today = datetime.now(ZoneInfo(settings.timezone)).date()
-    return (fn.__module__, fn.__qualname__, call, today, repr(settings.model_dump()), _data_version())
+    return (fn.__module__, fn.__qualname__, call, version())
 
 
 def cached(fn):
@@ -76,3 +88,11 @@ def cached(fn):
 def clear() -> None:
     with _guard:
         _store.clear()
+
+
+def expire(older_than: float) -> None:
+    """Einträge älter als `older_than` Sekunden verwerfen (der Vorwärmer rechnet sie danach neu)."""
+    now = time.monotonic()
+    with _guard:
+        for k in [k for k, (at, _) in _store.items() if now - at >= older_than]:
+            del _store[k]
