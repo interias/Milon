@@ -16,7 +16,7 @@ const MUSCLE_ICON: Record<string, string> = {
   Beine: "beine", Brust: "brust", Rücken: "ruecken", Schultern: "schultern",
   Bizeps: "bizeps", Trizeps: "trizeps", Core: "core",
 };
-const PERIODS = [["1m", "1M"], ["3m", "3M"], ["6m", "6M"], ["12m", "12M"]];
+const PERIODS = [["1m", "1M"], ["3m", "3M"], ["6m", "6M"], ["12m", "12M"], ["all", "Gesamt"]];
 const CATALOG_KEY = "milon.kraft.catalog.open";
 const month = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString("de-DE", { month: "short", year: "numeric" });
 
@@ -79,8 +79,8 @@ export default function Kraft() {
   const groups = new Map<string, Exercise[]>();
   for (const exercise of filtered) groups.set(exercise.muscle, [...(groups.get(exercise.muscle) ?? []), exercise]);
   const latestWeek = index?.series?.at(-1)?.week;
-  const chartStart = latestWeek ? new Date(`${latestWeek}T12:00:00Z`) : null;
-  if (chartStart) chartStart.setUTCMonth(chartStart.getUTCMonth() - parseInt(period));
+  const chartStart = latestWeek && period !== "all" ? new Date(`${latestWeek}T12:00:00Z`) : null;
+  if (chartStart && period !== "all") chartStart.setUTCMonth(chartStart.getUTCMonth() - parseInt(period));
   const series = (index?.series ?? []).filter((point) => !chartStart || new Date(`${point.week}T12:00:00Z`) >= chartStart);
   const lastTonnage = tonnage?.at(-1);
   const status = (key: string, loaded: boolean) => errors.includes(key) ? "Daten konnten nicht geladen werden." : loaded ? "Noch nicht genügend Daten." : "Wird geladen …";
@@ -97,7 +97,7 @@ export default function Kraft() {
       {index?.value != null ? <>
         <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
           <span className="font-display text-4xl font-extrabold text-accent">{de(index.value, 0)}</span>
-          <span className={`text-sm font-semibold ${index.trend === "steigt" ? "text-good" : index.trend === "faellt" ? "text-bad" : "text-muted"}`}>{index.window_delta_pct > 0 ? "+" : ""}{de(index.window_delta_pct, 1)} % · {period.toUpperCase()}</span>
+          <span className={`text-sm font-semibold ${index.trend === "steigt" ? "text-good" : index.trend === "faellt" ? "text-bad" : "text-muted"}`}>{index.window_delta_pct > 0 ? "+" : ""}{de(index.window_delta_pct, 1)} % · {period === "all" ? "seit Start" : period.toUpperCase()}</span>
         </div>
         <p className="mt-1 text-xs text-muted">Basis 100 = {month(index.base_week)}{latestWeek ? ` · zuletzt Woche ab ${dm(latestWeek)}` : ""}</p>
         <RunTrendChart label="Gesamtstärke · geglätteter Wochenverlauf" unit="Index" showPoints={false} points={series.map((point) => ({ date: point.week, value: point.smoothed }))} />
