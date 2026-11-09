@@ -89,7 +89,7 @@ def e1rm_trend(exercise: str, weeks: int = 26) -> list[dict]:
 _PERIODS = {"1m": 1, "3m": 3, "12m": 12, "all": None}
 DETAIL_ALPHA = 0.25  # EWMA der e1RM-Trendlinie auf der Übungs-Detailseite (wie Stärke-Index/EF)
 
-_INDEX_MONTHS = {"1m": 1, "3m": 3, "6m": 6, "12m": 12}  # Fenster für Δ/Trend (aus dem Monats-Backbone)
+_INDEX_MONTHS = {"1m": 1, "3m": 3, "6m": 6, "12m": 12, "all": None}  # Fenster für Δ/Trend (aus dem Monats-Backbone); all = seit Start
 _IDX_CLIP = 0.25     # Log-Return-Cap je Übung (Ausreißer-Schutz, = validierter Backbone)
 _IDX_KAPPA = 1.0     # Skalierung der Intra-Monats-Auslenkung (1.0 = volle Amplitude)
 _IDX_ALPHA = 0.25    # kausale EWMA-Glättung der Wochen-Anzeige (roughness ~1.0)
@@ -233,11 +233,12 @@ def strength_index(period: str = "3m") -> dict:
     rawv = [raw_monthly[m] for m in months]
     disp = [rawv[0]] + [(rawv[i] + rawv[i - 1]) / 2 for i in range(1, len(rawv))]  # 2-Pkt-Glättung
     n_mo = _INDEX_MONTHS.get(period, 3)
-    target = last_m - n_mo
     base_i = 0
-    for i, m in enumerate(months):
-        if m <= target:
-            base_i = i
+    if n_mo is not None:
+        target = last_m - n_mo
+        for i, m in enumerate(months):
+            if m <= target:
+                base_i = i
     delta = (disp[-1] / disp[base_i] - 1) * 100 if disp[base_i] else 0.0
     trend = "steigt" if delta >= 3 else "faellt" if delta <= -3 else "stagniert"
 

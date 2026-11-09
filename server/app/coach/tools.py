@@ -144,7 +144,7 @@ TOOLS = [
     _fn("get_strength_index", "Gesamtstärke-Index (wöchentlich aufgelöst, driftfrei am Monats-Backbone "
         "verankert, Basis 100 = Trainingsstart): aktueller Wert, Δ über den Zeitraum, Trend "
         "(steigt/stagniert/faellt) + Treiber-/Bremse-Übungen.",
-        {"period": {"type": "string", "description": "1m|3m|6m|12m, Default 3m"}}),
+        {"period": {"type": "string", "description": "1m|3m|6m|12m|all (seit Trainingsstart), Default 3m"}}),
     _fn("get_strength_energy", "Zusammenhang Gesamtstärke ↔ Energiebilanz (TDEE/Defizit), wöchentlich "
         "aligned. corr_index_deficit beschreibt den Zusammenhang der Niveaus; corr_change_deficit "
         "den der Indexänderung gegenüber der vorherigen verfügbaren Woche mit der Energiebilanz. "

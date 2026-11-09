@@ -65,3 +65,23 @@ def test_detail_has_trend_line(monkeypatch):
     assert trend[0] == series[0]["e1rm"]
     assert series[1]["e1rm"] > trend[1] > trend[0]                    # Spitze wird gedämpft
     assert trend[2] > series[2]["e1rm"]                                # Einbruch auch
+
+
+def test_index_period_all_measures_from_first_month(monkeypatch):
+    rows = []
+    for ex in ("A1", "B1", "C1"):
+        for m, w in ((1, 100), (2, 105), (3, 110), (4, 115), (5, 120)):
+            rows.append((ex, w, 10, None, f"2026-0{m}-10"))
+            rows.append((ex, w, 10, None, f"2026-0{m}-17"))
+    df = pd.DataFrame(rows, columns=["exercise", "weight_kg", "reps", "rpe", "started_at"])
+    df["started_at"] = pd.to_datetime(df["started_at"])
+    st.add_e1rm(df)
+    df["day"] = df["started_at"].dt.floor("D")
+    df["week"] = df["started_at"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
+    monkeypatch.setattr(st, "_sets", lambda: df)
+    monkeypatch.setattr(st, "_muscle_group", lambda e: e[0])
+    fn = getattr(st.strength_index, "__wrapped__", st.strength_index)
+    full, short = fn("all"), fn("1m")
+    assert full["period"] == "all"
+    assert full["window_delta_pct"] > short["window_delta_pct"] > 0
+    assert full["series"][0]["week"] == full["base_week"]

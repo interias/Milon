@@ -220,7 +220,7 @@ def get_forecast() -> dict:
 def get_strength_index(period: str = "3m") -> dict:
     """Gesamtstärke-Index (wöchentlich aufgelöst, driftfrei am Monats-Backbone verankert,
     Basis 100 = Trainingsstart): Wert, Δ, Trend (steigt/stagniert/faellt) + Treiber-/Bremse-Übungen.
-    period = 1m|3m|6m|12m."""
+    period = 1m|3m|6m|12m|all (seit Trainingsstart)."""
     return strength.strength_index(period)
 
 
