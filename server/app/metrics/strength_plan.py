@@ -145,7 +145,7 @@ PLANS: tuple[Plan, ...] = (
                      ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True,
                      muscles=(("Quadrizeps", 1), ("Gesäß", .5))),
         PlanExercise("rdl", "Romanian Deadlift (Langhantel)", ("2B4B7310",),
-                     ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 4, (8, 12), 150, Ladder(5.0),
+                     ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 3, (6, 10), 150, Ladder(5.0),
                      last_rpe=9.0, muscles=(("Beinbeuger", 1), ("Gesäß", 1))),
         PlanExercise("legcurl", "Beinbeugen sitzend (Maschine)", ("11A123F3",),
                      ("Beinbeugen sitzend", "Seated Leg Curl (Machine)"), 4, (10, 15), 90, _select(40),
