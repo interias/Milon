@@ -14,6 +14,7 @@ from .api import sync_inventory, overview_history, route_segments, weather
 from .api import hero as hero_api
 from .api import bike_plan as bike_plan_api
 from .api import walkpad as walkpad_api
+from . import cache_warmer
 from .compute_gate import ComputeGate
 from .config import DATA_DIR, PROGRESS_DIR, settings
 from .db import init_db
@@ -24,7 +25,9 @@ from .sync import scheduler
 async def lifespan(app: FastAPI):
     init_db()
     scheduler.start_scheduler()
+    cache_warmer.start(app)
     yield
+    cache_warmer.stop()
     scheduler.shutdown_scheduler()
 
 
