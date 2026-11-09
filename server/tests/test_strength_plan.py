@@ -58,7 +58,7 @@ def test_missing_sets_hold():
 def test_rir_falls_across_sets_with_rdl_and_four_set_exceptions():
     assert sp._targets(ROW) == [8, 9, 10]
     assert sp._targets(LATERAL) == [8, 9, 9, 10]
-    assert sp._targets(RDL) == [8, 9, 9, 9]
+    assert sp._targets(RDL) == [8, 9, 9]
 
 
 def test_lateral_raise_targets_15_and_custom_rule_overrides():
@@ -146,7 +146,7 @@ def test_weekly_volume_counts_hard_sets_fractionally(plan_db):
     v = {m["muscle"]: m for m in sp.weekly_volume(date(2026, 11, 4))["muscles"]}
     assert v["Rücken"]["this_week"] == 2 and v["Bizeps"]["this_week"] == 1
     assert v["Seitliche Schulter"]["avg_4w"] == 0.2  # 1 Satz in den 4 Wochen davor
-    assert v["Seitliche Schulter"]["planned"] == 8 and v["Gesäß"]["planned"] == 6
+    assert v["Seitliche Schulter"]["planned"] == 8 and v["Gesäß"]["planned"] == 5
 
 
 def test_classify_tells_upper_body_variants_apart(plan_db):
