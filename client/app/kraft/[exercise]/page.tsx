@@ -12,7 +12,7 @@ import { RuleEditor } from "@/components/StrengthRule";
 
 const PERIODS = [["1m", "1 Monat"], ["3m", "3 Monate"], ["12m", "12 Monate"], ["all", "Gesamt"]];
 const METRICS = {
-  e1rm: { label: "Geschätzte Maximalkraft", unit: "kg", note: "e1RM nach Epley aus dem besten Arbeitssatz je Trainingstag; kein gemessener Maximalkrafttest." },
+  e1rm: { label: "Geschätzte Maximalkraft", unit: "kg", note: "e1RM nach Epley aus dem besten Arbeitssatz je Trainingstag, gerechnet mit Wiederholungen + Reserve (RIR bis 3, höchstens 12 Wdh.). Punkte = Trainingstage, Linie = geglätteter Trend. Kein gemessener Maximalkrafttest." },
   top_weight: { label: "Trainingsgewicht", unit: "kg", note: "Schwerster erfasster Arbeitssatz je Trainingstag." },
   tonnage: { label: "Bewegte Last", unit: "kg", note: "Gewicht × Wiederholungen, summiert je Trainingstag. Mehr Last bedeutet nicht automatisch mehr Kraft." },
   rpe: { label: "Anstrengung (RPE)", unit: "RPE", note: "Mittlere erfasste Satzbewertung je Trainingstag. Höher bedeutet mehr subjektive Anstrengung; fehlende Angaben bleiben leer." },
@@ -72,7 +72,11 @@ export default function ExerciseDetailPage() {
         <div className="mt-2 flex flex-wrap items-baseline gap-2 tabular-nums"><strong className="font-display text-3xl">{de(last[metric], metric === "tonnage" ? 0 : 1)}</strong><span className="text-sm text-muted">{selected.unit}</span></div>
         <p className="mt-1 text-xs text-muted">Letzter Trainingstag: {new Date(`${last.date}T12:00:00`).toLocaleDateString("de-DE")}{last[metric] == null ? " · keine Angabe" : ""}</p>
         <p className={`mt-2 text-xs ${changeColor}`}>{delta == null ? (series.length < 2 ? "Noch kein Vergleich: erst ein Trainingstag im Zeitraum." : "Kein Vergleich: am ersten oder letzten Trainingstag fehlt eine Angabe.") : `${delta > 0 ? "+" : ""}${de(delta, metric === "tonnage" ? 0 : 1)} ${selected.unit} · erster → letzter Trainingstag (${dm(series[0].date)}–${dm(last.date)})`}</p>
-        <RunTrendChart key={`${metric}-${period}`} label={selected.label} unit={selected.unit} points={series.map((point) => ({ date: point.date, value: point[metric], detail: `${point.sets} Arbeitssätze · ${point.reps} Wiederholungen` }))} />
+        {metric === "e1rm"
+          ? <RunTrendChart key={`${metric}-${period}`} label={selected.label} unit={selected.unit} showPoints={false} maxGapDays={120}
+            points={series.map((point) => ({ date: point.date, value: point.e1rm_trend, detail: "Trend" }))}
+            observations={series.map((point) => ({ date: point.date, value: point.e1rm, detail: `${point.sets} Arbeitssätze · ${point.reps} Wiederholungen` }))} />
+          : <RunTrendChart key={`${metric}-${period}`} label={selected.label} unit={selected.unit} points={series.map((point) => ({ date: point.date, value: point[metric], detail: `${point.sets} Arbeitssätze · ${point.reps} Wiederholungen` }))} />}
         <p className="mt-2 text-xs text-muted">{selected.note}</p>
         <button type="button" className="mt-4 rounded border border-line px-3 py-2 text-sm" onClick={() => setDetails(true)}>Bestleistungen & Details</button>
       </>}

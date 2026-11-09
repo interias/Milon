@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from ..config import settings, watch_source_for
 from ..db import engine
 from ..models import SleepSession
+from . import strength
 
 LABELS = {"com.garmin.android.apps.connectmobile": "Garmin", "com.sec.android.app.shealth": "Samsung"}
 SLEEP_METHOD = ("Datum = lokales Aufwachen. Hauptschlaf = längstes erfasstes Fenster ab 2 Stunden je Tag; "
@@ -106,11 +107,11 @@ def _strength_outcomes() -> list[dict]:
             "SELECT id, external_id, title, started_at FROM workouts WHERE started_at IS NOT NULL "
             "ORDER BY started_at,id")).mappings().all()
         sets = con.execute(text(
-            "SELECT workout_id, exercise, weight_kg, reps FROM workout_sets WHERE set_type='normal' "
+            "SELECT workout_id, exercise, weight_kg, reps, rpe FROM workout_sets WHERE set_type='normal' "
             "AND weight_kg>0 AND reps>0")).mappings().all()
     tops = defaultdict(dict)
     for row in sets:
-        e1rm = row["weight_kg"] * (1 + min(row["reps"], 12) / 30)
+        e1rm = strength.e1rm(row["weight_kg"], row["reps"], row["rpe"])
         if np.isfinite(e1rm):
             values = tops[row["workout_id"]]
             values[row["exercise"]] = max(values.get(row["exercise"], 0), e1rm)
@@ -202,6 +203,6 @@ def performance(kind: str = "run", source: str = "current", days: int = 180,
     method += (" Laufwert = Geschwindigkeit / mittlere HF; dadurch nicht vollständig intensitätsbereinigt."
                if kind == "run" else " Kraftwert = gleich gewichtete logarithmische Veränderungen der besten "
                "e1RM-Arbeitssätze je gleicher Übung gegenüber der letzten Einheit (12 Stunden bis 60 Tage zurück), "
-               "Epley mit höchstens 12 Wiederholungen; kein Volumenvergleich.")
+               "Epley auf Wdh. + RIR (bis RIR 3), höchstens 12 Wiederholungen; kein Volumenvergleich.")
     return {"kind": kind, "source": source, "outcome_label": outcome_label, "outcome_unit": outcome_unit,
             "groups": groups, "method": method, "caveat": CAVEAT}

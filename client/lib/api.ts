@@ -407,7 +407,7 @@ export type RpePoint = { week: string; rpe: number };
 export type E1rmPoint = { date: string; e1rm: number };
 export type Exercise = { exercise: string; muscle: string; e1rm: number; peak: number; sets: number; last: string };
 export type ExerciseDayPoint = {
-  date: string; e1rm: number; top_weight: number; tonnage: number; reps: number; sets: number; rpe: number | null;
+  date: string; e1rm: number; e1rm_trend: number; top_weight: number; tonnage: number; reps: number; sets: number; rpe: number | null;
 };
 export type ExerciseStats = {
   sessions: number; sets: number; reps: number; tonnage_kg: number; top_weight: number;

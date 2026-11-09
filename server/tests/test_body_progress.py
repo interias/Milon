@@ -159,7 +159,7 @@ def test_one_muscle_group_remains_a_partial_view(db):
 def test_strength_caps_repetitions_like_existing_index_and_uses_daily_peaks(db):
     exercises = {"Bench Press": 80, "Squat": 100, "Lat Pulldown": 60}
     for offset in (0, 7):
-        workout(db, START + timedelta(days=offset), exercises, reps=12)
+        workout(db, START + timedelta(days=offset), exercises, reps=12)  # Kappung bei 12 Wdh.
         workout(db, CURRENT + timedelta(days=offset), exercises, reps=20)
         workout(db, CURRENT + timedelta(days=offset), {name: value / 2 for name, value in exercises.items()}, reps=20)
     result = body_progress.progress()["strength"]

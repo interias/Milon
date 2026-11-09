@@ -18,6 +18,7 @@ import pandas as pd
 from sqlmodel import Field, Session, SQLModel, select
 
 from ..db import engine
+from .strength import e1rm
 from ..data_cache import cached
 
 PAUSE_DAYS = 21
@@ -284,7 +285,7 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date,
         if not window:
             return _result(ex, None, lo, hi, targets, "new",
                            "Noch keine Daten – Startgewicht selbst wählen.", None)
-        e1 = max(w * (1 + min(r + (10 - (rpe or 10)), 15) / 30) for w, r, rpe in window)
+        e1 = max(e1rm(w, r, rpe) for w, r, rpe in window)
         weight = ex.ladder.floor(e1 / (1 + (hi + 2) / 30))  # Ziel-Wdh. mit ~2 Wdh. Reserve
         return _result(ex, weight, lo, hi, targets, "start",
                        f"Über {STALE_DAYS} Tage nicht trainiert – Start aus geschätztem 1RM ({_de(round(e1, 1))} kg).",

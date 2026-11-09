@@ -1,5 +1,9 @@
 """Kraft-Metriken (ARCHITECTURE.md §5.3): e1RM (Epley), Wochen-Tonnage, RPE-Trend.
-Nur Arbeitssätze (set_type='normal')."""
+Nur Arbeitssätze (set_type='normal').
+
+e1RM (2026-11-09, User-Entscheid): Epley auf „Wiederholungen bis zum Versagen“ = Wdh. + RIR
+(RIR = 10 − RPE, nur bis RIR_MAX — darüber ist die Selbsteinschätzung zu ungenau), gekappt auf
+E1RM_REP_CAP Wdh. (Epley überschätzt bei sehr vielen Wdh.). Sätze ohne RPE zählen ohne RIR."""
 from __future__ import annotations
 
 import math
@@ -9,6 +13,29 @@ import pandas as pd
 
 from ..db import engine
 from ..data_cache import cached
+
+
+E1RM_REP_CAP = 12
+RIR_MAX = 3
+
+
+def e1rm(weight: float, reps: float, rpe: float | None = None) -> float:
+    """Geschätztes 1RM eines Satzes (Epley) aus Wdh. + RIR, gekappt."""
+    rir = 10.0 - rpe if rpe is not None and np.isfinite(rpe) else 0.0
+    rir = rir if 0.0 <= rir <= RIR_MAX else 0.0
+    return weight * (1 + min(reps + rir, E1RM_REP_CAP) / 30.0)
+
+
+def add_e1rm(df: pd.DataFrame) -> pd.DataFrame:
+    """Spalten `e1rm` (mit RIR), `e1rm_raw` (ohne RIR, gleiche Kappung) und `has_rpe` an Sätze mit
+    weight_kg/reps (+ optional rpe) hängen. `e1rm_raw` braucht der Index für Vergleiche mit Zeiten ohne RPE."""
+    rpe = df["rpe"] if "rpe" in df else pd.Series(np.nan, index=df.index)
+    rir = 10.0 - rpe
+    rir = rir.where(rpe.notna() & (rir >= 0) & (rir <= RIR_MAX), 0.0)
+    df["e1rm"] = df["weight_kg"] * (1 + (df["reps"] + rir).clip(upper=E1RM_REP_CAP) / 30.0)
+    df["e1rm_raw"] = df["weight_kg"] * (1 + df["reps"].clip(upper=E1RM_REP_CAP) / 30.0)
+    df["has_rpe"] = rpe.notna()
+    return df
 
 
 def _read(sql: str, **kw) -> pd.DataFrame:
@@ -25,7 +52,7 @@ def _sets() -> pd.DataFrame:
         parse_dates=["started_at"],
     )
     if not df.empty:
-        df["e1rm"] = df["weight_kg"] * (1 + df["reps"] / 30.0)  # Epley
+        add_e1rm(df)
         df["tonnage"] = df["weight_kg"] * df["reps"]
         df["week"] = df["started_at"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
         df["day"] = df["started_at"].dt.floor("D")
@@ -60,6 +87,7 @@ def e1rm_trend(exercise: str, weeks: int = 26) -> list[dict]:
 
 
 _PERIODS = {"1m": 1, "3m": 3, "12m": 12, "all": None}
+DETAIL_ALPHA = 0.25  # EWMA der e1RM-Trendlinie auf der Übungs-Detailseite (wie Stärke-Index/EF)
 
 _INDEX_MONTHS = {"1m": 1, "3m": 3, "6m": 6, "12m": 12}  # Fenster für Δ/Trend (aus dem Monats-Backbone)
 _IDX_CLIP = 0.25     # Log-Return-Cap je Übung (Ausreißer-Schutz, = validierter Backbone)
@@ -79,16 +107,32 @@ def _idx_weights(cohort: list, mg_of: dict) -> dict:
     return {e: x / tot for e, x in w.items()}
 
 
+def _bucket(df: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Bestes e1RM (mit/ohne RIR) je Bucket + ob dort überwiegend RPE erfasst ist."""
+    return df.groupby(keys).agg(e1rm=("e1rm", "max"), e1rm_raw=("e1rm_raw", "max"),
+                                rpe_share=("has_rpe", "mean")).reset_index()
+
+
+def _basket(rows: pd.DataFrame) -> dict:
+    return {r.exercise: (r.mg, float(r.e1rm), float(r.e1rm_raw), bool(r.rpe_share >= 0.5)) for r in rows.itertuples()}
+
+
+def _log_ratio(a: tuple, b: tuple) -> float:
+    """Log-Verhältnis zweier Buckets einer Übung. Mit RIR nur, wenn BEIDE Buckets RPE haben —
+    sonst ohne RIR auf beiden Seiten (kein Schein-Sprung beim Start der RPE-Erfassung, Okt 2025)."""
+    i = 1 if a[3] and b[3] else 2
+    return max(-_IDX_CLIP, min(_IDX_CLIP, math.log(b[i] / a[i])))
+
+
 def _monthly_backbone(df: pd.DataFrame):
     """VALIDIERTE Monats-Verkettung (Endwert ~114) als drift-freies Rückgrat des Wochen-Index.
     Jeder Link = muskel-balanciertes geometrisches Mittel der e1RM-Log-Ratios über die in BEIDEN
     Monaten trainierten Übungen (löst Übungs-Rotation). 13 Links → kein Chain-Drift.
-    Liefert (raw{Period:val}, basket{Period:{ex:(mg,e1rm)}}, months[list], contrib{Period:{ex:w*r}})."""
-    sess = df.groupby(["exercise", "mg", "day", "month"])["e1rm_c"].max().reset_index()
-    monthly = sess.groupby(["exercise", "mg", "month"])["e1rm_c"].max().reset_index()
+    Erwartet Spalten aus `add_e1rm` + mg/day/month.
+    Liefert (raw{Period:val}, basket{Period:{ex:(mg,e1rm,e1rm_raw,has_rpe)}}, months[list], contrib{Period:{ex:w*r}})."""
+    monthly = _bucket(df, ["exercise", "mg", "month"])
     months = sorted(monthly["month"].unique())
-    basket = {m: {r.exercise: (r.mg, float(r.e1rm_c)) for r in monthly[monthly["month"] == m].itertuples()}
-              for m in months}
+    basket = {m: _basket(monthly[monthly["month"] == m]) for m in months}
     raw = {months[0]: 100.0}
     contrib: dict = {}
     for a, b in zip(months[:-1], months[1:]):
@@ -97,7 +141,7 @@ def _monthly_backbone(df: pd.DataFrame):
         if len(cohort) < 3:
             raw[b] = raw[a]; contrib[b] = {}; continue
         w = _idx_weights(cohort, {e: B[e][0] for e in cohort})
-        c = {e: w[e] * max(-_IDX_CLIP, min(_IDX_CLIP, math.log(B[e][1] / A[e][1]))) for e in cohort}
+        c = {e: w[e] * _log_ratio(A[e], B[e]) for e in cohort}
         raw[b] = raw[a] * math.exp(sum(c.values())); contrib[b] = c
     return raw, basket, months, contrib
 
@@ -112,12 +156,11 @@ def strength_index(period: str = "3m") -> dict:
     Per-Monat-Re-Zentrierung pinnt den Monatsschnitt der Wochen auf den Backbone-Anker (killt den
     MAX-pro-Bucket-Bias). Δ%/Trend kommen aus dem Backbone über die Fenster-Monate (konsistent zur
     Basis 100, drift-frei); die Wochenkurve liefert die Auflösung. e1RM Epley
-    rep-gekappt (≤12), Log-Returns auf ±0.25 geclippt, nur Übungen mit ≥3 Trainingstagen."""
+    auf Wdh. + RIR (siehe `add_e1rm`), Log-Returns auf ±0.25 geclippt, nur Übungen mit ≥3 Trainingstagen."""
     df = _sets()
     if df.empty:
         return {}
     df = df.copy()
-    df["e1rm_c"] = df["weight_kg"] * (1 + df["reps"].clip(upper=12) / 30.0)  # Epley, rep-gekappt
     df["month"] = df["started_at"].dt.to_period("M")
     df["mg"] = df["exercise"].map(_muscle_group)
 
@@ -133,12 +176,11 @@ def strength_index(period: str = "3m") -> dict:
     last_m = months[-1]
 
     # --- 2) Wochen-Best-e1RM + Anker-Monat (Wochenmitte = Donnerstag) ---
-    wk = df.groupby(["exercise", "mg", "week"])["e1rm_c"].max().reset_index()
+    wk = _bucket(df, ["exercise", "mg", "week"])
     weeks = sorted(wk["week"].unique())
     if len(weeks) < 2:
         return {}
-    week_basket = {w: {r.exercise: (r.mg, float(r.e1rm_c)) for r in wk[wk["week"] == w].itertuples()}
-                   for w in weeks}
+    week_basket = {w: _basket(wk[wk["week"] == w]) for w in weeks}
     week_month = {w: pd.Period(pd.Timestamp(w) + pd.Timedelta(days=3), freq="M") for w in weeks}
 
     # Monatsanker linear aufs Wochenraster (laufender Monat flach geklemmt)
@@ -161,8 +203,7 @@ def strength_index(period: str = "3m") -> dict:
             raw_offset[w] = None
             continue
         wts = _idx_weights(cohort, {e: Ww[e][0] for e in cohort})
-        raw_offset[w] = sum(wts[e] * max(-_IDX_CLIP, min(_IDX_CLIP, math.log(Ww[e][1] / Bm[e][1])))
-                            for e in cohort)
+        raw_offset[w] = sum(wts[e] * _log_ratio(Bm[e], Ww[e]) for e in cohort)
 
     # --- 4) Re-Zentrierung pro Anker-Monat (Drift-Killer): Monatsschnitt der Wochen == Anker ---
     by_m: dict = {}
@@ -225,7 +266,7 @@ def strength_index(period: str = "3m") -> dict:
         "drivers_up": [as_driver(e, v) for e, v in ordered[:3] if v > 0],
         "drivers_down": [as_driver(e, v) for e, v in ordered[::-1][:3] if v < 0],
         "cohort_size": len(active),
-        "groups": len({mg for mg, _ in active.values()}),
+        "groups": len({v[0] for v in active.values()}),
     }
 
 
@@ -391,6 +432,9 @@ def exercise_detail(exercise: str, period: str = "all") -> dict:
     sub = df[df["exercise"] == exercise].copy()
     if sub.empty:
         return {}
+    # Trendlinie über die GANZE Historie (kausale EWMA je Trainingstag), danach aufs Fenster schneiden —
+    # sonst startet die Linie in jedem Zeitraum neu am ersten (zufälligen) Tag.
+    trend = sub.groupby("day")["e1rm"].max().sort_index().ewm(alpha=DETAIL_ALPHA, adjust=False).mean()
     months = _PERIODS.get(period)
     if months is not None:
         sub = sub[sub["started_at"] >= pd.Timestamp.now() - pd.DateOffset(months=months)]
@@ -409,7 +453,8 @@ def exercise_detail(exercise: str, period: str = "all") -> dict:
 
     series = [
         {"date": d.date().isoformat(),
-         "e1rm": round(float(e), 1), "top_weight": round(float(tw), 1),
+         "e1rm": round(float(e), 1), "e1rm_trend": round(float(trend.loc[d]), 1),
+         "top_weight": round(float(tw), 1),
          "tonnage": round(float(t)), "reps": int(rp), "sets": int(st),
          "rpe": None if pd.isna(rp_e) else round(float(rp_e), 1)}
         for d, e, tw, t, rp, st, rp_e in zip(
@@ -427,7 +472,8 @@ def exercise_detail(exercise: str, period: str = "all") -> dict:
         "top_weight": round(float(sub["weight_kg"].max()), 1),
         "best_e1rm": round(float(sub["e1rm"].max()), 1),
         "best_e1rm_date": best["day"].date().isoformat(),
-        "best_set": f'{best["weight_kg"]:.1f} kg × {int(best["reps"])}',
+        "best_set": f'{best["weight_kg"]:.1f} kg × {int(best["reps"])}'
+                    + (f' @ RPE {best["rpe"]:g}' if pd.notna(best["rpe"]) else ""),
         "avg_reps": round(float(sub["reps"].mean()), 1),
         "avg_rpe": round(float(rpe_vals.mean()), 1) if not rpe_vals.empty else None,
         "first_date": per_day["day"].min().date().isoformat(),
