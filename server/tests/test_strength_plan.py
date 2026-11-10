@@ -30,7 +30,7 @@ def test_increase_when_all_sets_reach_target_reps():
     assert s["action"] == "increase"
     assert s["weight_kg"] == 56.5
     work = [x for x in s["sets"] if x["type"] == "normal"]
-    assert [x["rpe"] for x in work] == [8, 9, 10]  # RIR bleibt als Leitplanke
+    assert [x["rpe"] for x in work] == [8, 8, 9]  # RIR bleibt als Leitplanke
     assert [x["reps"] for x in work] == [12, 12, 12]
     assert s["sets"][0]["type"] == "warmup"
     assert s["rule"]["lines"][0] == "Schwerer: alle 3 Sätze ≥ 12 Wdh. → 59 kg"
@@ -55,10 +55,15 @@ def test_missing_sets_hold():
     assert s["action"] == "hold" and "Nur 2 von 3" in s["reason"]
 
 
-def test_rir_falls_across_sets_with_rdl_and_four_set_exceptions():
-    assert sp._targets(ROW) == [8, 9, 10]
+def test_rir_compounds_stop_at_one_isolation_goes_to_zero():
+    assert sp._targets(ROW) == [8, 8, 9]
+    assert sp._targets(RDL) == [8, 8, 9]
+    legpress = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "legpress")
+    assert sp._targets(legpress) == [8, 8, 8, 9]
     assert sp._targets(LATERAL) == [8, 9, 9, 10]
-    assert sp._targets(RDL) == [8, 9, 9]
+    assert sp._targets(SKULL) == [8, 10]
+    compounds = {ex.key for p in sp.PLANS for ex in p.exercises if ex.last_rpe < 10}
+    assert compounds == {"row", "mts", "pulldown", "legpress", "rdl"}
 
 
 def test_lateral_raise_targets_15_and_custom_rule_overrides():

@@ -6,8 +6,10 @@ Regeln (vom User 2026-11-08 festgelegt, je Übung einstellbar über `StrengthRul
 - Schwerer: alle geplanten Sätze der letzten Einheit (Hauptgewicht) ≥ Ziel-Wdh. → eine Stufe hoch.
 - Leichter: ein Satz unter der Mindest-Wdh. → eine Stufe runter. Sonst gleiches Gewicht.
 - Pause > 21 Tage → eine Stufe leichter; > 90 Tage oder neu → Start aus dem e1RM der letzten 180 Tage.
-- RIR sinkt über die Sätze (Satz 1 RPE 8, mittlere 9, letzter `last_rpe`) — nur Leitplanke beim
-  Training, zählt nicht für die Entscheidung."""
+- RIR sinkt über die Sätze (Satz 1 RPE 8, mittlere `mid_rpe`, letzter `last_rpe`) — nur Leitplanke
+  beim Training, zählt nicht für die Entscheidung. Isolation an Maschinen 2 → 1 → 0, schwere
+  Grundübungen (`_COMPOUND`) 2 → 2 → 1 (User-Entscheid 2026-11-10: 0 RIR bringt kaum mehr
+  Hypertrophie als 1–2 RIR, kostet aber Erholung — Robinson 2024, Refalo 2024)."""
 from __future__ import annotations
 
 from collections import Counter
@@ -83,6 +85,11 @@ class PlanExercise:
     superset: int | None = None
     last_rpe: float = 10.0              # Ziel-RPE des letzten Satzes
     muscles: tuple[tuple[str, float], ...] = ()  # harte Sätze je Muskel; mitbeteiligt = 0,5
+    mid_rpe: float = 9.0                # Ziel-RPE der mittleren Sätze
+
+
+# Schwere Grundübungen: nie bis zum Versagen (RIR 2 → 2 → 1).
+_COMPOUND = {"mid_rpe": 8.0, "last_rpe": 9.0}
 
 
 @dataclass(frozen=True)
@@ -100,13 +107,13 @@ class Plan:
 
 
 _ROW = PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
-                    ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True,
+                    ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True, **_COMPOUND,
                     muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5)))
 _LATERAL = PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
                         ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 15), 90, _select(25),
                         muscles=(("Seitliche Schulter", 1),))
 _PULLDOWN = PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
-                         ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0),
+                         ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0), **_COMPOUND,
                          muscles=(("Rücken", 1), ("Bizeps", .5)))
 _HAMMER = PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
                        ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
@@ -118,7 +125,7 @@ _SKULL = PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
 
 def _mts(sets: int) -> PlanExercise:
     return PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
-                        ("MTS Incline Press",), sets, (8, 12), 150, Ladder(5.0), warmup=True,
+                        ("MTS Incline Press",), sets, (8, 12), 150, Ladder(5.0), warmup=True, **_COMPOUND,
                         muscles=(("Brust", 1), ("Trizeps", .5)))
 
 
@@ -142,11 +149,11 @@ PLANS: tuple[Plan, ...] = (
     ), family="ok"),
     Plan("uk", "Milon UK", "Unterkörper", 1, (
         PlanExercise("legpress", "Beinpresse (Maschine)", ("C7973E0E",),
-                     ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True,
+                     ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True, **_COMPOUND,
                      muscles=(("Quadrizeps", 1), ("Gesäß", .5))),
         PlanExercise("rdl", "Romanian Deadlift (Langhantel)", ("2B4B7310",),
                      ("Romanian Deadlift (Barbell)", "Rumänisches Kreuzheben (Langhantel)"), 3, (6, 10), 150, Ladder(5.0),
-                     last_rpe=9.0, muscles=(("Beinbeuger", 1), ("Gesäß", 1))),
+                     **_COMPOUND, muscles=(("Beinbeuger", 1), ("Gesäß", 1))),
         PlanExercise("legcurl", "Beinbeugen sitzend (Maschine)", ("11A123F3",),
                      ("Beinbeugen sitzend", "Seated Leg Curl (Machine)"), 4, (10, 15), 90, _select(40),
                      superset=0, muscles=(("Beinbeuger", 1),)),
@@ -245,10 +252,10 @@ def _de(x: float) -> str:
 
 
 def _targets(ex: PlanExercise) -> list[float]:
-    """RIR sinkt über die Sätze: RPE 8 → 9 … → `last_rpe`."""
+    """RIR sinkt über die Sätze: RPE 8 → `mid_rpe` … → `last_rpe`."""
     if ex.sets == 1:
         return [ex.last_rpe]
-    return [8.0] + [9.0] * (ex.sets - 2) + [ex.last_rpe]
+    return [8.0] + [ex.mid_rpe] * (ex.sets - 2) + [ex.last_rpe]
 
 
 def _main_weight(weights: list[float]) -> float:
