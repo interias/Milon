@@ -167,7 +167,7 @@ def snapshot_lines() -> list[str]:
         last = s.get("last_ride") or {}
         hr_part = (f"Puls bei {hp['ref_power']} W: {hp.get('current')} bpm" if hp.get("ref_power") is not None
                    else "Puls bei Referenzleistung")
-        eff_part = f"Effizienz NP/HF {eff['current']}" if eff.get("current") is not None else "Effizienz NP/HF"
+        eff_part = f"Effizienz Leistung/Puls {eff['current']}" if eff.get("current") is not None else "Effizienz Leistung/Puls"
         lines.append(
             f"RAD (Zwift/Rolle): {s['rides']} Fahrten gesamt, {s['rides_30d']} in 30 T ({s['hours_30d']} h), "
             f"eFTP {s['eftp']} W ({s['eftp_source']}), {s['wkg']} W/kg, Watt-TSS 7 T {s['tss_7d']} / 28 T {s['tss_28d']}. "
@@ -206,7 +206,7 @@ def week_lines(first: date, last: date) -> list[str]:
             hp, eff = cycling.hr_at_power(), cycling.efficiency()
             ref = f"{hp['ref_power']} W" if hp.get("ref_power") is not None else "Referenzleistung"
             lines.append(f"RAD-URTEILE (nur bei Signifikanz belastbar): Puls bei {ref} → "
-                         f"{_verdict(hp.get('trend'))}; Effizienz NP/HF → {_verdict(eff.get('trend'))}.")
+                         f"{_verdict(hp.get('trend'))}; Effizienz Leistung/Puls → {_verdict(eff.get('trend'))}.")
     except Exception:  # noqa: BLE001
         log.warning("Wochenbericht: Rad nicht verfügbar", exc_info=True)
     return lines
