@@ -75,6 +75,8 @@ def _no_real_ride_db(monkeypatch, _ride_engine):
     monkeypatch.setattr(cycling, "engine", _ride_engine)
     monkeypatch.setattr(health, "engine", _ride_engine)
     monkeypatch.setattr(bike_plan, "engine", _ride_engine)  # Morgenbriefing liest den Rad-Plan
+    from app.metrics import gym_cardio
+    monkeypatch.setattr(gym_cardio, "engine", _ride_engine)  # Hevy-Cardio-Sätze (active_kcal)
 
 
 @pytest.fixture(scope="session")

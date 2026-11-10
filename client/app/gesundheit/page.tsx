@@ -11,6 +11,7 @@ import { GarminRecovery } from "@/components/GarminRecovery";
 import { GarminNights } from "@/components/GarminNights";
 import { SourceStatus } from "@/components/SourceStatus";
 import { WalkpadCard } from "@/components/WalkpadCard";
+import { GymCardioCard } from "@/components/GymCardioCard";
 import { ActiveKcalChart } from "@/components/ActiveKcalChart";
 import { de, de0, dm } from "@/lib/format";
 
@@ -67,6 +68,7 @@ export default function Gesundheit() {
       </> : <p className="mt-3 text-xs text-muted" role="status">{state("overview")}</p>}
     </Card>
     <WalkpadCard />
+    <GymCardioCard onChange={() => setRevision((r) => r + 1)} />
     <SleepPanel />
     <GarminNights />
     <GarminRecovery />

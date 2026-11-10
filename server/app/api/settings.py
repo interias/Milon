@@ -68,6 +68,7 @@ def _current() -> dict:
         "walkpad_incline_pct": settings.walkpad_incline_pct,
         "walkpad_garmin_upload": settings.walkpad_garmin_upload,
         "walkpad_max_speed_kmh": settings.walkpad_max_speed_kmh,
+        "gym_treadmill_incline_pct": settings.gym_treadmill_incline_pct,
         "weather_places": [item["place"] for item in weather.places()],
         "fddb_user_masked": _mask_user(settings.fddb_user),
         "keys": {f: _mask(getattr(settings, f)) for f in SECRET_FIELDS},
@@ -105,6 +106,7 @@ class SettingsIn(BaseModel):
     walkpad_incline_pct: float | None = None
     walkpad_garmin_upload: bool | None = None
     walkpad_max_speed_kmh: float | None = None
+    gym_treadmill_incline_pct: float | None = None
     weather_places: list[str] | None = None  # Reihenfolge = Blätter-Reihenfolge; [] = Wetter aus
     openrouter_api_key: str | None = None
     hevy_api_key: str | None = None
@@ -134,6 +136,8 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Schrittlänge muss zwischen 0,2 und 1,5 m liegen.")
     if body.walkpad_incline_pct is not None and not 0 <= body.walkpad_incline_pct <= 15:
         raise HTTPException(status_code=422, detail="Steigung muss zwischen 0 und 15 % liegen.")
+    if body.gym_treadmill_incline_pct is not None and not 0 <= body.gym_treadmill_incline_pct <= 20:
+        raise HTTPException(status_code=422, detail="Steigung muss zwischen 0 und 20 % liegen.")
     if body.walkpad_max_speed_kmh is not None and not 1 <= body.walkpad_max_speed_kmh <= 6:
         raise HTTPException(status_code=422, detail="Höchsttempo muss zwischen 1 und 6 km/h liegen.")
 
@@ -196,6 +200,9 @@ def update_settings(body: SettingsIn) -> dict:
     if body.walkpad_incline_pct is not None:
         settings.walkpad_incline_pct = body.walkpad_incline_pct
         env_updates["WALKPAD_INCLINE_PCT"] = str(body.walkpad_incline_pct)
+    if body.gym_treadmill_incline_pct is not None:  # wirkt beim Lesen auf alle Gym-Laufbandsätze ohne Notiz/Änderung
+        settings.gym_treadmill_incline_pct = body.gym_treadmill_incline_pct
+        env_updates["GYM_TREADMILL_INCLINE_PCT"] = str(body.gym_treadmill_incline_pct)
     if body.walkpad_garmin_upload is not None:
         settings.walkpad_garmin_upload = body.walkpad_garmin_upload
         env_updates["WALKPAD_GARMIN_UPLOAD"] = "true" if body.walkpad_garmin_upload else "false"

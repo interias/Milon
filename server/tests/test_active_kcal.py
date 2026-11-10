@@ -8,8 +8,8 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 from app import garmin_daily, walkpad
-from app.metrics import active_kcal, cycling, health, running
-from app.models import StepsDaily, Workout
+from app.metrics import active_kcal, cycling, gym_cardio, health, running
+from app.models import StepsDaily, Workout, WorkoutSet
 
 NOW = datetime(2026, 10, 26, 18, tzinfo=timezone.utc)
 DAY = date(2026, 10, 26)
@@ -20,7 +20,7 @@ KG = 80.0
 def db(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     SQLModel.metadata.create_all(engine)
-    for module in (garmin_daily, active_kcal):
+    for module in (garmin_daily, active_kcal, gym_cardio):
         monkeypatch.setattr(module, "engine", engine)
     monkeypatch.setattr(garmin_daily.settings, "timezone", "Europe/Berlin")
     monkeypatch.setattr(active_kcal.settings, "walkpad_stride_m", 0.65)
@@ -71,3 +71,53 @@ def test_average_uses_full_days_and_missing_weight_skips_kcal(db, monkeypatch):
     assert value["avg7_days"] == 2 and value["avg7"] == round((round(8000 * per_step) + round(4000 * per_step)) / 2)
     monkeypatch.setattr(walkpad, "_weights", lambda: None)
     assert active_kcal.daily(1, now=NOW)["today"]["total"] == 0
+
+
+def _treadmill(session, distance_m, duration_s, notes=None, wid="g", start=datetime(2026, 10, 26, 16)):
+    wo = Workout(external_id=wid, source="hevy", started_at=start, ended_at=start.replace(hour=start.hour + 1))
+    session.add(wo)
+    session.flush()
+    session.add(WorkoutSet(workout_id=wo.id, exercise="Laufband", exercise_template_id="243710DE", set_index=0,
+                           set_type="normal", distance_m=distance_m, duration_s=duration_s, notes=notes))
+    session.add(WorkoutSet(workout_id=wo.id, exercise="Beinpresse", set_index=0, weight_kg=150, reps=10))
+
+
+def test_gym_treadmill_counts_as_treadmill_not_gym(db, monkeypatch):
+    monkeypatch.setattr(gym_cardio.settings, "gym_treadmill_incline_pct", 12.0)
+    with Session(db) as session:
+        session.add(StepsDaily(day=DAY, steps=10_000, source="garmin_direct"))
+        _treadmill(session, 1000, 1020)                                    # 17 min, 3,5 km/h
+        session.commit()
+    today = active_kcal.daily(1, now=NOW)["today"]
+    v, minutes = 1000 / 17, 17
+    assert today["walkpad"] == round((0.1 * v + 1.8 * v * 0.12) * KG * minutes * 0.005)
+    assert today["gym"] == round(2.5 * KG * (1 - 17 / 60))                  # Krafttraining ohne die 17 min
+    assert today["steps"] == 10_000 - round(1000 / 0.65)                   # Uhr hat sie schon gezählt
+
+
+def test_gym_cardio_incline_note_override_and_minutes_typo(db, monkeypatch):
+    monkeypatch.setattr(gym_cardio.settings, "gym_treadmill_incline_pct", 12.0)
+    with Session(db) as session:
+        _treadmill(session, 1160, 14, notes="Steigung 6 %")                # „14 s“ = 14 min
+        session.commit()
+    (e,) = gym_cardio.entries(weights=walkpad._weights())
+    assert (e["incline_pct"], e["incline_source"], e["duration_s"], e["duration_fixed"]) == (6.0, "note", 840, True)
+    assert gym_cardio.set_incline(e["key"], 0) is True
+    (e,) = gym_cardio.entries(weights=walkpad._weights())
+    assert (e["incline_pct"], e["incline_source"], e["kcal"]) == (0, "custom", e["kcal_flat"])
+    gym_cardio.set_incline(e["key"], None)
+    assert gym_cardio.entries()[0]["incline_source"] == "note"
+    assert gym_cardio.set_incline("unbekannt", 5) is False
+
+
+def test_gym_cardio_api(db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with Session(db) as session:
+        _treadmill(session, 1000, 600)
+        session.commit()
+    client = TestClient(app)
+    key = client.get("/metrics/activity/gym-cardio?days=1100").json()["entries"][0]["key"]
+    assert client.put(f"/metrics/activity/gym-cardio/{key}", json={"incline_pct": 8}).status_code == 200
+    assert client.put(f"/metrics/activity/gym-cardio/{key}", json={"incline_pct": 25}).status_code == 422
+    assert client.put("/metrics/activity/gym-cardio/x:y:0", json={"incline_pct": 5}).status_code == 404

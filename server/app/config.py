@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     walkpad_stride_m: float = Field(default=0.65, gt=0.2, le=1.5, allow_inf_nan=False)
     walkpad_incline_pct: float = Field(default=6.0, ge=0, le=15, allow_inf_nan=False)
     walkpad_garmin_upload: bool = True
+    # Gym treadmill sets from Hevy (no incline field there): default incline unless the set's note says
+    # "12%" or the set was edited (gym_cardio).
+    gym_treadmill_incline_pct: float = Field(default=12.0, ge=0, le=20, allow_inf_nan=False)
     # Remote control via the recorder (FTMS Control Point): highest speed the app may set (pad: 1–6 km/h).
     walkpad_max_speed_kmh: float = Field(default=6.0, ge=1, le=6, allow_inf_nan=False)
 

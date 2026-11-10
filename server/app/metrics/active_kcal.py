@@ -8,8 +8,9 @@ Alles netto, also über dem Ruheumsatz (1 MET = 1 kcal je kg und Stunde), damit 
 - Rad draußen: MET nach Tempo (Compendium: < 16 km/h 4,0 · < 19 6,8 · < 22,5 8,0 · sonst 10,0).
 - Rad erkannt (Move IQ, ohne Tempo): MET 4,0 wie die langsamste Stufe (Pendelfahrt ~13 km/h); nur Fahrten,
   die keine aufgezeichnete Fahrt überlappt.
-- Laufband: ACSM mit Steigung (`walkpad.energy`), alle Walks.
-- Gym (Hevy): MET 3,5 (Krafttraining, mehrere Übungen, 8–15 Wdh.).
+- Laufband: ACSM mit Steigung (`walkpad.energy`), alle Walks; dazu Laufband-Sätze im Gym (`gym_cardio`).
+- Gym (Hevy): MET 3,5 (Krafttraining, mehrere Übungen, 8–15 Wdh.) für die Workout-Zeit ohne Cardio-Sätze;
+  Spinning zählt zu Rad, Treppe bleibt Gym (eigene MET, `gym_cardio`).
 Garmins activeKilocalories steht nur als Vergleich daneben. Nur Anzeige — nie zum adaptiven TDEE addieren."""
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import pandas as pd
 from sqlalchemy import inspect
 
 from .. import garmin_daily, walkpad
+from . import gym_cardio
 from ..config import settings
 from ..db import engine
 
@@ -98,7 +100,8 @@ def compute(start: date, end: date) -> tuple[dict[date, dict], dict[date, int]]:
             "SELECT started_at, moving_s, distance_m, incline_pct, watch_steps FROM walkpad_sessions"
         ).fetchall() if inspect(con).has_table("walkpad_sessions") else []
         workouts = con.exec_driver_sql(
-            "SELECT started_at, ended_at FROM workouts WHERE source='hevy' AND started_at IS NOT NULL AND ended_at IS NOT NULL"
+            "SELECT external_id, started_at, ended_at FROM workouts "
+            "WHERE source='hevy' AND started_at IS NOT NULL AND ended_at IS NOT NULL"
         ).fetchall()
         steps = con.exec_driver_sql("SELECT day, steps FROM steps_daily WHERE day BETWEEN ? AND ?",
                                     (start.isoformat(), end.isoformat())).fetchall()
@@ -109,11 +112,24 @@ def compute(start: date, end: date) -> tuple[dict[date, dict], dict[date, int]]:
             _add(out, day, "walkpad", walkpad.energy(dist, moving, incline or 0, _kg(weights, day))["kcal"] or 0)
             excluded[day] = excluded.get(day, 0) + (watch or 0)
 
-    for started, ended in workouts:
+    cardio_hours: dict[str, float] = {}
+    try:
+        cardio = gym_cardio.entries(start, end, weights)
+    except Exception:  # noqa: BLE001 -- ohne Cardio-Daten bleibt das ganze Workout Krafttraining
+        cardio = []
+    for e in cardio:
+        if e["kcal"] is None or not e["part"]:
+            continue
+        day = date.fromisoformat(e["date"])
+        _add(out, day, e["part"], e["kcal"])
+        excluded[day] = excluded.get(day, 0) + e["steps"]
+        cardio_hours[e["workout_id"]] = cardio_hours.get(e["workout_id"], 0) + e["duration_s"] / 3600
+
+    for wid, started, ended in workouts:
         begin, finish = datetime.fromisoformat(str(started)), datetime.fromisoformat(str(ended))
         hours = (finish - begin).total_seconds() / 3600
         if start <= begin.date() <= end and 0 < hours <= 4 and (kg := _kg(weights, begin.date())):
-            _add(out, begin.date(), "gym", (GYM_MET - 1) * kg * hours)
+            _add(out, begin.date(), "gym", (GYM_MET - 1) * kg * max(0.0, hours - cardio_hours.get(wid, 0)))
 
     everyday: dict[date, int] = {}
     stride = settings.walkpad_stride_m

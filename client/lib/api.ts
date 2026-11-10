@@ -65,6 +65,13 @@ export const coachImageUrl = (path: string) => `${BASE}${path}`;
 
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
 export type ActiveKcalDay = { date: string; total: number; everyday: number; run: number; ride: number; walkpad: number; gym: number; steps: number | null; garmin: number | null; provisional: boolean };
+export type GymCardioEntry = {
+  key: string; workout_id: string; title: string | null; date: string; started_at: string; exercise: string;
+  kind: "treadmill" | "bike" | "stairs"; distance_m: number | null; duration_s: number | null; duration_fixed: boolean;
+  speed_kmh: number | null; incline_pct: number | null; incline_source: "custom" | "note" | "default" | null;
+  mode: "walk" | "run" | null; kcal: number | null; kcal_flat: number | null; steps: number; part: string | null;
+};
+export type GymCardio = { default_incline_pct: number; incline_max: number; entries: GymCardioEntry[] };
 export type ActiveKcal = { stride_m: number; gym_met: number; today: ActiveKcalDay | null; latest: ActiveKcalDay | null; avg7: number | null; avg7_days: number; series: ActiveKcalDay[] };
 export type BadgeShape = [number, number][];
 export type DayBadgeRun = { time: string; km: number | null; minutes: number | null; pace_s: number | null; avg_hr: number | null; shape: BadgeShape | null };
@@ -480,12 +487,12 @@ export type LlmBudget = {
 export type AppSettings = {
   openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
   anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
-  timezone: string; scheduler_enabled: boolean; run_hr_max: number; body_height_cm: number | null; birth_date: string | null; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; weather_places: string[]; fddb_user_masked: string;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; body_height_cm: number | null; birth_date: string | null; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; gym_treadmill_incline_pct: number; weather_places: string[]; fddb_user_masked: string;
   keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
   openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
-  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; body_height_cm?: number; birth_date?: string; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
+  llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; body_height_cm?: number; birth_date?: string; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; gym_treadmill_incline_pct?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
   fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
@@ -754,6 +761,8 @@ export const api = {
   bodySummary: () => get<BodySummary>("/metrics/body/summary"),
   dayBadge: (day?: string) => get<DayBadge>(`/metrics/activity/day-badge${day ? `?day=${day}` : ""}`),
   activeKcal: (days = 14) => get<ActiveKcal>(`/metrics/activity/active-kcal?days=${days}`),
+  gymCardio: (days = 120) => get<GymCardio>(`/metrics/activity/gym-cardio?days=${days}`),
+  gymCardioIncline: (key: string, incline_pct: number | null) => send<{ ok: boolean }>("PUT", `/metrics/activity/gym-cardio/${encodeURIComponent(key)}`, { incline_pct }),
   // Gesundheit (Schritte + Radfahren)
   healthOverview: () => get<HealthOverview>("/metrics/health/overview"),
   healthSteps: (days = 30) => get<StepsTrendPoint[]>(`/metrics/health/steps?days=${days}`),
