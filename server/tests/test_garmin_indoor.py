@@ -434,6 +434,8 @@ def test_hr_at_power_ignores_drift_of_longer_later_rides(db):
     result = cycling.hr_at_power()
     assert result["trend"]["n"] == 14 and result["trend"]["verdict"] == "unklar"
     assert all(row["steady_min"] <= 35 for row in result["series"])
+    eff = cycling.efficiency()
+    assert eff["rides"] == 14 and eff["trend"]["verdict"] == "unklar"
 
 
 def test_steady_point_skips_intervals_and_warmup():

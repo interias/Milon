@@ -137,7 +137,7 @@ def get_week_plan(offset: int = 0) -> dict:
 @mcp.tool()
 def get_cycling_power() -> dict:
     """Indoor-Rad (Zwift/Rolle): eFTP + W/kg, ausgedünnte Leistungskurve, Puls bei Referenzleistung und
-    Effizienz NP/HF mit Signifikanz-Urteil, letzte Fahrten, Form (TSB, pulsbasiert über Lauf + Rad).
+    Effizienz Leistung/Puls mit Signifikanz-Urteil, letzte Fahrten, Form (TSB, pulsbasiert über Lauf + Rad).
     Urteil nur bei significant=true als echten Trend deuten. Watt-TSS nie mit Lauflast verrechnen;
     Form-TRIMP (HFmax-Setting) ist nicht direkt mit dem TRIMP aus get_run_fitness_trends vergleichbar."""
     from ..coach import rad

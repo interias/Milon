@@ -8,7 +8,7 @@ Leistungszonen nach Coggan (55/75/90/105/120/150 % eFTP),
 NP/IF/TSS je Fahrt selbst berechnet (Garmin liefert kein TSS/IF), W/kg mit dem 7-Tage-Gewicht.
 
 EHRLICHE STATISTIK (wie Laufen, stats.py): Urteile „werde ich besser?“ nur auf Fahrt-Ebene
-(Puls bei Referenzleistung, Effizienz NP/HF) — geglättete Serien sind reine Anzeige. Puls-
+(Puls bei Referenzleistung, Effizienz Leistung/Puls) — geglättete Serien sind reine Anzeige. Puls-
 Kennzahlen nutzen nur Fahrten mit hr_valid. Watt-TSS wird NIE mit Lauflast verrechnet."""
 from __future__ import annotations
 
@@ -541,16 +541,19 @@ def _decoupling(series: dict) -> tuple[float, float, float] | None:
 
 
 def efficiency(alpha: float = 0.25) -> dict:
-    """Effizienz NP/HF (Watt je Herzschlag/min) je Fahrt + EWMA (α 0,25, nur Anzeige); Urteil aus der
-    Fahrt-Level-Regression EF ~ Zeit. Dazu Pw:HR-Entkopplung gleichmäßiger Fahrten ≥ 20 min."""
+    """Effizienz Leistung/HF (Watt je Herzschlag/min) je Fahrt + EWMA (α 0,25, nur Anzeige); Urteil aus der
+    Fahrt-Level-Regression EF ~ Zeit. Leistung und Puls aus den gleichmäßigen Abschnitten (`_steady_point`,
+    wie `hr_at_power`) statt NP/Ø-HF der ganzen Fahrt. Dazu Pw:HR-Entkopplung gleichmäßiger Fahrten ≥ 20 min."""
     df = _hr_rides()
     result: dict = {"series": [], "current": None, "rides": 0,
                     "trend": {"verdict": "wenig_daten", "label": "zu wenig Daten", "n": 0}, "decoupling": []}
     if df.empty:
         return result
-    df = df[df["norm_power_w"].notna()].copy()
+    df = _attach_series(df)
+    points = [_steady_point(s) if isinstance(s, dict) else None for s in df["series"]]
+    df = df.assign(ef=[pt[0] / pt[1] if pt and pt[1] else np.nan for pt in points])
+    df = df[df["ef"].notna()].copy()
     if len(df) >= 4:
-        df["ef"] = df["norm_power_w"] / df["avg_hr"]
         smooth = df["ef"].ewm(alpha=alpha).mean()
         xs = ((df["started_at"] - df["started_at"].min()).dt.total_seconds() / 86_400).tolist()
         result.update({
@@ -568,8 +571,9 @@ def efficiency(alpha: float = 0.25) -> dict:
             result["decoupling"].append({"date": r["started_at"].date().isoformat(), "activity_id": r["activity_id"],
                                          "title": r["title"], "decoupling_pct": round(dec[0], 1),
                                          "vi": round(dec[1], 3), "minutes": round(dec[2])})
-    result["caveat"] = ("EF = NP/Ø-HF je Fahrt (nur Fahrten mit gültigem Puls); Urteil aus Einzel-Fahrten, "
-                        "EWMA-Kurve nur zur Anzeige. Entkopplung < 5 % = stabile aerobe Basis.")
+    result["caveat"] = ("EF = Leistung/Puls je Fahrt aus gleichmäßigen Abschnitten zwischen Minute 10 und 45 "
+                        "(mind. 5 min, nur gültiger Puls); Urteil aus Einzel-Fahrten, EWMA-Kurve nur zur Anzeige. "
+                        "Entkopplung < 5 % = stabile aerobe Basis.")
     return _clean(result)
 
 

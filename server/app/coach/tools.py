@@ -89,7 +89,7 @@ TOOLS = [
         "(Ruhepuls-Trend). Jedes trend-Objekt hat verdict (besser/schlechter/unklar/wenig_daten) "
         "— NUR bei significant=true als echten Trend deuten, sonst als Rauschen benennen."),
     _fn("get_cycling_power", "Indoor-Rad (Zwift/Rolle): eFTP mit Quelle und W/kg, ausgedünnte Leistungskurve "
-        "(90 T vs. 90 T davor, Allzeit-Bestwert), Puls bei Referenzleistung (hr_at_power) und Effizienz NP/HF "
+        "(90 T vs. 90 T davor, Allzeit-Bestwert), Puls bei Referenzleistung (hr_at_power) und Effizienz Leistung/Puls "
         "(efficiency) mit Signifikanz-Urteil, letzte Fahrten und Form (TSB, pulsbasiert über Lauf + Rad). "
         "Urteil NUR bei significant=true als echten Trend deuten, sonst als Rauschen benennen. Form-TRIMP nutzt "
         "HFmax aus dem Setting und ist nicht direkt mit dem TRIMP aus get_run_fitness_trends vergleichbar; "

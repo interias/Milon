@@ -139,8 +139,8 @@ export default function Rad() {
         <Card>
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Effizienz NP / Puls</h3>
-              <p className="text-[11px] text-muted">Watt je Herzschlag-Minute (NP ÷ Ø-HF) je Fahrt + EWMA — höher = fitter</p>
+              <h3 className="text-sm font-semibold">Effizienz Leistung / Puls</h3>
+              <p className="text-[11px] text-muted">Watt je Herzschlag-Minute in gleichmäßigen Abschnitten je Fahrt + EWMA — höher = fitter</p>
             </div>
             <TrendBadge t={eff?.trend} />
           </div>
