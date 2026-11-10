@@ -130,7 +130,7 @@ export default function Rad() {
               series={[
                 { values: hrSeries.map((p) => p.hr), label: "je Fahrt", color: "var(--color-accent-2)" },
                 { values: hrSeries.map((p) => p.smooth), label: "geglättet (EWMA)", color: "var(--color-accent)", smooth: true },
-              ]} /> : <Empty height={130}>noch zu wenige Fahrten mit gültigem Puls und Leistung (ab 6)</Empty>}
+              ]} /> : <Empty height={130}>noch zu wenige Fahrten mit mind. 5 gleichmäßigen Minuten zwischen Minute 10 und 45 (ab 6)</Empty>}
             {hrp.trend?.delta_bpm != null && hrp.trend.verdict !== "wenig_daten" && <p className="mt-2 text-[11px] text-muted">Δ {de(hrp.trend.delta_bpm, 1)} bpm über {hrp.trend.days} Tage · {hrp.trend.n} Fahrten</p>}
             {hrp.caveat && <p className="mt-1 text-[11px] text-muted">{hrp.caveat}</p>}
           </> : <Loading />}

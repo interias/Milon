@@ -419,6 +419,34 @@ def test_hr_at_power_and_efficiency_stay_neutral_on_noise(db):
     assert cycling.efficiency()["trend"]["verdict"] == "unklar"
 
 
+def test_hr_at_power_ignores_drift_of_longer_later_rides(db):
+    """Same fitness throughout, but later rides are 90 instead of 30 min: their whole-ride mean HR is
+    higher (drift). Only minutes 10–45 count, so no false „schlechter“."""
+    rng = np.random.default_rng(3)
+    for i in range(14):
+        power = float(110 + (i * 7) % 20)
+        offset = float(rng.normal(0, 1.5))
+        drift = lambda s, p=power, o=offset: 60 + 0.5 * p + o + 0.15 * max(0, s - 600) / 60  # noqa: E731
+        seconds = 1800 if i < 7 else 5400
+        mean_hr = float(np.mean([drift(s) for s in range(seconds)]))
+        store(TODAY - timedelta(days=30 - 2 * i), f"{300 + i}", power=power, avg_hr=round(mean_hr, 1),
+              seconds=seconds, hr=drift)
+    result = cycling.hr_at_power()
+    assert result["trend"]["n"] == 14 and result["trend"]["verdict"] == "unklar"
+    assert all(row["steady_min"] <= 35 for row in result["series"])
+
+
+def test_steady_point_skips_intervals_and_warmup():
+    seconds = 3000
+    power = [100.0 if s < 1500 else (300.0 if (s // 60) % 2 else 80.0) for s in range(seconds)]
+    hr = [120.0 if s < 1500 else 160.0 for s in range(seconds)]
+    series = {"t": list(range(seconds)), "power_w": power, "hr_bpm": hr}
+    p, h, n = cycling._steady_point(series)
+    assert (p, h) == (100.0, 120.0)
+    assert 900 <= n < 930  # minutes 10–25 plus the first seconds before the 60-s mean leaves the band
+    assert cycling._steady_point({"t": list(range(500)), "power_w": [100.0] * 500, "hr_bpm": [120.0] * 500}) is None
+
+
 def test_invalid_hr_rides_never_enter_hr_metrics(db):
     _ride_set(db, fitter=True, seed=7)
     store(TODAY, "999", power=200.0, avg_hr=35.0, hr=lambda s: 35.0)
