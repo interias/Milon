@@ -62,6 +62,10 @@ class WorkoutSet(SQLModel, table=True):
     weight_kg: Optional[float] = None
     reps: Optional[int] = None
     rpe: Optional[float] = None
+    distance_m: Optional[float] = None       # Hevy-Cardio (Laufband, Spinning …)
+    duration_s: Optional[float] = None
+    custom_metric: Optional[float] = None    # z. B. Stockwerke an der Treppe
+    notes: Optional[str] = None              # Übungsnotiz (gleich für alle Sätze der Übung)
 
 
 class ExerciseSession(SQLModel, table=True):

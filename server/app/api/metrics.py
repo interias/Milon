@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 
 from .. import zwift_worlds
-from ..metrics import week_plan, weight_phase
+from ..metrics import gym_cardio, week_plan, weight_phase
 from ..metrics import achievements, active_kcal, activity, day_badge, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -120,6 +120,23 @@ def activity_recent(limit: int = 8) -> list[dict]:
 @router.get("/activity/active-kcal")
 def activity_active_kcal(days: int = Query(default=14, ge=1, le=365)) -> dict:
     return active_kcal.daily(days)
+
+
+class GymCardioIncline(BaseModel):
+    incline_pct: float | None = Field(default=None, ge=0, le=gym_cardio.INCLINE_MAX)  # None = Notiz/Standard
+
+
+@router.get("/activity/gym-cardio")
+def activity_gym_cardio(days: int = Query(default=120, ge=1, le=1100)) -> dict:
+    """Cardio-Sätze aus Hevy (Laufband, Spinning, Treppe) mit Steigung und aktiven kcal."""
+    return gym_cardio.listing(days)
+
+
+@router.put("/activity/gym-cardio/{key}")
+def activity_gym_cardio_incline(key: str, body: GymCardioIncline) -> dict:
+    if not gym_cardio.set_incline(key, body.incline_pct):
+        raise HTTPException(404, "Unbekannter Cardio-Satz.")
+    return {"ok": True}
 
 
 @router.get("/activity/day-badge")

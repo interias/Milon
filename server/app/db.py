@@ -26,6 +26,7 @@ def init_db() -> None:
     from . import garmin_activity, garmin_daily  # noqa: F401 -- source-owned Garmin records
     from . import garmin_weather, run_context, run_reference, coach_actions  # noqa: F401
     from . import garmin_load  # noqa: F401 -- optional Garmin running tolerance
+    from .metrics import gym_cardio  # noqa: F401 -- incline overrides for Hevy treadmill sets
     from . import hero  # noqa: F401 -- gamification state (start day, vault claims)
     from . import hero_keystone  # noqa: F401 -- Mythisch+ keystones per dungeon
     from . import hero_events_live  # noqa: F401 -- spontaneous events during a keystone run
@@ -76,6 +77,10 @@ def _run_migrations() -> None:
                     continue
                 if isinstance(result, dict) and result.get("mode") != "not_configured":
                     con.exec_driver_sql("UPDATE sync_state SET last_success_at=? WHERE source=?", (last_sync, source))
+        set_cols = cols("workout_sets")
+        for col, typ in (("distance_m", "REAL"), ("duration_s", "REAL"), ("custom_metric", "REAL"), ("notes", "TEXT")):
+            if set_cols and col not in set_cols:
+                con.exec_driver_sql(f"ALTER TABLE workout_sets ADD COLUMN {col} {typ}")
         ex_cols = cols("exercise_sessions")
         for col in ("max_hr", "hr_drift_pct"):
             if col not in ex_cols:

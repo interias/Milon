@@ -91,6 +91,8 @@ def _upsert_workout(s: Session, w: dict) -> bool:
                 workout_id=wo.id, exercise=title, exercise_template_id=template,
                 set_index=st.get("index"), set_type=st.get("type"),
                 weight_kg=st.get("weight_kg"), reps=st.get("reps"), rpe=st.get("rpe"),
+                distance_m=st.get("distance_meters"), duration_s=st.get("duration_seconds"),
+                custom_metric=st.get("custom_metric"), notes=ex.get("notes") or None,
             ))
     return is_new
 
