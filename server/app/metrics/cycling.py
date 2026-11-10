@@ -428,11 +428,54 @@ def _hr_rides() -> pd.DataFrame:
     return df[df["p"].fillna(0) > 0].sort_values("started_at")
 
 
+STEADY_FROM_S = 600      # Puls erst ab Minute 10 eingeschwungen
+STEADY_TO_S = 2700       # bis Minute 45: lange Fahrten bringen nicht mehr Drift mit als kurze
+STEADY_LOOKBACK_S = 180  # die 60-s-Leistung muss so lange ruhig gewesen sein
+STEADY_SPREAD = 0.30     # (max − min) / Mittel der 60-s-Leistung im Rückblick (Zwift-Hügel lassen sie wackeln)
+STEADY_MIN_S = 300       # Mindest-Sekunden je Fahrt
+STEADY_LEVEL_BAND = 0.15  # nur Sekunden nahe der häufigsten Leistungsstufe
+
+
+def _steady_point(series: dict) -> tuple[float, float, int] | None:
+    """(Median-Leistung, Median-Puls, Sekunden) der gleichmäßigen Sekunden zwischen Minute 10 und 45.
+    Gleichmäßig = die nachlaufende 60-s-Leistung schwankte in den 3 min davor um höchstens 30 % —
+    so läuft der Puls keinem Intervall oder Sprint hinterher."""
+    if not series.get("power_w") or not series.get("hr_bpm"):
+        return None
+    power, hr = garmin_indoor.grid(series, "power_w"), garmin_indoor.grid(series, "hr_bpm")
+    p60 = pd.Series(power).rolling(60, min_periods=60).mean()
+    look = p60.rolling(STEADY_LOOKBACK_S, min_periods=STEADY_LOOKBACK_S)
+    spread = (look.max() - look.min()) / look.mean()
+    idx = np.arange(power.size)
+    keep = ((idx >= STEADY_FROM_S) & (idx < STEADY_TO_S) & (spread.to_numpy() <= STEADY_SPREAD)
+            & (p60.to_numpy() > 0) & ~np.isnan(hr[:power.size]))
+    if keep.sum() < STEADY_MIN_S:
+        return None
+    # Intervall-Workouts haben zwei ruhige Stufen (Pause, Intervall) — getrennte Mediane über die Mischung
+    # passten nicht zusammen. Deshalb nur die häufigste Stufe (10-W-Klasse) ± STEADY_LEVEL_BAND.
+    levels = p60.to_numpy()
+    counts = np.bincount((levels[keep] // 10).astype(int))
+    level = (int(np.argmax(counts)) + 0.5) * 10
+    keep &= np.abs(levels - level) <= STEADY_LEVEL_BAND * level
+    if keep.sum() < STEADY_MIN_S:
+        return None
+    return float(np.median(levels[keep])), float(np.median(hr[:power.size][keep])), int(keep.sum())
+
+
 def hr_at_power(ref_power: int | None = None, alpha: float = 0.25) -> dict:
-    """„Welcher Puls bei X Watt?“ — Fahrt-Level-Modell HF = a + b·P + c·Tage (P = NP, sonst Ø-Leistung)
-    über alle Fahrten mit gültigem Puls. c < 0 signifikant (95 %-CI, n ≥ 8) und b > 0 ⇒ „besser“.
+    """„Welcher Puls bei X Watt?“ — Fahrt-Level-Modell HF = a + b·P + c·Tage über alle Fahrten mit gültigem
+    Puls. P und HF sind die Mediane der gleichmäßigen Sekunden zwischen Minute 10 und 45 (`_steady_point`),
+    nicht die Fahrt-Mittel: NP kurzer, welliger Fahrten und die Drift langer Fahrten verzerrten sonst den Trend.
+    c < 0 signifikant (95 %-CI, n ≥ 8) und b > 0 ⇒ „besser“.
     Anzeige: je Fahrt auf die Referenzleistung korrigierter Puls + EWMA (nur Anzeige)."""
     df = _hr_rides()
+    if not df.empty:
+        df = _attach_series(df)
+        points = [_steady_point(s) if isinstance(s, dict) else None for s in df["series"]]
+        df = df.assign(p=[pt[0] if pt else np.nan for pt in points],
+                       avg_hr=[pt[1] if pt else np.nan for pt in points],
+                       steady_s=[pt[2] if pt else 0 for pt in points])
+        df = df[df["p"].notna()]
     if df.empty or len(df) < 6:
         return {"trend": {"verdict": "wenig_daten", "label": "zu wenig Daten", "n": int(len(df))}, "series": []}
     if ref_power is None:
@@ -461,13 +504,15 @@ def hr_at_power(ref_power: int | None = None, alpha: float = 0.25) -> dict:
             adjusted = pd.Series(hr - b_p * (p - ref_power), index=df.index)
             smooth = adjusted.ewm(alpha=alpha).mean()
             series = [{"date": d.date().isoformat(), "activity_id": a, "hr": round(float(h), 1),
-                       "smooth": round(float(s), 1)}
-                      for d, a, h, s in zip(df["started_at"], df["activity_id"], adjusted, smooth)]
+                       "smooth": round(float(s), 1), "power": round(float(pw)), "steady_min": round(st / 60)}
+                      for d, a, h, s, pw, st in zip(df["started_at"], df["activity_id"], adjusted, smooth,
+                                                    df["p"], df["steady_s"])]
     return _clean({
         "ref_power": ref_power, "series": series, "trend": trend,
         "current": series[-1]["smooth"] if series else None,
-        "caveat": "Ø-Werte je Fahrt; Temperatur/Tagesform nicht kontrolliert. Urteil aus dem "
-                  "Fahrt-Level-Modell (HF ~ Leistung + Zeit), Kurve nur zur Anzeige.",
+        "caveat": "Je Fahrt nur gleichmäßige Abschnitte zwischen Minute 10 und 45 (ohne Intervalle/Sprints, "
+                  "mind. 5 min); Temperatur/Tagesform nicht kontrolliert. Urteil aus dem Fahrt-Level-Modell "
+                  "(HF ~ Leistung + Zeit), Kurve nur zur Anzeige.",
     })
 
 

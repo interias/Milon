@@ -33,7 +33,9 @@ def fill(engine, fitter: bool, seed: int, n: int = 20):
             s.add(GarminIndoorRide(activity_id=f"r{i}", activity_type="virtual_ride", title="Zwift - Tempus Fugit in Watopia",
                                    world="Watopia", route="Tempus Fugit", started_at=started, duration_seconds=1800,
                                    elapsed_duration_seconds=1800, distance_km=15.0, avg_power_w=power, norm_power_w=power,
-                                   avg_hr=hr, hr_valid=True, power_curve_json=json.dumps({"1200": power}), synced_at=started))
+                                   avg_hr=hr, hr_valid=True, power_curve_json=json.dumps({"1200": power}), synced_at=started,
+                                   series_json=json.dumps({"t": list(range(1800)), "power_w": [power] * 1800,
+                                                           "hr_bpm": [hr] * 1800})))
         s.commit()
 
 
