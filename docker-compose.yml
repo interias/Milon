@@ -21,6 +21,10 @@ services:
     # expose dient nur der Doku (kein Host-Mapping):
     expose:
       - "8000"
+    # Zusätzlich im gemeinsamen Netz mit BISS (Ernährungstagebuch): dort heißt dessen API biss-api.
+    networks:
+      - default
+      - biss
     # Optionales RAM-Limit (bei OOM während großer HC-Importe erhöhen/entfernen):
     # mem_limit: 768m
     healthcheck:
@@ -85,6 +89,12 @@ services:
       client:
         condition: service_healthy
     restart: unless-stopped
+
+networks:
+  # Einmalig anlegen: docker network create milon-biss (BISS tritt über compose.milon.yaml bei).
+  biss:
+    name: milon-biss
+    external: true
 
 volumes:
   tailscale-state:

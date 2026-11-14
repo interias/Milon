@@ -9,7 +9,7 @@ import json
 from fastapi import APIRouter, HTTPException
 
 from ..config import INCOMING_DIR, settings
-from ..ingest import drive, fddb, garmin, health_connect, hevy
+from ..ingest import biss, drive, fddb, garmin, health_connect, hevy
 from ..sync import scheduler
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -29,6 +29,8 @@ def _run(source: str, fn, cursor: str | None = None) -> dict:
     except Exception as e:  # noqa: BLE001
         scheduler.record_sync(source, "error", str(e))
         raise HTTPException(status_code=502, detail=f"{source}-Import fehlgeschlagen: {e}")
+    if cursor is None and isinstance(res, dict):
+        cursor = res.pop("cursor", None)
     detail = json.dumps({k: v for k, v in res.items() if k != "columns"}) if isinstance(res, dict) else ""
     scheduler.record_sync(source, "ok", detail, cursor=cursor)
     return res
@@ -53,6 +55,11 @@ def ingest_hevy_routines() -> dict:
 @router.post("/fddb")
 def ingest_fddb(full: bool = False) -> dict:
     return _run("fddb", lambda: fddb.import_fddb(full=full))
+
+
+@router.post("/biss")
+def ingest_biss(full: bool = False) -> dict:
+    return _run("biss", lambda: biss.import_biss(full=full))
 
 
 @router.post("/garmin")
@@ -87,7 +94,9 @@ def ingest_health_connect_pull(full: bool = False) -> dict:
 def refresh_all(full: bool = False) -> dict:
     """Alle Quellen aktualisieren (inkrementell; full=true erzwingt Voll-Reconciliation)."""
     res: dict = {}
-    for src, fn in (("hevy", lambda: hevy.import_hevy(full=full)), ("fddb", lambda: fddb.import_fddb(full=full))):
+    food = (("biss", lambda: biss.import_biss(full=full)) if settings.nutrition_source == "biss"
+            else ("fddb", lambda: fddb.import_fddb(full=full)))
+    for src, fn in (("hevy", lambda: hevy.import_hevy(full=full)), food):
         try:
             res[src] = _run(src, fn)
         except HTTPException as e:

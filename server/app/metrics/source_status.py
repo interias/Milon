@@ -68,6 +68,7 @@ def _garmin_categories(rows: list[GarminDaily], today: date) -> list[dict]:
 def source_status(*, now: datetime | None = None) -> dict:
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     today = now.astimezone(ZoneInfo(settings.timezone)).date()
+    food = "biss" if settings.nutrition_source == "biss" else "fddb"  # only the active food diary is shown
     with Session(engine) as session:
         states = {row.source: row for row in session.exec(select(SyncState)).all()}
         days = session.exec(select(GarminDaily).where(GarminDaily.day <= today).order_by(GarminDaily.day)).all()
@@ -88,7 +89,7 @@ def source_status(*, now: datetime | None = None) -> dict:
             "health_connect": _latest(session, hc_queries),
             "arboleaf": _latest(session, hc_queries[:1]),
             "hevy": _latest(session, [select(func.max(Workout.started_at)).where(Workout.source == "hevy")]),
-            "fddb": _latest(session, [select(func.max(NutritionEntry.eaten_at)).where(NutritionEntry.source == "fddb")]),
+            food: _latest(session, [select(func.max(NutritionEntry.eaten_at)).where(NutritionEntry.source == food)]),
             "garmin": _latest(session, [select(func.max(GarminActivity.started_at))]),
         }
         garmin_days = [row.day.isoformat() for row in days if any(
@@ -98,12 +99,15 @@ def source_status(*, now: datetime | None = None) -> dict:
 
     configured = {"garmin": garmin_configured(), "health_connect": bool(settings.hc_drive_file_id) or (INCOMING_DIR / "health_connect_export.db").is_file(),
                   "arboleaf": bool(settings.body_source_package), "hevy": bool(settings.hevy_api_key),
-                  "fddb": bool(settings.fddb_cookie or (settings.fddb_user and settings.fddb_pw))}
+                  "fddb": bool(settings.fddb_cookie or (settings.fddb_user and settings.fddb_pw)),
+                  "biss": bool(settings.biss_url)}
     specs = [
         ("garmin", "Garmin", "Uhrdaten direkt", 24, "Neue Uhrdaten erscheinen nach der Synchronisierung mit Garmin Connect."),
         ("health_connect", "Health Connect", "Täglicher Export", 48, "Ein erfolgreicher Import kann denselben Export erneut einlesen; das Messdatum bleibt maßgeblich."),
         ("arboleaf", "Arboleaf", "Waage via Health Connect", 48, "Messungen kommen über den Health-Connect-Export. Ohne neue Wägung bleibt das Messdatum unverändert."),
         ("hevy", "Hevy", "Krafttraining", 18, "Ein erfolgreicher Abruf ohne neues Training ist aktuell; Ruhetage sind keine Synchronisationslücke."),
+        ("biss", "BISS", "Ernährungsprotokoll, minütlich", 1, "Das Datenende zeigt den letzten protokollierten Eintrag, nicht die Vollständigkeit eines Tages.")
+        if food == "biss" else
         ("fddb", "FDDB", "Ernährungsprotokoll", 48, "Das Datenende zeigt den letzten protokollierten Eintrag, nicht die Vollständigkeit eines Tages."),
     ]
     sources = []

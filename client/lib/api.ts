@@ -179,6 +179,15 @@ export type NutritionSummary = {
   macro_split: MacroSplit | null; macro_g: { protein: number | null; carb: number | null; fat: number | null } | null; on_target_days_7: number | null;
 };
 export type ProteinPoint = { date: string; protein: number | null; avg7: number | null; days7: number };
+export type MacroPoint = { date: string; value: number | null; avg7: number | null; days7: number };
+export type MacroAmounts = { kcal: number | null; protein: number | null; carb: number | null; fat: number | null };
+export type NutritionToday = MacroAmounts & {
+  date: string; source: "biss" | "fddb"; entries: number; last_entry: string | null; goal: MacroAmounts | null;
+  protein_target: number | null; avg7: MacroAmounts | null; avg7_days: number; split: MacroSplit | null;
+};
+export type NutritionFood = MacroAmounts & { name: string; brand: string | null; count: number; days: number; share: number | null };
+export type NutritionFoods = { days: number; recorded_days: number; favorites: NutritionFood[]; protein: NutritionFood[]; carb: NutritionFood[]; fat: NutritionFood[]; kcal: NutritionFood[] };
+export type NutritionMeals = { days: number; recorded_days: number; meals: (MacroAmounts & { meal: string; label: string; protein_share: number | null })[] };
 export type KcalPoint = { date: string; kcal: number | null; avg7: number | null; days7: number };
 export type ForecastPoint = { date: string; value: number };
 export type Forecast = {
@@ -487,13 +496,13 @@ export type LlmBudget = {
 export type AppSettings = {
   openrouter_model: string; llm_provider: "" | "anthropic" | "openrouter"; llm_provider_resolved: "anthropic" | "openrouter";
   anthropic_model: string; anthropic_effort: "low" | "medium" | "high"; llm_monthly_budget_usd: number; llm_budget: LlmBudget;
-  timezone: string; scheduler_enabled: boolean; run_hr_max: number; body_height_cm: number | null; birth_date: string | null; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; gym_treadmill_incline_pct: number; weather_places: string[]; fddb_user_masked: string;
+  timezone: string; scheduler_enabled: boolean; run_hr_max: number; body_height_cm: number | null; birth_date: string | null; bike_ftp: number; walkpad_stride_m: number; walkpad_incline_pct: number; walkpad_garmin_upload: boolean; walkpad_max_speed_kmh: number; gym_treadmill_incline_pct: number; weather_places: string[]; fddb_user_masked: string; nutrition_source: "biss" | "fddb"; biss_since: string;
   keys: { anthropic_api_key: SettingsKey; openrouter_api_key: SettingsKey; hevy_api_key: SettingsKey; fddb_pw: SettingsKey; fddb_cookie: SettingsKey; fddb_phpsessid: SettingsKey };
 };
 export type SettingsUpdate = {
   openrouter_model?: string; llm_provider?: string; anthropic_model?: string; anthropic_effort?: string;
   llm_monthly_budget_usd?: number; anthropic_api_key?: string; scheduler_enabled?: boolean; run_hr_max?: number; body_height_cm?: number; birth_date?: string; bike_ftp?: number; walkpad_stride_m?: number; walkpad_incline_pct?: number; walkpad_garmin_upload?: boolean; walkpad_max_speed_kmh?: number; gym_treadmill_incline_pct?: number; weather_places?: string[]; openrouter_api_key?: string; hevy_api_key?: string;
-  fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
+  nutrition_source?: string; fddb_user?: string; fddb_pw?: string; fddb_cookie?: string; fddb_phpsessid?: string;
 };
 export type CoachVisual = { id: "weight" | "running" | "strength" | "sleep"; title: string; kind: "line" | "bars"; unit: string; description: string; captured_at: string; points: { date: string; value: number | null }[] };
 export type CoachImage = { url: string; cost_usd: number | null; model: string };
@@ -747,6 +756,10 @@ export const api = {
   // Ernährung
   nutritionSummary: () => get<NutritionSummary>("/metrics/nutrition/summary"),
   nutritionProtein: (days = 30) => get<ProteinPoint[]>(`/metrics/nutrition/protein?days=${days}`),
+  nutritionToday: () => get<NutritionToday>("/metrics/nutrition/today"),
+  nutritionMacro: (macro: "protein" | "carb" | "fat", days = 30) => get<MacroPoint[]>(`/metrics/nutrition/macro?macro=${macro}&days=${days}`),
+  nutritionFoods: (days = 30) => get<NutritionFoods>(`/metrics/nutrition/foods?days=${days}`),
+  nutritionMeals: (days = 30) => get<NutritionMeals>(`/metrics/nutrition/meals?days=${days}`),
   nutritionKcal: (days = 30) => get<KcalPoint[]>(`/metrics/nutrition/kcal?days=${days}`),
   bodySteps: (days = 14) => get<StepsSummary>(`/metrics/body/steps?days=${days}`),
   activityRecent: (limit = 8) => get<Activity[]>(`/metrics/activity/recent?limit=${limit}`),

@@ -59,6 +59,8 @@ def _current() -> dict:
         "llm_monthly_budget_usd": settings.llm_monthly_budget_usd,
         "llm_budget": _budget(),
         "timezone": settings.timezone,
+        "nutrition_source": settings.nutrition_source,
+        "biss_since": settings.biss_since.isoformat(),
         "scheduler_enabled": settings.scheduler_enabled,
         "run_hr_max": settings.run_hr_max,
         "body_height_cm": settings.body_height_cm,
@@ -98,6 +100,7 @@ class SettingsIn(BaseModel):
     llm_monthly_budget_usd: float | None = None
     anthropic_api_key: str | None = None
     scheduler_enabled: bool | None = None
+    nutrition_source: str | None = None  # biss | fddb
     run_hr_max: float | None = None
     body_height_cm: float | None = None
     birth_date: date | None = None
@@ -126,6 +129,8 @@ def _validate_llm(body: SettingsIn) -> None:
         raise HTTPException(status_code=422, detail="Effort: low, medium oder high.")
     if body.llm_monthly_budget_usd is not None and not 0 <= body.llm_monthly_budget_usd < float("inf"):
         raise HTTPException(status_code=422, detail="Budget muss eine Zahl ≥ 0 sein (0 = kein Limit).")
+    if body.nutrition_source is not None and body.nutrition_source not in ("biss", "fddb"):
+        raise HTTPException(status_code=422, detail="Ernährungsquelle: biss oder fddb.")
     if body.bike_ftp is not None and not 0 <= body.bike_ftp <= 1000:
         raise HTTPException(status_code=422, detail="FTP muss zwischen 0 und 1000 W liegen (0 = automatisch).")
     if body.body_height_cm is not None and not 100 < body.body_height_cm < 250:
@@ -174,6 +179,10 @@ def update_settings(body: SettingsIn) -> dict:
             scheduler.start_scheduler()
         else:
             scheduler.shutdown_scheduler()
+
+    if body.nutrition_source is not None:
+        settings.nutrition_source = body.nutrition_source
+        env_updates["NUTRITION_SOURCE"] = body.nutrition_source
 
     # Maximalpuls (Zonen-Basis): 0 = wieder aus Daten ableiten; negatives ignorieren.
     if body.run_hr_max is not None and body.run_hr_max >= 0:

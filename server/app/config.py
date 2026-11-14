@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     fddb_cookie: str = ""
     fddb_phpsessid: str = ""
 
+    # Food diary: "biss" (own tracker, read live over its REST API) or "fddb" (kept as fallback).
+    # Only the active source is synced. BISS counts from biss_since on; FDDB holds the days before.
+    nutrition_source: str = "fddb"
+    biss_url: str = "http://biss-api:2478"  # service name on the shared Docker network milon-biss
+    biss_since: date = date(2026, 11, 14)
+
     # Health Connect via Google Drive: taegliche Export-Zip ziehen.
     # "Jeder mit dem Link"-Inhalte sind per anonymem API-Key NICHT erreichbar (Google blockt das) ->
     # der no-OAuth-Weg ist der keylose Download per DATEI-ID (gdown). Aus dem Datei-Freigabelink

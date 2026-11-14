@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 
 from ..config import INCOMING_DIR, settings
 from ..db import engine
-from ..ingest import fddb, garmin, health_connect, hevy, hevy_routines
+from ..ingest import biss, fddb, garmin, health_connect, hevy, hevy_routines
 from ..models import SyncState
 
 _scheduler: BackgroundScheduler | None = None
@@ -73,11 +73,23 @@ def sync_hevy_routines(force: bool = False) -> dict:
 
 
 def sync_fddb() -> None:
+    if settings.nutrition_source != "fddb":  # parked while BISS is the food diary
+        return
     try:
         res = fddb.import_fddb()
         record_sync("fddb", "ok", json.dumps({k: v for k, v in res.items() if k != "columns"}))
     except Exception as e:  # noqa: BLE001
         record_sync("fddb", "error", str(e))
+
+
+def sync_biss() -> None:
+    if settings.nutrition_source != "biss":
+        return
+    try:
+        res = biss.import_biss()
+        record_sync("biss", "ok", json.dumps({k: v for k, v in res.items() if k != "cursor"}), cursor=res.get("cursor"))
+    except Exception as e:  # noqa: BLE001
+        record_sync("biss", "error", str(e))
 
 
 def sync_garmin() -> None:
@@ -150,6 +162,8 @@ def start_scheduler() -> None:
     sch.add_job(sync_weekly_report, "interval", minutes=30, id="weekly_report", replace_existing=True)
     # Tagsüber alle 30 min, damit „heute gegessen“ auf der Übersicht aktuell ist
     sch.add_job(sync_fddb, "cron", hour="4-23", minute="0,30", id="fddb", replace_existing=True)
+    # BISS läuft lokal: jede Minute fragen, geschrieben wird nur bei geändertem Tagebuch
+    sch.add_job(sync_biss, "interval", minutes=1, id="biss", replace_existing=True)
     sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
                 replace_existing=True, next_run_time=datetime.now())
     sch.add_job(sync_hc_drive, "cron", hour=5, minute=0, id="hc_drive", replace_existing=True)

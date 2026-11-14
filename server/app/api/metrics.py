@@ -102,6 +102,26 @@ def nutrition_kcal(days: int = 30) -> list[dict]:
     return nutrition.kcal_trend(days)
 
 
+@router.get("/nutrition/today")
+def nutrition_today() -> dict:
+    return nutrition.today()
+
+
+@router.get("/nutrition/macro")
+def nutrition_macro(macro: Literal["protein", "carb", "fat"] = "carb", days: int = Query(30, ge=7, le=400)) -> list[dict]:
+    return nutrition.macro_trend(macro, days)
+
+
+@router.get("/nutrition/foods")
+def nutrition_foods(days: int = Query(30, ge=1, le=400), limit: int = Query(8, ge=1, le=30)) -> dict:
+    return nutrition.foods(days, limit)
+
+
+@router.get("/nutrition/meals")
+def nutrition_meals(days: int = Query(30, ge=1, le=400)) -> dict:
+    return nutrition.meals(days)
+
+
 @router.get("/nutrition/daily")
 def nutrition_daily(days: int = 30) -> list[dict]:
     return nutrition.daily(days)

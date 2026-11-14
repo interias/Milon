@@ -1,10 +1,16 @@
-"""Ernährungs-Metriken aus FDDB: Kalorien + Makros (Protein/Kohlenhydrate/Fett).
+"""Ernährungs-Metriken aus dem Ernährungstagebuch (BISS, davor FDDB): Kalorien + Makros.
 Protein-Ziel relativ zum Körpergewicht (g/kg). Reine Funktionen über die DB —
 speisen REST + Coach + MCP."""
 from __future__ import annotations
 
-import pandas as pd
+import re
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
+import pandas as pd
+from sqlalchemy import text
+
+from ..config import settings
 from ..db import engine
 from . import body
 
@@ -116,3 +122,105 @@ def summary() -> dict:
         "macro_g": {"protein": _rounded(p), "carb": _rounded(c), "fat": _rounded(f)},
         "on_target_days_7": on_target,
     }
+
+
+# ---- Makros heute, Lieblingslebensmittel, Mahlzeiten -------------------------------------------
+
+MACROS = {"protein": "protein_g", "carb": "carb_g", "fat": "fat_g"}
+MEALS = (("breakfast", "Frühstück"), ("lunch", "Mittag"), ("snack", "Snack"), ("dinner", "Abend"))
+# FDDB writes the amount in front of the name ("25 g Corny Big", "1 Portion Cappuccino").
+_AMOUNT = re.compile(r"^[\d.,/]+\s*(?:g|ml|kg|l|Portion\w*|Stück\w*|Scheiben?|Becher|Glas|Gläser|Tassen?|EL|TL|"
+                     r"Riegel|Dosen?|Flaschen?|Packung\w*|Tafeln?|Kugeln?)\s+", re.IGNORECASE)
+_COLS = ["kcal", "protein_g", "carb_g", "fat_g"]
+
+
+def macro_trend(macro: str, days: int = 30) -> list[dict]:
+    """Protein, Kohlenhydrate oder Fett je Kalendertag + 7-Tage-Mittel."""
+    return _trend(MACROS[macro], "value", days)
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+
+
+def _entries(days: int) -> pd.DataFrame:
+    cutoff = (_now() - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+    df = _read(text("SELECT eaten_at, description, kcal, protein_g, carb_g, fat_g, source, meal, brand "
+                    "FROM nutrition_entries WHERE eaten_at >= :cutoff"),
+               params={"cutoff": cutoff}, parse_dates=["eaten_at"])
+    df["day"] = pd.to_datetime(df["eaten_at"]).dt.floor("D")  # to_datetime: an empty result has no dtype
+    return df
+
+
+def _food_name(description, source) -> str:
+    name = (description or "").strip() or "Ohne Namen"
+    return _AMOUNT.sub("", name, count=1) if source == "fddb" else name
+
+
+def _pack(values) -> dict:
+    return {"kcal": _rounded(values["kcal"]), "protein": _rounded(values["protein_g"]),
+            "carb": _rounded(values["carb_g"]), "fat": _rounded(values["fat_g"])}
+
+
+def today() -> dict:
+    """Makros des laufenden Tages gegen die Ziele des Tagebuchs, dazu das Mittel der 7 Tage davor.
+    Mit BISS endet der Tag wie dort erst um 04:00 Uhr."""
+    now = _now() - timedelta(hours=4 if settings.nutrition_source == "biss" else 0)
+    day = pd.Timestamp(now.date())
+    df = _entries(7)
+    cur = df[df["day"] == day]
+    tot = {c: float(cur[c].sum()) for c in _COLS}
+    prev = df[df["day"] < day].groupby("day")[_COLS].sum()
+    goal = _read(text("SELECT kcal, protein_g, carb_g, fat_g FROM nutrition_goals WHERE day <= :d "
+                      "ORDER BY day DESC LIMIT 1"), params={"d": day.date().isoformat()})
+    energy = {"protein": tot["protein_g"] * 4, "carb": tot["carb_g"] * 4, "fat": tot["fat_g"] * 9}
+    total = sum(energy.values())
+    return {
+        "date": day.date().isoformat(),
+        "source": settings.nutrition_source,
+        "entries": int(len(cur)),
+        "last_entry": cur["eaten_at"].max().strftime("%H:%M") if not cur.empty else None,
+        **_pack(tot),
+        "goal": _pack(goal.iloc[0]) if not goal.empty else None,
+        "protein_target": protein_target(),
+        "avg7": _pack(prev.mean()) if not prev.empty else None,
+        "avg7_days": int(len(prev)),
+        "split": {k: round(v / total * 100) for k, v in energy.items()} if total > 0 else None,
+    }
+
+
+def foods(days: int = 30, limit: int = 8) -> dict:
+    """Was am häufigsten gegessen wird und woher Protein, Kohlenhydrate, Fett und Kalorien kommen."""
+    df = _entries(days)
+    if df.empty:
+        return {"days": days, "recorded_days": 0, "favorites": [], "protein": [], "carb": [], "fat": [], "kcal": []}
+    df["name"] = [_food_name(d, s) for d, s in zip(df["description"], df["source"])]
+    g = df.groupby("name").agg(count=("name", "size"), days=("day", "nunique"), brand=("brand", "first"),
+                               **{c: (c, "sum") for c in _COLS}).reset_index()
+    totals = {c: float(df[c].sum()) for c in _COLS}
+
+    def top(column: str | None) -> list[dict]:
+        order = g.sort_values(["count", "kcal"] if column is None else [column], ascending=False).head(limit)
+        return [{
+            "name": r["name"], "brand": r["brand"] if isinstance(r["brand"], str) else None,
+            "count": int(r["count"]), "days": int(r["days"]), **_pack(r),
+            "share": round(float(r[column]) / totals[column] * 100) if column and totals[column] > 0 else None,
+        } for _, r in order.iterrows() if column is None or r[column] > 0]
+
+    return {"days": days, "recorded_days": int(df["day"].nunique()), "favorites": top(None),
+            "protein": top("protein_g"), "carb": top("carb_g"), "fat": top("fat_g"), "kcal": top("kcal")}
+
+
+def meals(days: int = 30) -> dict:
+    """Ø je Mahlzeit und erfasstem Tag (nur BISS kennt die Mahlzeit)."""
+    df = _entries(days)
+    df = df[df["meal"].notna()]
+    if df.empty:
+        return {"days": days, "recorded_days": 0, "meals": []}
+    n = int(df["day"].nunique())
+    g = df.groupby("meal")[_COLS].sum()
+    protein_total = float(g["protein_g"].sum())
+    return {"days": days, "recorded_days": n, "meals": [
+        {"meal": key, "label": label, **_pack(g.loc[key] / n),
+         "protein_share": round(float(g.loc[key, "protein_g"]) / protein_total * 100) if protein_total > 0 else None}
+        for key, label in MEALS if key in g.index]}

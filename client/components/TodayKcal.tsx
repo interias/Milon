@@ -6,7 +6,7 @@ import { api, type Tdee } from "@/lib/api";
 import { Card, CardTitle } from "@/components/ui";
 import { de0 } from "@/lib/format";
 
-// Tagesprognose: Verbrauch heute (Grundverbrauch + Verdauung + Bewegung, mindestens typisch) vs. bisher gegessen (FDDB).
+// Tagesprognose: Verbrauch heute (Grundverbrauch + Verdauung + Bewegung, mindestens typisch) vs. bisher gegessen (Ernährungstagebuch).
 export function TodayKcal() {
   const [data, setData] = useState<Tdee | null>(null);
   const [error, setError] = useState(false);
@@ -24,7 +24,7 @@ export function TodayKcal() {
   const activeAvg = data!.active_avg ?? 0;
   return (
     <Card className="mt-4">
-      <CardTitle title="Kalorien heute" sub="Prognose aus deinem Verbrauchsmodell · gegessen laut FDDB" />
+      <CardTitle title="Kalorien heute" sub="Prognose aus deinem Verbrauchsmodell · gegessen laut Ernährungstagebuch" />
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
         <p><span className="text-xs text-muted">Verbrauch heute ca. </span><strong className="text-2xl">{de0(Math.round(forecast / 10) * 10)}</strong> <span className="text-xs text-muted">kcal{data!.tdee_sd != null ? ` ± ${de0(data!.tdee_sd)}` : ""}</span></p>
         <p><span className="text-xs text-muted">Gegessen </span><strong className="text-2xl">{de0(eaten)}</strong> <span className="text-xs text-muted">kcal</span></p>
