@@ -37,6 +37,25 @@ class NutritionEntry(SQLModel, table=True):
     carb_g: Optional[float] = None
     protein_g: Optional[float] = None
     source: str = "fddb"
+    # Only BISS fills these (FDDB exports just a description with the amount in front).
+    grams: Optional[float] = None
+    meal: Optional[str] = None  # breakfast | lunch | snack | dinner
+    food_ref: Optional[str] = None  # BISS food id
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    group_name: Optional[str] = None  # dish the entry was logged with
+
+
+class NutritionGoal(SQLModel, table=True):
+    """Daily targets as the food tracker (BISS) held them on that day."""
+    __tablename__ = "nutrition_goals"
+
+    day: date = Field(primary_key=True)
+    kcal: Optional[float] = None
+    protein_g: Optional[float] = None
+    carb_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    source: str = "biss"
 
 
 class Workout(SQLModel, table=True):

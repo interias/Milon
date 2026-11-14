@@ -68,7 +68,7 @@ def _daily_values(session: Session, metric: str, start: date, end: date) -> dict
     rows = session.exec(select(NutritionEntry).where(
         NutritionEntry.eaten_at >= datetime.combine(start, datetime.min.time()),
         NutritionEntry.eaten_at < datetime.combine(end + timedelta(days=1), datetime.min.time()),
-        NutritionEntry.source == "fddb",
+        NutritionEntry.source.in_(("fddb", "biss")),
     )).all()
     values: dict[date, list[float]] = defaultdict(list)
     for row in rows:

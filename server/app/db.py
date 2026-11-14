@@ -81,6 +81,11 @@ def _run_migrations() -> None:
         for col, typ in (("distance_m", "REAL"), ("duration_s", "REAL"), ("custom_metric", "REAL"), ("notes", "TEXT")):
             if set_cols and col not in set_cols:
                 con.exec_driver_sql(f"ALTER TABLE workout_sets ADD COLUMN {col} {typ}")
+        nut_cols = cols("nutrition_entries")
+        for col, typ in (("grams", "REAL"), ("meal", "TEXT"), ("food_ref", "TEXT"), ("brand", "TEXT"),
+                         ("category", "TEXT"), ("group_name", "TEXT")):
+            if nut_cols and col not in nut_cols:
+                con.exec_driver_sql(f"ALTER TABLE nutrition_entries ADD COLUMN {col} {typ}")
         ex_cols = cols("exercise_sessions")
         for col in ("max_hr", "hr_drift_pct"):
             if col not in ex_cols:

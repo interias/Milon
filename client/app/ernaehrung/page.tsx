@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type NutritionSummary, type ProteinPoint, type KcalPoint } from "@/lib/api";
 import { Card, PageTitle } from "@/components/ui";
 import { EnergyBalance } from "@/components/EnergyBalance";
+import { FoodInsights, MacroTrend, MacrosToday, MealSplit } from "@/components/NutritionInsights";
 import { RunTrendChart } from "@/components/RunTrendChart";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { de, de0, dm } from "@/lib/format";
@@ -27,14 +28,15 @@ export default function Ernaehrung() {
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden." : "Wird geladen …";
   const target = summary?.protein_target;
   return <>
-    <PageTitle title="Ernährung" sub="Protein & geschätzte Energiebilanz" />
-    <div className="grid items-start gap-4 xl:grid-cols-2">
+    <PageTitle title="Ernährung" sub="Makros, Lieblingslebensmittel & geschätzte Energiebilanz" />
+    <MacrosToday />
+    <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">
       <Card>
         <h2 className="text-sm font-semibold">Protein · 7-Tage-Mittel</h2>
         {summary ? <>
           <p className="mt-3 font-display text-3xl font-extrabold">{de0(summary.protein_avg7)} <span className="text-sm font-normal text-muted">g/Tag</span></p>
           <p className="mt-2 text-sm">{target != null ? `Referenzziel ${de0(target)} g/Tag · ${de(summary.protein_per_kg, 1)} g/kg` : "Kein Referenzziel ohne Gewicht verfügbar"}</p>
-          {summary.last_day ? <p className="mt-2 text-xs text-muted">{dm(summary.window_start ?? summary.last_day)}–{dm(summary.last_day)} · {summary.protein_days_7} erfasste Proteintage im 7-Tage-Fenster</p> : <p className="mt-2 text-xs text-muted">Noch keine Ernährungsdaten aus FDDB.</p>}
+          {summary.last_day ? <p className="mt-2 text-xs text-muted">{dm(summary.window_start ?? summary.last_day)}–{dm(summary.last_day)} · {summary.protein_days_7} erfasste Proteintage im 7-Tage-Fenster</p> : <p className="mt-2 text-xs text-muted">Noch keine Ernährungsdaten.</p>}
           <p className="mt-2 text-xs text-muted">Erfasste Tage können unvollständig sein.</p>
         </> : <p className="mt-3 text-xs text-muted" role="status">{state("summary")}</p>}
         <button type="button" onClick={() => setDetails(true)} className="mt-4 rounded border border-line px-3 py-2 text-sm">Makros & Erfassungsdetails</button>
@@ -53,6 +55,14 @@ export default function Ernaehrung() {
         {kcal ? <RunTrendChart label="Kalorien · 7-Tage-Mittel" unit="kcal" showPoints={false} points={kcal.map((point) => ({ date: point.date, value: point.avg7, detail: `${point.days7} erfasste Tage im 7-Tage-Fenster` }))} observations={rawKcal ? kcal.map((point) => ({ date: point.date, value: point.kcal, detail: "Erfasste Tagesmenge" })) : []} /> : <p className="mt-4 text-xs text-muted" role="status">{state("kcal")}</p>}
         <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted"><span>Bis zu 60 Tage · 7-Tage-Mittel</span><label className="flex items-center gap-2"><input type="checkbox" checked={rawKcal} onChange={(event) => setRawKcal(event.target.checked)} />Tageswerte</label></div>
       </Card>
+    </div>
+    <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">
+      <MacroTrend macro="carb" />
+      <MacroTrend macro="fat" />
+    </div>
+    <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">
+      <FoodInsights />
+      <MealSplit />
     </div>
     {details && <RunAnalysisDialog title="Makros & Erfassungsdetails" onClose={() => setDetails(false)}>
       {summary?.last_day ? <div className="space-y-4 text-sm">

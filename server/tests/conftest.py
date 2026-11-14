@@ -23,6 +23,12 @@ def _no_real_hevy(monkeypatch):
     monkeypatch.setattr(settings, "hevy_api_key", "")
 
 
+@pytest.fixture(autouse=True)
+def _default_nutrition_source(monkeypatch):
+    """server/.env selects the live food diary (biss); tests start from the code default and never call BISS."""
+    monkeypatch.setattr(settings, "nutrition_source", "fddb")
+
+
 @pytest.fixture(scope="session")
 def _costs_engine(tmp_path_factory):
     engine = create_engine(f"sqlite:///{tmp_path_factory.mktemp('costs') / 'costs.db'}",

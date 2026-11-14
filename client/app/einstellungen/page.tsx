@@ -59,6 +59,7 @@ export default function Einstellungen() {
   const [places, setPlaces] = useState<string[]>([]);
   const [newPlace, setNewPlace] = useState("");
   const [fddbUser, setFddbUser] = useState("");
+  const [food, setFood] = useState<"biss" | "fddb">("fddb");
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export default function Einstellungen() {
 
   useEffect(() => {
     api.settingsGet()
-      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setHrMax(String(d.run_hr_max ?? "")); setHeight(String(d.body_height_cm ?? "")); setBirth(d.birth_date ?? ""); setFtp(String(d.bike_ftp ?? "")); setPad(d); setPlaces(d.weather_places ?? []); })
+      .then((d) => { setS(d); applyLlm(d); setModel(d.openrouter_model); setScheduler(d.scheduler_enabled); setFood(d.nutrition_source); setHrMax(String(d.run_hr_max ?? "")); setHeight(String(d.body_height_cm ?? "")); setBirth(d.birth_date ?? ""); setFtp(String(d.bike_ftp ?? "")); setPad(d); setPlaces(d.weather_places ?? []); })
       .catch((e) => setErr(String(e)));
   }, []);
 
@@ -108,6 +109,7 @@ export default function Einstellungen() {
       if (!Number.isNaN(gymInc) && gymInc !== s.gym_treadmill_incline_pct) body.gym_treadmill_incline_pct = gymInc;
       const wanted = newPlace.trim() ? [...places, newPlace.trim()] : places;
       if (JSON.stringify(wanted) !== JSON.stringify(s.weather_places ?? [])) body.weather_places = wanted;
+      if (food !== s.nutrition_source) body.nutrition_source = food;
       if (fddbUser.trim()) body.fddb_user = fddbUser.trim();
       (["anthropic_api_key", "openrouter_api_key", "hevy_api_key", "fddb_pw", "fddb_cookie", "fddb_phpsessid"] as SecretKey[]).forEach((k) => {
         if (secrets[k]?.trim()) body[k] = secrets[k].trim();
@@ -117,6 +119,7 @@ export default function Einstellungen() {
       applyLlm(updated);
       setModel(updated.openrouter_model);
       setScheduler(updated.scheduler_enabled);
+      setFood(updated.nutrition_source);
       setHrMax(String(updated.run_hr_max ?? ""));
       setHeight(String(updated.body_height_cm ?? ""));
       setBirth(updated.birth_date ?? "");
@@ -213,14 +216,21 @@ export default function Einstellungen() {
         </Card>
 
         <Card>
-          <CardTitle title="Automatik" sub="Geplante Syncs (Hevy / FDDB / Health Connect)" />
+          <CardTitle title="Automatik" sub="Geplante Syncs (Hevy / Ernährung / Health Connect)" />
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input type="checkbox" checked={scheduler} onChange={(e) => setScheduler(e.target.checked)} className="h-5 w-5" style={{ accentColor: "var(--color-accent)" }} />
             Scheduler aktiv
           </label>
           <p className="mt-2 text-[11px] text-muted">
-            Hevy alle 6 h · FDDB täglich · HC-Ordner-Scan alle 10 min. Manuell über „↻ Daten aktualisieren".
+            Hevy alle 6 h · BISS jede Minute bzw. FDDB alle 30 min · HC-Ordner-Scan alle 10 min. Manuell über „↻ Daten aktualisieren".
           </p>
+          <label className="mt-4 block text-sm">Ernährungstagebuch
+            <select value={food} onChange={(e) => setFood(e.target.value as "biss" | "fddb")} className={INPUT}>
+              <option value="biss">BISS (eigene App, ab {new Date(s.biss_since).toLocaleDateString("de-DE")})</option>
+              <option value="fddb">FDDB (Rückfall)</option>
+            </select>
+          </label>
+          <p className="mt-2 text-[11px] text-muted">Nur die gewählte Quelle wird abgerufen. Der FDDB-Zugang bleibt gespeichert, die alten FDDB-Tage bleiben erhalten.</p>
         </Card>
 
         <Card className="md:col-span-2">
