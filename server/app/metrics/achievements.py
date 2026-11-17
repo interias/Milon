@@ -92,6 +92,23 @@ def _iso(d) -> str:
     return d.isoformat() if hasattr(d, "isoformat") else str(d)
 
 
+def _garmin_indoor_run_km() -> float:
+    """Garmin treadmill runs are stored as runs (type 33); they still count as treadmill km."""
+    import json
+
+    from ..garmin_activity import INDOOR_RUN_TYPES
+    try:
+        rows = running._read("SELECT summary_json FROM garmin_activities WHERE canonical_external_id IS NOT NULL")
+    except Exception:  # noqa: BLE001 -- no Garmin table yet
+        return 0.0
+    total = 0.0
+    for raw in rows["summary_json"]:
+        summary = json.loads(raw)
+        if summary.get("activity_type") in INDOOR_RUN_TYPES:
+            total += float(summary.get("distance_km") or 0)
+    return total
+
+
 def _season(m: int) -> str:
     return ("Winter" if m in (12, 1, 2) else "Frühling" if m in (3, 4, 5)
             else "Sommer" if m in (6, 7, 8) else "Herbst")
@@ -231,6 +248,7 @@ def _build_context() -> SimpleNamespace:
         alls["wk"] = list(zip(iso2["year"].astype(int), iso2["week"].astype(int)))
         c.types_per_week = alls.groupby("wk")["exercise_type"].apply(lambda s: set(s.tolist()))
         c.treadmill_km = float(alls[alls["exercise_type"] == 58]["distance_km"].fillna(0).sum())
+        c.treadmill_km += _garmin_indoor_run_km()
     except Exception:  # noqa: BLE001
         c.run_days = set(runs["dte"]); c.strength_days = set(); c.bike_days = set()
         c.sessions_per_day = pd.Series(dtype=int); c.types_per_week = pd.Series(dtype=object)

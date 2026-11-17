@@ -18,10 +18,13 @@ from .models import ExerciseSession, RunBestEffort, RunMinute
 
 
 SOURCE = "garmin_direct"
-PARSER_VERSION = "garmin-recording-v3"
+PARSER_VERSION = "garmin-recording-v4"
 MAX_POINTS = 100_000
 BEST_DISTANCES = (1000, 5000, 10000, 15000, 20000)
 OUTDOOR_RUN_TYPES = {"running", "trail_running", "track_running", "ultra_run"}
+# Indoor runs become runs too, but stay out of mechanics/insights (OUTDOOR_RUN_TYPES).
+INDOOR_RUN_TYPES = {"treadmill_running", "indoor_running"}
+RUN_TYPES = OUTDOOR_RUN_TYPES | INDOOR_RUN_TYPES
 
 
 class GarminActivity(SQLModel, table=True):
@@ -172,6 +175,19 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
             point["gap"] = gap > 15 or (timer_gap is not None and timer_gap < gap - 0.5)
         series.append(point)
 
+    # Calibrating an indoor run after the fact only changes the summary distance; the recorded
+    # series keeps the watch's own estimate. The calibrated distance wins, scaled over the series.
+    calibration = None
+    recorded = series[-1]["distance_m"] if series else None
+    if summary.get("activity_type") in INDOOR_RUN_TYPES and recorded and summary["distance_km"]:
+        factor = summary["distance_km"] * 1000 / recorded
+        if 0.5 <= factor <= 2 and abs(factor - 1) > 0.001:
+            calibration = round(factor, 4)
+            for point in series:
+                for key in ("distance_m", "speed_m_s"):
+                    if point[key] is not None:
+                        point[key] *= factor
+
     reported = _number(details.get("totalMetricsCount"), 0, MAX_POINTS * 100)
     count = _number(details.get("metricsCount"), 0, MAX_POINTS * 100)
     reasons = []
@@ -230,7 +246,7 @@ def normalize_recording(summary: dict, details: dict) -> tuple[list[dict], dict]
                "reported_points": int(reported) if reported is not None else None,
                "hr_coverage": round(hr_coverage, 4), "speed_coverage": round(speed_coverage, 4),
                "typical_interval_seconds": typical_gap, "reason": " ".join(reasons) or None,
-               "impact_unit_verified": impact_verified,
+               "impact_unit_verified": impact_verified, "calibration_factor": calibration,
                "source": SOURCE}
     return series, quality
 
@@ -359,11 +375,17 @@ def _canonicalize(session: Session, row: GarminActivity, summary: dict, series: 
     start = datetime.fromisoformat(summary["started_at"])
     if not quality["complete"]:
         return
-    if summary.get("activity_type") not in OUTDOOR_RUN_TYPES:
-        quality["reason"] = "Dieser Garmin-Aktivitätstyp wird nicht als Outdoorlauf übernommen; die bisherige Quelle bleibt erhalten."
+    if summary.get("activity_type") not in RUN_TYPES:
+        quality["reason"] = "Dieser Garmin-Aktivitätstyp wird nicht als Lauf übernommen; die bisherige Quelle bleibt erhalten."
         return
     if watch_source_for(start.date(), settings) != GARMIN_PACKAGE:
         quality["reason"] = "Vor dem Garmin-Uhrenwechsel bleibt die bisherige Quelle maßgeblich."
+        return
+    if summary.get("activity_type") in INDOOR_RUN_TYPES and session.exec(select(ExerciseSession).where(
+            ExerciseSession.exercise_type == 58,
+            ExerciseSession.started_at >= start - timedelta(seconds=120),
+            ExerciseSession.started_at <= start + timedelta(seconds=120))).first():
+        quality["reason"] = "Für diesen Laufbandlauf gibt es schon eine Laufband-Einheit; die bisherige Quelle bleibt erhalten."
         return
     candidates = session.exec(select(ExerciseSession).where(
         ExerciseSession.exercise_type == 33,
