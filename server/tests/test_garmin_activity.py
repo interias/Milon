@@ -284,7 +284,30 @@ def test_unsupported_run_subtypes_do_not_duplicate_or_replace_hc_treadmill_sessi
     details = activity.activity_detail("123")
     assert details["available"] and details["series"]
     assert details["quality"]["complete"] and not details["quality"]["canonical"]
-    assert "Aktivitätstyp" in details["quality"]["reason"]
+    assert "Aktivitätstyp" in details["quality"]["reason"] or "Laufband-Einheit" in details["quality"]["reason"]
+
+
+@pytest.mark.parametrize("kind", ["treadmill_running", "indoor_running"])
+def test_calibrated_treadmill_run_becomes_a_run_with_scaled_series(db, kind):
+    api = FakeApi()
+    api.raw["activityTypeDTO"]["typeKey"] = kind
+    api.raw["summaryDTO"]["distance"] = 1800 * 3 * 1.25  # calibrated after the run, series stays at 5.4 km
+    assert activity.sync_activities(api, api.listing())["canonical"] == 1
+    with Session(db) as session:
+        run = session.exec(select(ExerciseSession)).one()
+        assert run.exercise_type == 33 and run.distance_km == pytest.approx(6.75)
+        efforts = {e.distance_m: e.seconds for e in session.exec(select(RunBestEffort)).all()}
+    assert efforts[5000] == pytest.approx(5000 / 3.75, abs=1)
+    details = activity.activity_detail("123")
+    assert details["quality"]["calibration_factor"] == 1.25
+    assert details["series"][-1]["distance_m"] == pytest.approx(6750)
+    assert details["series"][10]["speed_m_s"] == pytest.approx(3.75)
+
+
+def test_uncalibrated_outdoor_mismatch_is_still_rejected(db):
+    api = FakeApi()
+    api.raw["summaryDTO"]["distance"] = 1800 * 3 * 1.25
+    assert activity.sync_activities(api, api.listing())["canonical"] == 0
 
 
 def test_optional_data_failure_preserves_laps_and_zones(db):
