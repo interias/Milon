@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 
 from .. import zwift_worlds
-from ..metrics import gym_cardio, week_plan, weight_phase
+from ..metrics import egym, gym_cardio, week_plan, weight_phase
 from ..metrics import achievements, active_kcal, activity, day_badge, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -539,6 +539,31 @@ def strength_rule_reset(key: str) -> dict:
         return strength_plan.reset_rule(key)
     except KeyError:
         raise HTTPException(404, "Unbekannte Planübung.")
+
+
+class EgymInput(BaseModel):
+    day: date | None = None  # leer = heute
+
+
+@router.get("/strength/egym")
+def strength_egym() -> dict:
+    return egym.listing()
+
+
+@router.post("/strength/egym")
+def strength_egym_add(body: EgymInput) -> dict:
+    try:
+        return egym.add(body.day)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.delete("/strength/egym/{day}")
+def strength_egym_remove(day: date) -> dict:
+    result = egym.remove(day)
+    if result is None:
+        raise HTTPException(404, "An diesem Tag ist kein eGym-Training eingetragen.")
+    return result
 
 
 @router.get("/strength/volume")

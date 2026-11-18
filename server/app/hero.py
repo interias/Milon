@@ -210,7 +210,9 @@ def _hr_max(runs: pd.DataFrame) -> float:
 
 
 def _workouts() -> pd.DataFrame:
-    df = _read("SELECT w.id, w.started_at, COUNT(ws.id) AS sets FROM workouts w "
+    from .metrics import egym
+    df = _read(f"SELECT w.id, w.started_at, w.source, CASE WHEN w.source = '{egym.SOURCE}' THEN {egym.HERO_SETS} "
+               "ELSE COUNT(ws.id) END AS sets FROM workouts w "
                "LEFT JOIN workout_sets ws ON ws.workout_id = w.id AND ws.set_type = 'normal' "
                "WHERE w.started_at IS NOT NULL GROUP BY w.id", parse_dates=["started_at"])
     if not df.empty:
@@ -576,7 +578,8 @@ def ledger(runs, workouts, steps, other, sick, ach, today: date, mods: Mods | No
             buff, tal = xp * buff_pct, xp * mods.workout_talent(d, ran)
             trained = True
             entries.append({"date": d, "kind": "kraft", "xp": xp + buff + tal, "bonus": bonus, "ref": str(w.id),
-                            "label": f"Krafttraining {w.sets} Sätze"})
+                            "label": "eGym-Training" if getattr(w, "source", None) == "egym"
+                            else f"Krafttraining {w.sets} Sätze"})
             day_xp["kraft"] += xp
             day_xp["ruhebonus"] += bonus
             day_xp["buffs"] += buff

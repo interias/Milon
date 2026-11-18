@@ -195,14 +195,16 @@ def _rides(day: date) -> list[dict]:
 
 
 def _strength(day: date) -> list[dict]:
+    from . import egym
+
     with engine.connect() as con:
         rows = con.exec_driver_sql(
             "SELECT w.started_at, w.ended_at, w.title, "
-            "SUM(CASE WHEN COALESCE(s.set_type, 'normal') != 'warmup' THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN s.id IS NOT NULL AND COALESCE(s.set_type, 'normal') != 'warmup' THEN 1 ELSE 0 END), "
             "SUM(CASE WHEN COALESCE(s.set_type, 'normal') != 'warmup' THEN COALESCE(s.weight_kg, 0) * COALESCE(s.reps, 0) ELSE 0 END), "
             "COUNT(DISTINCT s.exercise) "
             "FROM workouts w LEFT JOIN workout_sets s ON s.workout_id = w.id "
-            "WHERE w.source = 'hevy' AND w.started_at >= ? AND w.started_at < ? "
+            f"WHERE w.source IN {egym.SOURCES_SQL} AND w.started_at >= ? AND w.started_at < ? "
             "GROUP BY w.id ORDER BY w.started_at",
             (day.isoformat(), (day + timedelta(days=1)).isoformat())).fetchall()
     out = []

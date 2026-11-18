@@ -30,6 +30,8 @@ async function put<T>(path: string, body?: unknown): Promise<T> {
 }
 
 // Wie put/post, aber mit der Server-Meldung (detail) als Fehlertext — für Formulare mit 409/422.
+export type Egym = { today: string; done_today: boolean; minutes: number; kcal: number; total: number; days: string[] };
+
 async function send<T>(method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
   const r = await fetch(`${BASE}${path}`, {
     method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined,
@@ -923,6 +925,9 @@ export const api = {
     send<StrengthRule>("PUT", `/metrics/strength/rules/${encodeURIComponent(key)}`, { min_reps, target_reps }),
   resetStrengthRule: (key: string) => send<StrengthRule>("DELETE", `/metrics/strength/rules/${encodeURIComponent(key)}`),
   strengthVolume: () => get<WeeklyVolume>("/metrics/strength/volume"),
+  egym: () => get<Egym>("/metrics/strength/egym"),
+  egymAdd: (day?: string) => send<Egym>("POST", "/metrics/strength/egym", { day: day ?? null }),
+  egymRemove: (day: string) => send<Egym>("DELETE", `/metrics/strength/egym/${day}`),
   writeHevyRoutines: () => post<Record<string, unknown>>("/ingest/hevy-routines"),
   // Coach
   coachReports: (limit = 10) => get<Report[]>(`/coach/reports?limit=${limit}`),

@@ -11,7 +11,7 @@ from ..config import settings
 from ..data_cache import cached
 from ..db import engine
 from .. import walkpad
-from . import endurance, running, strength
+from . import egym, endurance, running, strength
 
 RUN = 33
 
@@ -26,7 +26,7 @@ def overview(now: datetime | None = None) -> dict:
     runs = running._runs()
     with engine.connect() as con:
         workouts = pd.read_sql(
-            "SELECT started_at FROM workouts WHERE source='hevy' AND started_at IS NOT NULL",
+            f"SELECT started_at FROM workouts WHERE source IN {egym.SOURCES_SQL} AND started_at IS NOT NULL",
             con, parse_dates=["started_at"],
         )
         steps = pd.read_sql("SELECT day, steps FROM steps_daily", con, parse_dates=["day"])
@@ -172,7 +172,7 @@ def recent(limit: int = 8) -> list[dict]:
             con, parse_dates=["started_at"],
         )
         wos = pd.read_sql(
-            "SELECT started_at, title FROM workouts WHERE source='hevy' ORDER BY started_at DESC LIMIT 25",
+            f"SELECT started_at, title FROM workouts WHERE source IN {egym.SOURCES_SQL} ORDER BY started_at DESC LIMIT 25",
             con, parse_dates=["started_at"],
         )
     items: list[dict] = []
