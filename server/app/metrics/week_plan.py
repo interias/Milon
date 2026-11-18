@@ -123,7 +123,7 @@ def _workouts(first: date, last: date) -> list[dict]:
                                                                                    datetime.min.time()))).all()
     kinds = _safe(lambda: strength_plan._classify(strength_plan._read_sets()), {})
     family = {p.key: p.program for p in strength_plan.PLANS}
-    return [{"id": w.id, "day": w.started_at.date(), "title": w.title or "Krafttraining",
+    return [{"id": w.id, "day": w.started_at.date(), "title": w.title or "Krafttraining", "source": w.source,
              "minutes": round((w.ended_at - w.started_at).total_seconds() / 60) if w.ended_at else None,
              "program": family.get(kinds.get(w.id)), "variant": kinds.get(w.id), "start": w.started_at.isoformat(),
              "end": (w.ended_at or w.started_at + timedelta(hours=1)).isoformat()} for w in rows if w.started_at]
@@ -261,6 +261,8 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             else:
                 variant = None
             title = (plans.get(variant) or {}).get("title") or PROGRAM_TITLE[program]
+            if hit and hit.get("source") == "egym":
+                title = hit["title"]
             items.append({"type": "gym", "planned": True, "title": title, "program": program, "variant": variant,
                           "label": plan_gym.get(key), "color": color, "done": hit, "day": key,
                           "prescription": _prescription(plans, variant or program) if not past and not hit else [],

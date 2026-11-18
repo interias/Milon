@@ -33,7 +33,7 @@ def journal(offset: int = 0, *, now: datetime | None = None) -> dict:
     current_rides = all_rides[(all_rides["started_at"] >= pd.Timestamp(first)) & (all_rides["started_at"] < pd.Timestamp(boundary))]
     previous_rides = all_rides[(all_rides["started_at"] >= pd.Timestamp(previous_first)) & (all_rides["started_at"] < pd.Timestamp(first))]
     with Session(engine) as session:
-        workouts = session.exec(select(Workout).where(Workout.source == "hevy", Workout.started_at >= previous_time,
+        workouts = session.exec(select(Workout).where(Workout.source.in_(("hevy", "egym")), Workout.started_at >= previous_time,
                                                       Workout.started_at < end_time).order_by(Workout.started_at)).all()
         checkins = {entry.day: entry for entry in session.exec(select(CheckIn).where(CheckIn.day >= first, CheckIn.day < boundary)).all()}
         steps = {entry.day: entry.steps for entry in session.exec(select(StepsDaily).where(StepsDaily.day >= first, StepsDaily.day < boundary)).all()}

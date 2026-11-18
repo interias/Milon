@@ -9,6 +9,7 @@ import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { StrengthDetails } from "@/components/StrengthDetails";
 import { NextTraining } from "@/components/NextTraining";
 import { WeeklyVolume } from "@/components/WeeklyVolume";
+import { EgymCard } from "@/components/EgymCard";
 import { RULES_EVENT, ruleChip } from "@/components/StrengthRule";
 import { de, dm } from "@/lib/format";
 
@@ -87,6 +88,7 @@ export default function Kraft() {
 
   return <>
     <PageTitle title="Kraft" sub="Stärkeentwicklung & Training" />
+    <div className="mb-4"><EgymCard /></div>
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-sm font-semibold">Gesamtstärke</h2>

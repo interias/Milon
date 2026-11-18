@@ -36,7 +36,7 @@ def _inputs(cutoff):
                            "JOIN workouts w ON w.id=ws.workout_id WHERE w.source='hevy' AND ws.set_type='normal' "
                            "AND ws.weight_kg > 0 AND ws.reps > 0 AND w.started_at <= ?", connection,
                            params=(cutoff.isoformat(sep=" "),), parse_dates=["started_at"])
-        workouts = pd.read_sql("SELECT started_at FROM workouts WHERE source='hevy' AND started_at <= ?", connection,
+        workouts = pd.read_sql("SELECT started_at FROM workouts WHERE source IN ('hevy', 'egym') AND started_at <= ?", connection,
                                params=(cutoff.isoformat(sep=" "),), parse_dates=["started_at"])
     sessions = sessions[(sessions.started_at <= cutoff) & (sessions.ended_at <= cutoff)].copy()
     if not sets.empty:

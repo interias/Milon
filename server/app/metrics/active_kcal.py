@@ -10,7 +10,7 @@ Alles netto, also über dem Ruheumsatz (1 MET = 1 kcal je kg und Stunde), damit 
   die keine aufgezeichnete Fahrt überlappt.
 - Laufband: ACSM mit Steigung (`walkpad.energy`), alle Walks; dazu Laufband-Sätze im Gym (`gym_cardio`).
 - Gym (Hevy): MET 3,5 (Krafttraining, mehrere Übungen, 8–15 Wdh.) für die Workout-Zeit ohne Cardio-Sätze;
-  Spinning zählt zu Rad, Treppe bleibt Gym (eigene MET, `gym_cardio`).
+  Spinning zählt zu Rad, Treppe bleibt Gym (eigene MET, `gym_cardio`). eGym: Pauschale je Training (`egym`).
 Garmins activeKilocalories steht nur als Vergleich daneben. Nur Anzeige — nie zum adaptiven TDEE addieren."""
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import pandas as pd
 from sqlalchemy import inspect
 
 from .. import garmin_daily, walkpad
-from . import gym_cardio
+from . import egym, gym_cardio
 from ..config import settings
 from ..db import engine
 
@@ -103,6 +103,9 @@ def compute(start: date, end: date) -> tuple[dict[date, dict], dict[date, int]]:
             "SELECT external_id, started_at, ended_at FROM workouts "
             "WHERE source='hevy' AND started_at IS NOT NULL AND ended_at IS NOT NULL"
         ).fetchall()
+        flat_gym = con.exec_driver_sql(
+            "SELECT started_at FROM workouts WHERE source=? AND started_at IS NOT NULL", (egym.SOURCE,)
+        ).fetchall()
         steps = con.exec_driver_sql("SELECT day, steps FROM steps_daily WHERE day BETWEEN ? AND ?",
                                     (start.isoformat(), end.isoformat())).fetchall()
 
@@ -130,6 +133,11 @@ def compute(start: date, end: date) -> tuple[dict[date, dict], dict[date, int]]:
         hours = (finish - begin).total_seconds() / 3600
         if start <= begin.date() <= end and 0 < hours <= 4 and (kg := _kg(weights, begin.date())):
             _add(out, begin.date(), "gym", (GYM_MET - 1) * kg * max(0.0, hours - cardio_hours.get(wid, 0)))
+
+    for (started,) in flat_gym:
+        day = datetime.fromisoformat(str(started)).date()
+        if start <= day <= end:
+            _add(out, day, "gym", egym.KCAL)
 
     everyday: dict[date, int] = {}
     stride = settings.walkpad_stride_m
