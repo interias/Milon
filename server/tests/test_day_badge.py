@@ -124,6 +124,21 @@ def test_badge_collects_every_source_without_coordinates(db, monkeypatch):
         assert all(0 <= v <= 1 for point in item["shape"] or [] for v in point)
 
 
+def test_walks_with_same_incline_are_merged(db, monkeypatch):
+    monkeypatch.setattr(walkpad, "_weights", lambda: "w")
+    monkeypatch.setattr(cycling, "_weight_at", lambda weights, day: 70.0)
+    with Session(db) as session:
+        for sid, hour, incline in [("a", 6, 6), ("b", 12, 6), ("c", 18, 0)]:
+            session.add(walkpad.WalkpadSession(id=sid, started_at=datetime(2026, 11, 8, hour), started_at_utc=0,
+                                               ended_at_utc=0, moving_s=1800, distance_m=2000, incline_pct=incline))
+        session.commit()
+    walks = day_badge.badge()["walks"]
+    six = walkpad.energy(2000, 1800, 6, 70.0)["kcal"]
+    assert [(w["incline_pct"], w["count"], w["km"], w["minutes"]) for w in walks] == [(6, 2, 4.0, 60.0), (0, 1, 2.0, 30.0)]
+    assert walks[0]["time"] == "06:00" and walks[0]["steps"] == walkpad.steps_of(4000)
+    assert walks[0]["kcal"] == 2 * six and walks[1]["kcal"] == walkpad.energy(2000, 1800, 0, 70.0)["kcal"]
+
+
 def test_empty_day_and_api(db):
     result = day_badge.badge(DAY - timedelta(days=3))
     assert result["empty"] and not result["is_today"] and result["sessions"] == 0 and result["steps"] is None

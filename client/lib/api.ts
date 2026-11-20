@@ -79,7 +79,7 @@ export type BadgeShape = [number, number][];
 export type DayBadgeRun = { time: string; km: number | null; minutes: number | null; pace_s: number | null; avg_hr: number | null; shape: BadgeShape | null };
 export type DayBadgeRide = { kind: "outdoor" | "indoor" | "detected"; time: string; km: number | null; minutes: number | null; world: string | null; avg_power_w: number | null; elevation_m: number | null; shape: BadgeShape | null };
 export type DayBadgeStrength = { time: string; title: string; minutes: number | null; sets: number; exercises: number; tonnage_kg: number };
-export type DayBadgeWalk = { time: string; minutes: number | null; km: number | null; incline_pct: number | null; steps: number };
+export type DayBadgeWalk = { time: string; count: number; minutes: number | null; km: number | null; incline_pct: number | null; steps: number; kcal: number | null };
 export type DayBadge = {
   date: string; weekday: string; is_today: boolean; steps: number | null; step_goal: number; active_kcal: number | null;
   active_minutes: number; sessions: number; km: { run: number; ride: number; zwift: number; walk: number };

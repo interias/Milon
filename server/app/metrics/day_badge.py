@@ -227,8 +227,28 @@ def _walks(day: date) -> list[dict]:
             "SELECT started_at, moving_s, distance_m, incline_pct FROM walkpad_sessions "
             "WHERE started_at >= ? AND started_at < ? ORDER BY started_at",
             (day.isoformat(), (day + timedelta(days=1)).isoformat())).fetchall()
-    return [{"time": _clock(s), "minutes": _num((m or 0) / 60), "km": _num((d or 0) / 1000, 2),
-             "incline_pct": _num(i or 0), "steps": walkpad.steps_of(d or 0)} for s, m, d, i in rows]
+    from . import cycling
+
+    weights = _safe(walkpad._weights, default=None)
+    # One line per incline: what counts for the day is total distance, time, steps and kcal.
+    groups: dict[float, dict] = {}
+    for s, m, d, i in rows:
+        begin = pd.Timestamp(s)
+        kg = cycling._weight_at(weights, begin.date()) if weights is not None else None
+        kcal = walkpad.energy(d or 0, m or 0, i or 0, kg)["kcal"]
+        g = groups.setdefault(float(i or 0), {"time": _clock(begin), "count": 0, "moving_s": 0.0,
+                                              "distance_m": 0.0, "kcal": 0, "kcal_known": True})
+        g["count"] += 1
+        g["moving_s"] += m or 0
+        g["distance_m"] += d or 0
+        if kcal is None:
+            g["kcal_known"] = False
+        else:
+            g["kcal"] += kcal
+    return [{"time": g["time"], "count": g["count"], "minutes": _num(g["moving_s"] / 60),
+             "km": _num(g["distance_m"] / 1000, 2), "incline_pct": _num(incline),
+             "steps": walkpad.steps_of(g["distance_m"]),
+             "kcal": g["kcal"] if g["kcal_known"] else None} for incline, g in groups.items()]
 
 
 def _steps(day: date) -> int | None:

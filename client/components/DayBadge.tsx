@@ -43,8 +43,9 @@ function rowsAndTiles(d: DayBadge): { rows: Row[]; tiles: Tile[] } {
   }
   for (const s of d.strength) rows.push({ color: C.gym, title: s.title || "Krafttraining",
     detail: join([s.exercises > 0 && `${s.exercises} Übungen`, s.sets > 0 && `${s.sets} Sätze`, s.tonnage_kg > 0 && `${n1(s.tonnage_kg / 1000)} t`, s.minutes != null && `${n0(s.minutes)} min`]) });
-  for (const w of d.walks) rows.push({ color: C.walk, title: "Laufband",
-    detail: join([w.km != null && `${n1(w.km, 2)} km`, w.minutes != null && `${n0(w.minutes)} min`, w.incline_pct ? `${n0(w.incline_pct)} % Steigung` : null]) });
+  for (const w of d.walks) rows.push({ color: C.walk, title: w.count > 1 ? `Laufband · ${w.count}×` : "Laufband",
+    detail: join([w.km != null && `${n1(w.km, 2)} km`, w.minutes != null && `${n0(w.minutes)} min`, w.incline_pct ? `${n0(w.incline_pct)} %` : null,
+      w.steps > 0 && `${n0(w.steps)} Schritte`, w.kcal != null && `${n0(w.kcal)} kcal`]) });
   return { rows, tiles: tiles.slice(0, 4) };
 }
 
