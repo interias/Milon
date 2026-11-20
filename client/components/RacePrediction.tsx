@@ -43,7 +43,7 @@ export function RacePrediction() {
                       <span className={d.reliable ? "font-semibold text-accent" : "font-semibold"}>{dur(c.seconds)}</span>
                       <span className="block text-[11px] text-muted">{c.at_floor ? "wie bisher" : `± ${dur(c.pm)}`}</span>
                       <span className="block text-[11px] text-muted" title={c.beyond_bpm > 0 ? `${c.beyond_bpm} bpm über deinem bisher höchsten Ø-Puls im Training` : undefined}>
-                        Ø {c.race_hr} bpm{c.beyond_bpm > 0 && " ↑"}
+                        {c.race_hr == null ? "Sprint" : <>Ø {c.race_hr} bpm{c.beyond_bpm > 0 && " ↑"}</>}
                       </span>
                     </> : "–"}
                   </td>
@@ -61,6 +61,7 @@ export function RacePrediction() {
           <li><strong>Bisher:</strong> deine Bestzeit der letzten 90 Tage, mit der Riegel-Formel auf andere Strecken umgerechnet. Das hast du im Training schon geschafft.</li>
           <li><strong>HFmax {scenarios.join(" / ")}:</strong> der Puls, den du im Rennen halten müsstest (5 km 95 %, 10 km 92 %, Halbmarathon 88 %, Marathon 83 % von HFmax). Die zweite Spalte ist vorsichtiger: weniger Puls, den du halten kannst.</li>
           <li>Die Zeit ist das Mittel aus zwei Rechnungen: (1) aus {data.model?.runs} Läufen gelernt, wie schnell du bei welchem Puls bist ({data.model?.hr_lo}–{data.model?.hr_hi} bpm), und (2) deine beste 5-/10-km-Zeit, um den Puls-Unterschied zum Renn-Puls hochgerechnet. Allein lag (1) im Rückblick 3 % zu langsam, (2) 4 % zu schnell, das Mittel traf auf 1 % genau.</li>
+          <li><strong>400 m und 1 km:</strong> aus der 5-km-Prognose mit Riegel heruntergerechnet. Der Puls steigt bei so kurzen Strecken zu langsam, um etwas zu sagen („Sprint“). Wie viel Endspurt du hast, weiß Milon nicht — echte Sprints können schneller sein.</li>
           <li>± = eine Standardabweichung, rund zwei von drei Läufen liegen darin. „wie bisher“ = bei diesem Puls nicht schneller als deine Bestzeit. ↑ = mehr Puls als in deinem Training, dort ist die Hochrechnung ungeprüft.</li>
         </ul>
       </details>

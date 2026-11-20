@@ -245,8 +245,8 @@ export type RunRecords = {
   biggest_week?: { km: number; week: string; runs: number };
 };
 export type BestEfforts = { distances: BestEffortDist[]; top: number; records?: RunRecords };
-export type RaceCell = { hr_max: number; race_hr: number; pct: number; seconds: number; fast: number; slow: number; pm: number; at_floor: boolean; beyond_bpm: number };
-export type RaceRow = { label: string; distance_m: number; floor: { seconds: number; from: string; measured: boolean } | null; cells: (RaceCell | null)[]; reliable: boolean; note: string | null };
+export type RaceCell = { hr_max: number; race_hr: number | null; pct: number | null; seconds: number; fast: number; slow: number; pm: number; at_floor: boolean; beyond_bpm: number };
+export type RaceRow = { label: string; distance_m: number; floor: { seconds: number; from: string; measured: boolean } | null; cells: (RaceCell | null)[]; reliable: boolean; sprint?: boolean; note: string | null };
 export type RacePrediction = {
   hr_max_setting?: number; scenarios?: number[]; longest_km?: number; caveat?: string;
   model?: { runs: number; hr_lo: number; hr_hi: number; kmh_per_bpm: number } | null;
