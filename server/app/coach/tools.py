@@ -103,7 +103,11 @@ TOOLS = [
     _fn("get_run_records", "Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz "
         "(1/5/10/15/20 km = schnellstes zusammenhaengendes Fenster INNERHALB eines Laufs, nicht "
         "die Gesamtzeit) + weitere Rekorde (laengster Lauf, groesste Wochendistanz, beste aerobe "
-        "Effizienz). Distanzen ohne qualifizierten Lauf haben eine leere Liste (nie so weit gelaufen)."),
+        "Effizienz). Distanzen ohne qualifizierten Lauf haben eine leere Liste (nie so weit gelaufen). "
+        "race_prediction = Wettkampf-Prognose 5 km bis Marathon je HFmax-Annahme (180/170): "
+        "seconds ± pm beim noetigen Renn-Puls race_hr, floor = Riegel aus Bestzeiten; "
+        "reliable=false heisst ohne Grundlage (Strecke > 1,5 x laengster Lauf). Nur Schaetzung "
+        "aus Training, kein Rennen gelaufen."),
     _fn("get_run_achievements", "Lauf-Achievements (sammelbare Trophaeen, WoW-Style): summary "
         "(Gesamtpunkte, erreichte/gesamte Trophaeen, Laeufer-Level+Titel), Liste der erreichten "
         "Erfolge und 'almost' (fast geschafft, hoechster Fortschritt) — gut zum Motivieren."),
@@ -201,7 +205,8 @@ def dispatch(name: str, args: dict):
         from ..metrics import week_plan
         return week_plan.compact(max(-52, min(8, int(args.get("offset", 0)))))
     if name == "get_run_records":
-        return running.best_efforts()
+        from ..metrics import race_prediction
+        return {**running.best_efforts(), "race_prediction": race_prediction.predict()}
     if name == "get_hero":
         from .. import hero
         return hero.coach_summary()

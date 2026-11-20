@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, model_validator
 
 from .. import zwift_worlds
-from ..metrics import egym, gym_cardio, week_plan, weight_phase
+from ..metrics import egym, gym_cardio, race_prediction, week_plan, weight_phase
 from ..metrics import achievements, active_kcal, activity, day_badge, body, composition, cycling, endurance, health, nutrition, run_analysis, run_fitness_service, running, strength, strength_plan
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
@@ -460,6 +460,11 @@ def running_ef() -> dict:
 @router.get("/running/best-efforts")
 def running_best_efforts(top: int = 3) -> dict:
     return running.best_efforts(top)
+
+
+@router.get("/running/race-prediction")
+def running_race_prediction() -> dict:
+    return race_prediction.predict()
 
 
 @router.get("/running/achievements")
