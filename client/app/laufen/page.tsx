@@ -12,6 +12,7 @@ import { RunningMoreAnalyses } from "@/components/RunningMoreAnalyses";
 import { RunAnalysisDialog } from "@/components/RunAnalysisDialog";
 import { RunZones } from "@/components/RunZones";
 import { RunRoutes } from "@/components/RunRoutes";
+import { RacePrediction } from "@/components/RacePrediction";
 import { RunReferenceCard } from "@/components/RunReference";
 import { RunningLoad } from "@/components/RunningLoad";
 import { EnduranceFitnessCard } from "@/components/EnduranceFitness";
@@ -136,6 +137,7 @@ export default function Laufen() {
             </table>
         </> : <p className="text-xs text-muted">Noch keine Bestzeiten verfügbar.</p>}
         <p className="mt-2 text-[11px] text-muted">Schnellster Abschnitt innerhalb eines Laufs</p>
+        <RacePrediction />
         {ach && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
           <p className="text-sm"><strong>{ach.summary.earned} Erfolge</strong><span className="text-muted"> · {de0(ach.summary.points)} Punkte · Level, Beute & Truhe in der Heldenreise</span></p>
           <Link className={linkClass} href="/heldenreise#sammlung">Zur Heldenreise</Link>

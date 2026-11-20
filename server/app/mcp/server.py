@@ -121,8 +121,12 @@ def get_run_records() -> dict:
     """Lauf-Bestzeiten: Top-3 Best-Effort-Splits je Standard-Distanz (1/5/10/15/20 km =
     schnellstes zusammenhängendes Fenster INNERHALB eines Laufs, nicht die Gesamtzeit) +
     weitere Rekorde (längster Lauf, größte Wochendistanz, beste aerobe Effizienz).
-    Distanzen ohne qualifizierten Lauf haben eine leere entries-Liste (nie so weit gelaufen)."""
-    return running.best_efforts()
+    Distanzen ohne qualifizierten Lauf haben eine leere entries-Liste (nie so weit gelaufen).
+    race_prediction = Wettkampf-Prognose 5 km bis Marathon je HFmax-Annahme (180/170): Zeit
+    ± Unsicherheit beim nötigen Renn-Puls, floor = Riegel aus Bestzeiten; reliable=false =
+    ohne Grundlage. Schätzung aus Training, nicht aus Rennen."""
+    from ..metrics import race_prediction
+    return {**running.best_efforts(), "race_prediction": race_prediction.predict()}
 
 
 @mcp.tool()
