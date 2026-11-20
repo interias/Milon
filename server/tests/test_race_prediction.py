@@ -72,6 +72,15 @@ def test_anchor_averages_best_effort_shifted_to_race_hr(monkeypatch):
     assert abs(ten["cells"][0]["seconds"] - 10000 / ((model_v + anchor_v) / 2) * 60) <= 1
 
 
+def test_short_distances_scale_the_5k_prediction_without_hr(monkeypatch):
+    _setup(monkeypatch, _runs())
+    rows = race_prediction.predict(TODAY)["distances"]
+    assert [d["label"] for d in rows][:3] == ["400 m", "1 km", "5 km"]
+    five, one = rows[2]["cells"][0], rows[1]["cells"][0]
+    assert one["race_hr"] is None and rows[1]["sprint"] is True
+    assert abs(one["seconds"] - five["seconds"] * 0.2 ** race_prediction.RIEGEL_K) <= 1
+
+
 def test_marathon_without_long_runs_is_not_reliable(monkeypatch):
     _setup(monkeypatch, _runs(km=15.0))
     out = race_prediction.predict(TODAY)
@@ -90,4 +99,4 @@ def test_endpoint_is_json(monkeypatch):
     app = FastAPI()
     app.include_router(metrics.router)
     r = TestClient(app).get("/metrics/running/race-prediction")
-    assert r.status_code == 200 and len(r.json()["distances"]) == 4
+    assert r.status_code == 200 and len(r.json()["distances"]) == 6

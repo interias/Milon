@@ -25,6 +25,8 @@ DISTANCES = (("5 km", 5000.0), ("10 km", 10000.0), ("Halbmarathon", 21097.5), ("
 # Typischer Ø-Puls im Rennen in % HFmax (Hobbyläufer, Mitte der Literaturspannen).
 RACE_HR_PCT = {"5 km": 0.95, "10 km": 0.92, "Halbmarathon": 0.88, "Marathon": 0.83}
 RIEGEL_K = 1.06
+# Kurzstrecken ohne Puls-Bezug (Puls steigt zu langsam): aus der 5-km-Prognose per Riegel.
+SHORT = (("400 m", 400.0), ("1 km", 1000.0))
 FIT_DAYS = 120
 BEST_DAYS = 90
 MIN_RUNS = 8
@@ -83,18 +85,22 @@ def predict(today: date | None = None, scenarios: tuple[float, ...] = SCENARIOS)
     model = _fit(fit_df, today_ts) if len(fit_df) >= MIN_RUNS else None
 
     best = _best_efforts(today_ts - timedelta(days=BEST_DAYS))
+    anchors = {int(d): float(g["seconds"].min()) for d, g in best.groupby("distance_m")
+               if int(d) in (1000, 5000, 10000)}
     best = best[best["distance_m"].isin([5000, 10000])]
-    anchors = {int(d): float(g["seconds"].min()) for d, g in best.groupby("distance_m")}
     with_hr = best[best["avg_hr"].between(100, 200)]
 
     hr_seen = float(fit_df["avg_hr"].max()) if model else None
+
+    def floor_for(dist: float) -> dict | None:
+        if not anchors:
+            return None
+        src_d, src_t = min(((d, t * (dist / d) ** RIEGEL_K) for d, t in anchors.items()), key=lambda p: p[1])
+        return {"seconds": round(src_t), "from": f"{src_d // 1000} km", "measured": src_d == dist}
+
     rows = []
     for label, dist in DISTANCES:
-        floor = None
-        if anchors:
-            src_d, src_t = min(((d, t * (dist / d) ** RIEGEL_K) for d, t in anchors.items()), key=lambda p: p[1])
-            floor = {"seconds": round(src_t), "from": f"{int(src_d // 1000)} km",
-                     "measured": src_d == dist}
+        floor = floor_for(dist)
         cells = []
         if model:
             fn, slope = model
@@ -128,6 +134,26 @@ def predict(today: date | None = None, scenarios: tuple[float, ...] = SCENARIOS)
                                                    "für diese Strecke fehlt die Grundlage."})
     if not model and not anchors:
         return {}
+    five = rows[0]["cells"]
+    short = []
+    for label, dist in SHORT:
+        floor = floor_for(dist)
+        f = (dist / 5000) ** RIEGEL_K
+        cells = []
+        for c in five:
+            if c is None:
+                cells.append(None)
+                continue
+            mid, fast, slow = c["seconds"] * f, c["fast"] * f, c["slow"] * f
+            at_floor = bool(floor and mid >= floor["seconds"])
+            if floor:
+                mid, slow = min(mid, floor["seconds"]), min(slow, floor["seconds"])
+            cells.append({"hr_max": c["hr_max"], "race_hr": None, "pct": None,
+                          "seconds": round(mid), "fast": round(fast), "slow": round(slow),
+                          "pm": round(c["pm"] * f), "at_floor": at_floor, "beyond_bpm": 0})
+        short.append({"label": label, "distance_m": dist, "floor": floor, "cells": cells,
+                      "reliable": True, "sprint": True, "note": None})
+    rows = short + rows
     return {
         "hr_max_setting": round(hrmax), "hr_max_source": hr_src,
         "scenarios": [round(s) for s in scenarios] if model else [],
@@ -139,5 +165,6 @@ def predict(today: date | None = None, scenarios: tuple[float, ...] = SCENARIOS)
         "caveat": "Mitte = Mittel aus Puls-Modell und deiner besten Zeit, beide auf den typischen "
                   "Renn-Puls hochgerechnet (5 km 95 %, 10 km 92 %, HM 88 %, Marathon 83 % HFmax); ± = eine "
                   "Standardabweichung inkl. Tagesform. Untergrenze = Riegel aus deinen Bestzeiten "
-                  "(90 T). Über deinen bisher höchsten Ø-Puls hinaus ist die Hochrechnung ungeprüft.",
+                  "(90 T). Über deinen bisher höchsten Ø-Puls hinaus ist die Hochrechnung ungeprüft. "
+                  "400 m und 1 km: aus der 5-km-Prognose per Riegel, ohne Puls (Sprint).",
     }
