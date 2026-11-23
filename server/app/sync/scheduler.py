@@ -123,7 +123,7 @@ def sync_weekly_report() -> None:
 
 def sync_hc_if_new() -> None:
     """Importiert die HC-DB nur, wenn sich die Datei seit dem letzten Import geaendert hat."""
-    if not HC_DB.exists():
+    if not settings.health_connect_enabled or not HC_DB.exists():
         return
     mtime = str(int(HC_DB.stat().st_mtime))
     with Session(engine) as s:
@@ -138,7 +138,7 @@ def sync_hc_if_new() -> None:
 
 def sync_hc_drive() -> None:
     """Täglicher Pull der HC-Export-Zip aus Drive (wenn HC_DRIVE_FILE_ID gesetzt)."""
-    if not settings.hc_drive_file_id:
+    if not settings.health_connect_enabled or not settings.hc_drive_file_id:
         return
     from ..ingest import drive
     try:
@@ -164,9 +164,10 @@ def start_scheduler() -> None:
     sch.add_job(sync_fddb, "cron", hour="4-23", minute="0,30", id="fddb", replace_existing=True)
     # BISS läuft lokal: jede Minute fragen, geschrieben wird nur bei geändertem Tagebuch
     sch.add_job(sync_biss, "interval", minutes=1, id="biss", replace_existing=True)
-    sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
-                replace_existing=True, next_run_time=datetime.now())
-    sch.add_job(sync_hc_drive, "cron", hour=5, minute=0, id="hc_drive", replace_existing=True)
+    if settings.health_connect_enabled:
+        sch.add_job(sync_hc_if_new, "interval", minutes=10, id="hc_scan",
+                    replace_existing=True, next_run_time=datetime.now())
+        sch.add_job(sync_hc_drive, "cron", hour=5, minute=0, id="hc_drive", replace_existing=True)
     sch.start()
     _scheduler = sch
 
