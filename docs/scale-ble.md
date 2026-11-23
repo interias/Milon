@@ -74,6 +74,8 @@ Zeit `0x3296e6ea` = 16:58:34 UTC, r1/r2 = 0). Die Waage löscht einen Datensatz,
 
 ## Bereitschaft: Seite offen, draufstellen, fertig
 
+Am 2026-11-23 an der echten CS20L bestätigt (Handy, Bereitschaft).
+
 Ein Tipp auf „Wiegen“ wählt die Waage (Chrome-Dialog). Danach ist die Karte **in Bereitschaft** (`watchScale` im Treiber):
 Sie versucht alle 3 s, die Waage zu verbinden (mit `watchAdvertisements()`, falls Chrome es anbietet, erst beim Funksignal).
 Wacht die Waage auf, weil man draufsteigt, verbindet sich die Seite, holt die Wiegung (live oder aus dem Speicher) und speichert sie.
