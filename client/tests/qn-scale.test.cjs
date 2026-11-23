@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { hex, isEmptyStoredFrame, parseInfoFrame, parseLiveFrame, parseStoredFrame, withChecksum } = require('../lib/scale/qnScale.ts');
+const { hex, isEmptyStoredFrame, qnTimeToIso, parseInfoFrame, parseLiveFrame, parseStoredFrame, withChecksum } = require('../lib/scale/qnScale.ts');
 
 const frame = (...bytes) => Uint8Array.from(bytes);
 
@@ -70,4 +70,20 @@ test('real 0x12 info frame of the CS20L: protocol type 0xff, weight factor /10',
   const d = frame(0x12, 0x12, 0xff, 0x9f, 0x35, 0x05, 0x00, 0x05, 0xff, 0x12, 0x07, 0x15, 0x00, 0x00, 0x05, 0x9f, 0x32, 0x04);
   assert.equal(parseInfoFrame(d, 100), 10);
   assert.equal(hex(withChecksum([0x13, 0x09, 0xff, 0x01, 0x10, 0, 0, 0, 0])), '13 09 ff 01 10 00 00 00 2c');
+});
+
+test('real stored record of the CS20L: 76.75 kg at 16:58:34 UTC (scale clock set by us)', () => {
+  const d = frame(0x23, 0x14, 0xff, 0x01, 0x01, 0xf0, 0xea, 0xe6, 0x96, 0x32, 0x1d, 0xfb, 0, 0, 0, 0, 0, 0, 0, 0xd8);
+  const f = parseStoredFrame(d);
+  assert.equal(f.kg, 76.75);
+  assert.equal(isEmptyStoredFrame(f), false);
+  // the time we sent 22 min later was 0x3296ec2e → the record is 1348 s older
+  assert.equal(0x3296ec2e - f.recTime, 1348);
+  assert.equal(qnTimeToIso(f.recTime, Date.parse('2026-11-23T17:30:00Z')), '2026-11-23T16:58:34.000Z');
+});
+
+test('implausible scale clock gives no time', () => {
+  const now = Date.parse('2026-11-23T16:30:00Z');
+  assert.equal(qnTimeToIso(0, now), null); // clock never set → year 2000
+  assert.equal(qnTimeToIso(Math.floor(now / 1000) - 946_702_800 + 3600, now), null); // one hour ahead
 });
