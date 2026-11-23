@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ScaleMeasurement } from "@/lib/api";
 import { pickScale, rememberedScale, watchScale, type ScaleReading } from "@/lib/scale/qnScale";
-import { de, dm } from "@/lib/format";
+import { de, dm, isToday } from "@/lib/format";
 
 type Phase = "idle" | "measuring" | "saving" | "saved" | "error";
 export const WEIGHT_SAVED = "milon:weight-saved";
@@ -250,5 +250,25 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
         </li>)}
       </ul>
     </details>}
+  </div>;
+}
+
+// Übersicht: einmal am Tag wiegen reicht — nach der heutigen Wiegung nur eine Zeile, ausklappbar.
+export function DailyWeighCard({ onSaved }: { onSaved?: () => void }) {
+  const [today, setToday] = useState<ScaleMeasurement | null | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    api.scaleList(2).then((r) => setToday(r.measurements.find((m) => isToday(m.measured_at)) ?? null)).catch(() => setToday(null));
+  }, []);
+  if (today === undefined) return null; // kurz laden, sonst springt die Karte
+  if (today && !open) {
+    return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3 text-sm">
+      <span><span className="text-accent">✓</span> Heute gewogen: <b>{de(today.weight_kg, 1)} kg</b> um {time(today.measured_at)}</span>
+      <button type="button" onClick={() => setOpen(true)} className="py-1 text-xs text-muted underline underline-offset-4">Erneut wiegen</button>
+    </div>;
+  }
+  return <div className="mb-4 rounded-card border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(20,32,31,0.04)] sm:p-5">
+    {today && <button type="button" onClick={() => setOpen(false)} className="mb-3 py-1 text-xs text-muted underline underline-offset-4">Einklappen</button>}
+    <ScaleWeigh onSaved={onSaved} />
   </div>;
 }

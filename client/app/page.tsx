@@ -14,7 +14,7 @@ import { TodayKcal } from "@/components/TodayKcal";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { WeekLine } from "@/components/WeekPlan";
 import { DayBadgeCard } from "@/components/DayBadge";
-import { ScaleWeigh } from "@/components/ScaleWeigh";
+import { DailyWeighCard } from "@/components/ScaleWeigh";
 import type { WeekPlan, WeekToday } from "@/lib/api";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
@@ -153,7 +153,7 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
-    <Card className="mb-4 min-w-0"><ScaleWeigh onSaved={() => setWeightRevision((value) => value + 1)} /></Card>
+    <DailyWeighCard onSaved={() => setWeightRevision((value) => value + 1)} />
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="min-w-0 xl:col-span-2"><WeatherCard /><TodayKcal /><WeeklyReportCard /><BriefingCard /></div>
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:flex xl:flex-col">
