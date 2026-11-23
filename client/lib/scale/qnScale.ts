@@ -141,50 +141,133 @@ export function isEmptyStoredFrame(f: StoredFrame): boolean {
   return f.kg === 0 && f.recTime === 0;
 }
 
-export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReading> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BtDevice = any;
+
+const logger = (opts: QnScaleOptions) => {
   // Milon: local wall time in the log (was UTC, which read like the wrong hour)
   const stamp = () => { const n = new Date(); return `${n.toTimeString().slice(0, 8)}.${String(n.getMilliseconds()).padStart(3, "0")}`; };
-  const log = (s: string) => opts.onLog?.(`${stamp()} ${s}`);
+  return (s: string) => opts.onLog?.(`${stamp()} ${s}`);
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bluetooth = (): any => {
   if (!("bluetooth" in navigator)) throw new Error("Web Bluetooth nicht verfügbar – Chrome auf Android nutzen.");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (navigator as any).bluetooth;
+};
+const OPTIONAL_SERVICES = [SVC_T1, SVC_T2, SVC_AE00, SVC_DEVINFO, SVC_BATTERY];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const optionalServices = [SVC_T1, SVC_T2, SVC_AE00, SVC_DEVINFO, SVC_BATTERY];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bt = (navigator as any).bluetooth;
-  const choose = () => bt.requestDevice(
+/** Milon: Chrome's device chooser. Must run inside a click handler (user gesture). */
+export async function pickScale(opts: QnScaleOptions = {}): Promise<BtDevice> {
+  const device = await bluetooth().requestDevice(
     opts.acceptAllDevices
-      ? { acceptAllDevices: true, optionalServices }
-      : {
-          filters: [{ namePrefix: "QN" }, { services: [SVC_T2] }, { services: [SVC_T1] }],
-          optionalServices,
-        },
+      ? { acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES }
+      : { filters: [{ namePrefix: "QN" }, { services: [SVC_T2] }, { services: [SVC_T1] }], optionalServices: OPTIONAL_SERVICES },
   );
-  // Milon: a remembered scale connects without the chooser (only where Chrome offers getDevices).
+  logger(opts)(`Gerät: "${device.name}" id=${device.id}`);
+  return device;
+}
+
+/** Milon: a scale this origin was already granted, without the chooser — only where Chrome offers getDevices(). */
+export async function rememberedScale(): Promise<BtDevice | null> {
+  const bt = bluetooth();
+  if (typeof bt.getDevices !== "function") return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let device: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let server: any = null;
-  if (!opts.acceptAllDevices && opts.remember !== false && typeof bt.getDevices === "function") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const known = (await bt.getDevices()).filter((d: any) => (d.name ?? "").startsWith("QN"));
-    if (known.length) {
-      device = known[0];
-      log(`Gemerkte Waage: "${device.name}" – verbinde ohne Dialog`);
+  const known = (await bt.getDevices()).filter((d: any) => (d.name ?? "").startsWith("QN"));
+  return known[0] ?? null;
+}
+
+export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReading> {
+  const log = logger(opts);
+  let device: BtDevice = null;
+  if (!opts.acceptAllDevices && opts.remember !== false) {
+    device = await rememberedScale();
+    if (device) log(`Gemerkte Waage: "${device.name}" – verbinde ohne Dialog`);
+  }
+  if (device) {
+    try {
+      return await measureWith(device, opts);
+    } catch (e) {
+      log(`! gemerkte Waage: ${e} – Auswahl-Dialog`);
+    }
+  }
+  return measureWith(await pickScale(opts), opts);
+}
+
+/**
+ * Milon: stand-by — keeps reconnecting to `device` whenever the scale wakes up and weighs, until stop() is called.
+ * Needs no user gesture once the device object exists (from pickScale or rememberedScale).
+ */
+export function watchScale(device: BtDevice, opts: QnScaleOptions & {
+  onReading: (r: ScaleReading) => void;
+  onState?: (state: "waiting" | "connecting" | "measuring") => void;
+  cooldownMs?: number;
+  retryMs?: number;
+}): () => void {
+  const log = logger(opts);
+  let stopped = false;
+  let lastError = "";
+  const waitForAdvertisement = (ms: number) => new Promise<boolean>((resolve) => {
+    const onAdv = () => { clearTimeout(timer); device.removeEventListener("advertisementreceived", onAdv); resolve(true); };
+    const timer = setTimeout(() => { device.removeEventListener("advertisementreceived", onAdv); resolve(false); }, ms);
+    device.addEventListener("advertisementreceived", onAdv);
+  });
+  (async () => {
+    let watchAds = typeof device.watchAdvertisements === "function";
+    if (watchAds) {
+      try { await device.watchAdvertisements(); log("Bereitschaft: warte auf Funksignal der Waage"); }
+      catch (e) { watchAds = false; log(`Bereitschaft: ohne Funksignal-Erkennung (${e}) – versuche regelmäßig zu verbinden`); }
+    } else log("Bereitschaft: versuche regelmäßig zu verbinden");
+    while (!stopped) {
+      if (document.hidden) { await sleep(2000); continue; }
+      opts.onState?.("waiting");
+      if (watchAds && !(await waitForAdvertisement(30_000))) continue;
+      if (stopped) break;
+      opts.onState?.("connecting");
       try {
-        server = await device.gatt.connect();
+        const r = await measureWith(device, { ...opts, connectTimeoutMs: 12_000, onConnected: () => opts.onState?.("measuring") });
+        lastError = "";
+        if (!stopped) opts.onReading(r);
+        await sleep(opts.cooldownMs ?? 30_000);
       } catch (e) {
-        log(`! gemerkte Waage nicht erreichbar (${e}) – Auswahl-Dialog`);
-        device = null;
+        const msg = String(e instanceof Error ? e.message : e);
+        if (msg !== lastError) log(`  (${msg})`);
+        lastError = msg;
+        await sleep(opts.retryMs ?? (watchAds ? 500 : 3000));
       }
     }
-  } else if (typeof bt.getDevices !== "function") {
-    log("Chrome kann sich die Waage hier nicht merken (getDevices fehlt) – Auswahl-Dialog");
-  }
-  if (!device) {
-    device = await choose();
-    log(`Gerät: "${device.name}" id=${device.id}`);
-    server = await device.gatt.connect();
-  }
+  })();
+  return () => {
+    stopped = true;
+    try { device.unwatchAdvertisements?.(); } catch {}
+    if (device.gatt?.connected) device.gatt.disconnect();
+  };
+}
+
+/** One connection to a known device: handshake, wait for the weighing, disconnect. */
+export async function measureWith(device: BtDevice, opts: QnScaleOptions & { connectTimeoutMs?: number; onConnected?: () => void } = {}): Promise<ScaleReading> {
+  const log = logger(opts);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let server: any;
+  if (opts.connectTimeoutMs) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      server = await Promise.race([
+        device.gatt.connect(),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Waage nicht erreichbar")), opts.connectTimeoutMs); }),
+      ]);
+    } catch (e) {
+      if (device.gatt.connected) device.gatt.disconnect();
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  } else server = await device.gatt.connect();
   log("GATT verbunden");
+  opts.onConnected?.();
+  // Milon: connection number — the delayed disconnect below must never hit a newer connection (stand-by)
+  const generation = (device.__milonGeneration = (device.__milonGeneration ?? 0) + 1);
 
   // --- discover characteristics of both layouts ----------------------------
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,15 +329,23 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
       if (!(r instanceof Error)) {
         write(writeChar, withChecksum([0x1f, 0x05, protocolType, 0x10, 0x00]), "0x1F ack");
       }
-      queue.finally(() => setTimeout(() => device.gatt.connected && device.gatt.disconnect(), 300));
+      device.removeEventListener("gattserverdisconnected", onDisconnect);
+      for (const c of notifying) c.removeEventListener("characteristicvaluechanged", onPacket);
+      queue.finally(() => setTimeout(() => {
+        if (device.__milonGeneration === generation && device.gatt.connected) device.gatt.disconnect();
+      }, 300));
       if (r instanceof Error) reject(r);
       else resolve(r);
     };
     const timer = setTimeout(() => finish(new Error("Timeout – keine stabile Messung empfangen")), opts.timeoutMs ?? 60_000);
-    device.addEventListener("gattserverdisconnected", () => {
+    // Milon: named listeners, removed in finish() — stand-by reuses the same device object for many connections
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const notifying: any[] = [];
+    const onDisconnect = () => {
       log("Verbindung getrennt");
       finish(new Error("Waage hat die Verbindung getrennt, bevor eine stabile Messung kam"));
-    });
+    };
+    device.addEventListener("gattserverdisconnected", onDisconnect);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onPacket = (ev: any) => {
@@ -328,6 +419,7 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
         const c = chars[uuid];
         if (!c) continue;
         c.addEventListener("characteristicvaluechanged", onPacket);
+        notifying.push(c);
         await c.startNotifications();
         log(`Notifications an: ${uuid.slice(4, 8)}`);
       }
