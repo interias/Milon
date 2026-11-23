@@ -72,6 +72,11 @@ Zeit `0x3296e6ea` = 16:58:34 UTC, r1/r2 = 0). Die Waage löscht einen Datensatz,
   Wiegung, statt sie live zu senden, kommt sie so trotzdem in Sekunden an. Ein Datensatz, der höchstens 90 s alt ist, gilt als „diese Wiegung“.
 - Die Log-Zeiten sind jetzt Ortszeit (vorher UTC).
 
+## Ohne Knopfdruck: Empfänger am PC
+
+`tools/scale/receiver.py` (siehe `tools/scale/README.md`) wartet auf dem Windows-PC auf die Waage und holt jede Wiegung
+automatisch ab. Das Handy braucht man dann nicht. Voraussetzung: Der PC erreicht die Waage per Bluetooth.
+
 ## Koppel-Dialog nur einmal?
 
 Chrome merkt sich erlaubte Bluetooth-Geräte nur, wenn er `navigator.bluetooth.getDevices()` anbietet. Auf Android steht das laut
