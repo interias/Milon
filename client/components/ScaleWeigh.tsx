@@ -1,11 +1,12 @@
 "use client";
 
 // Wiegen direkt über Web Bluetooth (Arboleaf CS20L / QN-Protokoll, lib/scale/qnScale.ts).
-// measureOnce() muss direkt aus dem Klick heraus starten (Chrome verlangt eine Nutzergeste
-// für requestDevice) — deshalb kein await davor.
+// Bereitschaft: einmal die Waage wählen (Nutzergeste für requestDevice, deshalb kein await davor),
+// danach verbindet sich die Seite bei jedem Aufwachen der Waage selbst (watchScale). Kennt Chrome die
+// Waage schon (getDevices), startet die Bereitschaft beim Öffnen ganz ohne Tippen.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ScaleMeasurement } from "@/lib/api";
-import { measureOnce, type ScaleReading } from "@/lib/scale/qnScale";
+import { pickScale, rememberedScale, watchScale, type ScaleReading } from "@/lib/scale/qnScale";
 import { de, dm } from "@/lib/format";
 
 type Phase = "idle" | "measuring" | "saving" | "saved" | "error";
@@ -52,7 +53,11 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   const [logOpen, setLogOpen] = useState(false);
   const [backfilled, setBackfilled] = useState<string[]>([]);
   const [remembers, setRemembers] = useState(true);
+  const [standby, setStandby] = useState<null | "waiting" | "connecting" | "measuring">(null);
   const logRef = useRef<string[]>([]);
+  const stopRef = useRef<(() => void) | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wakeRef = useRef<any>(null);
 
   useEffect(() => {
     if (phase !== "measuring") return;
@@ -109,6 +114,39 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     }).catch((e) => addLog(`! Nachtragen fehlgeschlagen: ${friendly(e)}`));
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const beginStandby = (device: any) => {
+    stopRef.current?.();
+    setStandby("waiting");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (navigator as any).wakeLock?.request("screen").then((lock: unknown) => { wakeRef.current = lock; }).catch(() => {});
+    stopRef.current = watchScale(device, {
+      onLog: addLog, onLiveWeight: setLive, onStoredRecord: backfill, timeoutMs: 120_000,
+      onState: (s) => {
+        setStandby(s);
+        if (s === "measuring") { setLive(null); setReady(false); setElapsed(0); setError(null); setPhase("measuring"); }
+        else if (s === "waiting") setPhase((p) => (p === "measuring" ? "idle" : p));
+      },
+      onReading: (r) => { setReading(r); setLive(r.weightKg); save(r); },
+    });
+  };
+  const stopStandby = () => {
+    stopRef.current?.();
+    stopRef.current = null;
+    setStandby(null);
+    wakeRef.current?.release?.().catch?.(() => {});
+    wakeRef.current = null;
+    setPhase((p) => (p === "measuring" ? "idle" : p));
+  };
+  // Gemerkte Waage (nur wenn Chrome getDevices anbietet): Bereitschaft ohne Tippen.
+  useEffect(() => {
+    if (support !== "ok") return;
+    rememberedScale().then((device) => {
+      if (device && !stopRef.current) { addLog(`Gemerkte Waage „${device.name}“ – Bereitschaft startet automatisch`); beginStandby(device); }
+    }).catch(() => {});
+    return () => { stopRef.current?.(); stopRef.current = null; wakeRef.current?.release?.().catch?.(() => {}); };
+  }, [support]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const start = (acceptAllDevices = false) => {
     logRef.current = [];
     setLog([]);
@@ -120,9 +158,9 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     setReady(false);
     setElapsed(0);
     setBackfilled([]);
-    setPhase("measuring");
-    measureOnce({ acceptAllDevices, onLiveWeight: setLive, onLog: addLog, onStoredRecord: backfill, timeoutMs: 120_000 })
-      .then((r) => { setReading(r); setLive(r.weightKg); return save(r); })
+    setPhase("idle");
+    pickScale({ acceptAllDevices, onLog: addLog })
+      .then(beginStandby)
       .catch((e) => { addLog(`! ${friendly(e)}`); setError(friendly(e)); setPhase("error"); });
   };
 
@@ -138,7 +176,9 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   }
 
   const waiting = phase === "measuring" && live == null;
-  const status = phase === "measuring"
+  const status = standby === "connecting" && phase !== "measuring" ? "Waage wacht auf – verbinde …"
+    : standby === "waiting" && phase !== "saving" && phase !== "saved" ? "Bereit – einfach barfuß draufstellen. Milon verbindet sich, sobald die Waage aufwacht."
+    : phase === "measuring"
     ? (!ready ? "Verbinde mit der Waage …"
       : live == null ? (elapsed >= 30 ? "Noch kein Gewicht. Steh still, bis die Waage fertig blinkt – Milon holt die Messung dann aus ihrem Speicher." : "Bereit – jetzt barfuß draufstellen")
       : "Messe – stillstehen …")
@@ -146,10 +186,13 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
 
   return <div className="min-w-0">
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-      <button type="button" disabled={busy || support !== "ok"} onClick={() => start(false)}
-        className="min-h-14 rounded-lg bg-accent px-8 text-lg font-semibold text-white disabled:opacity-50">
-        {phase === "measuring" ? "Läuft …" : phase === "saving" ? "Speichere …" : "Wiegen"}
-      </button>
+      {standby
+        ? <button type="button" onClick={stopStandby}
+            className="min-h-14 rounded-lg border border-accent px-6 text-base font-semibold text-accent">Bereitschaft aus</button>
+        : <button type="button" disabled={busy || support !== "ok"} onClick={() => start(false)}
+            className="min-h-14 rounded-lg bg-accent px-8 text-lg font-semibold text-white disabled:opacity-50">
+            {phase === "saving" ? "Speichere …" : "Wiegen"}
+          </button>}
       <div className="flex items-baseline gap-2" aria-live="polite">
         <span className={`font-display text-5xl font-extrabold tabular-nums ${phase === "saved" ? "text-accent" : live == null ? "text-muted/40" : ""}`}>
           {live == null ? "–,–" : de(live, phase === "saved" ? 2 : 1)}
@@ -167,7 +210,7 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     </p>
     {backfilled.length > 0 && <p className="text-sm text-accent">Aus dem Waagenspeicher nachgetragen: {backfilled.join(" · ")}</p>}
     <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-      <button type="button" disabled={busy || support !== "ok"} onClick={() => start(true)}
+      <button type="button" disabled={busy || !!standby || support !== "ok"} onClick={() => start(true)}
         className="py-1.5 text-muted underline underline-offset-4 disabled:opacity-50">Alle Geräte anzeigen</button>
       <button type="button" onClick={() => setLogOpen((open) => !open)} className="py-1.5 text-muted underline underline-offset-4">
         {logOpen ? "Log ausblenden" : `Log (${log.length})`}</button>
@@ -185,11 +228,11 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
       <ol className="mt-1 list-decimal space-y-1 pl-5">
         <li>Arboleaf-App schließen – sie hält sonst die Verbindung zur Waage.</li>
         <li>Waage antippen, damit sie aufwacht.</li>
-        <li>„Wiegen“ tippen und im Chrome-Dialog die Waage wählen (meist „QN-Scale“).</li>
-        <li>Erst wenn „Bereit“ erscheint, barfuß draufstellen und stillstehen, bis das Häkchen kommt.</li>
+        <li>Einmal „Wiegen“ tippen und im Chrome-Dialog die Waage wählen (meist „QN-Scale“). Danach ist Milon in Bereitschaft.</li>
+        <li>In Bereitschaft einfach barfuß draufstellen – Milon verbindet sich beim Aufwachen der Waage und speichert. Die Seite muss dafür offen und sichtbar sein.</li>
         <li>Auch ohne Milon gewogen? Die Waage merkt sich die Messung – beim nächsten „Wiegen“ wird sie mit ihrer echten Uhrzeit nachgetragen.</li>
       </ol>
-      {!remembers && <p className="mt-2">Der Koppel-Dialog kommt jedes Mal, weil dieser Chrome sich Bluetooth-Geräte nicht merkt. Abhilfe (ungeprüft): in Chrome <code>chrome://flags</code> öffnen, „Experimental Web Platform features“ aktivieren, Chrome neu starten.</p>}
+      {!remembers && <p className="mt-2">Nach jedem Öffnen der Seite einmal „Wiegen“ tippen, weil dieser Chrome sich Bluetooth-Geräte nicht merkt. Ganz ohne Tippen (ungeprüft): in Chrome <code>chrome://flags</code> „Experimental Web Platform features“ aktivieren und Chrome neu starten – dann startet die Bereitschaft beim Öffnen von selbst.</p>}
     </details>}
 
     {!compact && recent && recent.length > 0 && <details className="mt-1 text-sm">

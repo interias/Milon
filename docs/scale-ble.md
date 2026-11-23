@@ -72,7 +72,20 @@ Zeit `0x3296e6ea` = 16:58:34 UTC, r1/r2 = 0). Die Waage löscht einen Datensatz,
   Wiegung, statt sie live zu senden, kommt sie so trotzdem in Sekunden an. Ein Datensatz, der höchstens 90 s alt ist, gilt als „diese Wiegung“.
 - Die Log-Zeiten sind jetzt Ortszeit (vorher UTC).
 
-## Ohne Knopfdruck: Empfänger am PC
+## Bereitschaft: Seite offen, draufstellen, fertig
+
+Ein Tipp auf „Wiegen“ wählt die Waage (Chrome-Dialog). Danach ist die Karte **in Bereitschaft** (`watchScale` im Treiber):
+Sie versucht alle 3 s, die Waage zu verbinden (mit `watchAdvertisements()`, falls Chrome es anbietet, erst beim Funksignal).
+Wacht die Waage auf, weil man draufsteigt, verbindet sich die Seite, holt die Wiegung (live oder aus dem Speicher) und speichert sie.
+Danach 30 s Pause, dann wieder Bereitschaft. Die Seite muss offen und sichtbar sein (im Hintergrund pausiert sie); solange hält
+sie den Bildschirm wach (Wake Lock). „Bereitschaft aus“ beendet das.
+
+- Ohne `getDevices()` braucht es einen Tipp pro Seitenaufruf (Chrome erlaubt den Gerätedialog nur nach einer Geste).
+- Mit `getDevices()` (vermutlich nur mit dem Flag „Experimental Web Platform features“) startet die Bereitschaft beim Öffnen von selbst.
+- Jede Verbindung bekommt eine Nummer: Das verzögerte Trennen nach einer Messung trifft nie eine neuere Verbindung
+  (Test `client/tests/qn-scale-standby.test.cjs` mit simulierter Waage).
+
+## Optional: Empfänger am PC
 
 `tools/scale/receiver.py` (siehe `tools/scale/README.md`) wartet auf dem Windows-PC auf die Waage und holt jede Wiegung
 automatisch ab. Das Handy braucht man dann nicht. Voraussetzung: Der PC erreicht die Waage per Bluetooth.
