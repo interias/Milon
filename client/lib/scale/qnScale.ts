@@ -125,6 +125,11 @@ export function parseStoredFrame(d: Uint8Array): StoredFrame | null {
   };
 }
 
+/** All-zero 0x23 record (time 0, weight 0): the scale has no stored measurement. */
+export function isEmptyStoredFrame(f: StoredFrame): boolean {
+  return f.kg === 0 && f.recTime === 0;
+}
+
 export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReading> {
   const log = (s: string) => opts.onLog?.(`${new Date().toISOString().slice(11, 23)} ${s}`);
   if (!("bluetooth" in navigator)) throw new Error("Web Bluetooth nicht verfügbar – Chrome auf Android nutzen.");
@@ -256,6 +261,11 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
         case 0x23: {
           const f = parseStoredFrame(d);
           if (!f) return void setTimeout(sendHistoryQuery, 3000);
+          if (isEmptyStoredFrame(f)) {
+            // Milon: all-zero record = nothing stored (seen on a real CS20L); stop polling, wait for live 0x10
+            log("  Waagenspeicher leer – warte auf Live-Gewicht");
+            break;
+          }
           log(`  gespeichert: ${f.kg} kg r1=${f.r1} r2=${f.r2} alter=${sessionStart - f.recTime}s`);
           if (f.kg > 5 && f.kg < 300 && f.recTime + 90 >= sessionStart) {
             finish({ weightKg: f.kg, r1: f.r1, r2: f.r2, source: "stored", protocolType, timestamp: new Date().toISOString(), rawHex: hex(d) });

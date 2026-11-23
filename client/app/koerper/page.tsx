@@ -24,7 +24,6 @@ export default function Koerper() {
   const [details, setDetails] = useState(false);
   const [measurementsRevision, setMeasurementsRevision] = useState(0);
   const [phaseRevision, setPhaseRevision] = useState(0);
-  const [weighOpen, setWeighOpen] = useState(false);
   useEffect(() => {
     let active = true;
     const failed = (key: string) => { if (active) setErrors((previous) => [...previous, key]); };
@@ -40,18 +39,12 @@ export default function Koerper() {
   const state = (key: string) => errors.includes(key) ? "Daten konnten nicht geladen werden. Bitte Seite neu laden." : "Wird geladen …";
   return <>
     <PageTitle title="Körper" sub="Körpermaße, Gewicht & Zusammensetzung" />
+    <Card className="mb-5 min-w-0"><ScaleWeigh onSaved={() => setPhaseRevision((value) => value + 1)} /></Card>
     <BodyProgress revision={measurementsRevision} />
     <div className="mb-5"><BodyCircumferences onChange={() => setMeasurementsRevision(value => value + 1)} /></div>
     <Card className="min-w-0">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Gewicht</h2>
-          <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
-        </div>
-        <button type="button" onClick={() => setWeighOpen((open) => !open)}
-          className="shrink-0 rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-accent">{weighOpen ? "Schließen" : "Wiegen"}</button>
-      </div>
-      {weighOpen && <div className="mt-4 rounded-lg border border-line p-4"><ScaleWeigh onSaved={() => setPhaseRevision((value) => value + 1)} /></div>}
+      <h2 className="text-sm font-semibold">Gewicht</h2>
+      <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
       {summary ? <>
         <p className="mt-3 font-display text-3xl font-extrabold">{de(summary.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
         <p className="mt-2 text-sm">{delta == null ? "Kein Vergleich verfügbar" : `${delta > 0 ? "+" : ""}${de(delta, 2)} kg gegenüber 7 Tagen zuvor`}</p>

@@ -6,9 +6,9 @@ Milon liest die Waage direkt im Handy-Browser aus. Die Arboleaf-App wird dafür 
 
 1. Arboleaf-App schließen (sie hält sonst die Bluetooth-Verbindung).
 2. Waage antippen – sie wacht auf und sendet.
-3. In Milon „Wiegen“ tippen (Übersicht → „Wiegen“, `/wiegen` oder Körper → Gewicht → „Wiegen“).
+3. In Milon „Wiegen“ tippen (Karte ganz oben auf der Übersicht und auf der Körper-Seite, oder `/wiegen`).
 4. Chrome zeigt den Gerätedialog → Waage wählen (meist `QN-Scale` / `QN-Scale1`).
-5. Barfuß draufstellen. Das Live-Gewicht läuft mit; die stabile Messung wird automatisch gespeichert.
+5. **Erst wenn „Bereit – jetzt barfuß draufstellen“ erscheint**, draufstellen. Das Live-Gewicht läuft mit; die stabile Messung wird automatisch gespeichert.
 
 Voraussetzungen: **Chrome auf Android** und **HTTPS** (Tailscale). Über `http://<IP>` gibt es kein Web Bluetooth;
 Samsung Internet, Firefox und iOS können es gar nicht. Die Seite zeigt das statt eines Knopfs.
@@ -58,13 +58,17 @@ Kein eigener Zugangsschutz, wie die übrigen UI-Endpunkte (Milon ist nur im Heim
 - `0x23` gespeicherte Messung (Fallback): Gewicht `[10,11]` /100, Zeit `[6..9]` little-endian, r1/r2 `[13..16]` little-endian.
 - Zeit = Sekunden seit QN-Epoch (Unix − 946702800).
 
-**Noch nicht an der echten Waage geprüft.** Die Tests nutzen synthetische Frames.
+Erster echter Test (2026-11-23, CS20L): Verbindung und Handshake laufen (`QN-Scale`, Service `FFF0`, protocolType `0xff`, Faktor /10,
+neuere Firmware mit `0x21`). Die Waage antwortet auf `0xA0` mit `0xA1` und auf `0x22` mit einem leeren Speicher: `0x23` komplett 0, danach
+`0x24`/`0x25` (ebenfalls 0, Bedeutung unbekannt). Leerer `0x23` → der Treiber fragt nicht weiter nach. Ein `0x10`-Live-Frame kam in diesem
+Test nicht an (16 s Log) – die Reihenfolge entspricht openScale (`QNHandler.kt`), dort gibt es keinen eigenen Startbefehl.
+Das Live-Gewicht ist also noch unbestätigt.
 
 ## Troubleshooting
 
 - **Waage taucht im Dialog nicht auf:** Waage erneut antippen (sie sendet nur kurz). Dann „Alle Geräte anzeigen“ und das Gerät von Hand wählen.
   Meldet sie sich unter anderem Namen, das Debug-Log kopieren – der Name steht in der ersten Zeile.
-- **Verbindet, aber kein Gewicht:** Debug-Log aufklappen, „Log kopieren“, in einen Chat oder ein Issue einfügen. Alle Pakete stehen
+- **Verbindet, aber kein Gewicht:** Erst nach „Bereit“ draufstellen und 10–20 s stehen bleiben. Kommt nach 20 s nichts, zeigt die Karte einen Hinweis. Debug-Log aufklappen, „Log kopieren“, in einen Chat oder ein Issue einfügen. Alle Pakete stehen
   dort als Hex (`←` empfangen, `→` gesendet). Häufigste Ursache: andere Protokollfamilie (dann fehlt `FFF2`/`FFE3`).
 - **Verbindung bricht sofort ab / „NetworkError“:** Arboleaf-App ganz beenden (auch aus den zuletzt genutzten Apps wischen).
 - **Kein Bluetooth-Dialog:** In Android Chrome Bluetooth- und Standort-Berechtigung erlauben (Android-Einstellungen → Apps → Chrome →

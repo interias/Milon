@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { hex, parseInfoFrame, parseLiveFrame, parseStoredFrame, withChecksum } = require('../lib/scale/qnScale.ts');
+const { hex, isEmptyStoredFrame, parseInfoFrame, parseLiveFrame, parseStoredFrame, withChecksum } = require('../lib/scale/qnScale.ts');
 
 const frame = (...bytes) => Uint8Array.from(bytes);
 
@@ -55,4 +55,19 @@ test('stored record: weight big-endian /100, time and resistances little-endian'
     0x1c, 0x93, 0x00, 0xf4, 0x01, 0xe0, 0x01, 0, 0]);
   assert.deepEqual(parseStoredFrame(d), { kg: 73.15, recTime: t, r1: 500, r2: 480 });
   assert.equal(parseStoredFrame(frame(0x23, 0x05, 0x01, 0, 0)), null);
+});
+
+test('all-zero stored record from a real CS20L means "nothing stored"', () => {
+  const d = frame(0x23, 0x14, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x36);
+  assert.equal(hex(withChecksum([...d])), hex(d)); // checksum of the real frame
+  const f = parseStoredFrame(d);
+  assert.deepEqual(f, { kg: 0, recTime: 0, r1: 0, r2: 0 });
+  assert.equal(isEmptyStoredFrame(f), true);
+  assert.equal(isEmptyStoredFrame({ kg: 73.15, recTime: 849000000, r1: 500, r2: 480 }), false);
+});
+
+test('real 0x12 info frame of the CS20L: protocol type 0xff, weight factor /10', () => {
+  const d = frame(0x12, 0x12, 0xff, 0x9f, 0x35, 0x05, 0x00, 0x05, 0xff, 0x12, 0x07, 0x15, 0x00, 0x00, 0x05, 0x9f, 0x32, 0x04);
+  assert.equal(parseInfoFrame(d, 100), 10);
+  assert.equal(hex(withChecksum([0x13, 0x09, 0xff, 0x01, 0x10, 0, 0, 0, 0])), '13 09 ff 01 10 00 00 00 2c');
 });

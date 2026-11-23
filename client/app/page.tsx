@@ -14,6 +14,7 @@ import { TodayKcal } from "@/components/TodayKcal";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { WeekLine } from "@/components/WeekPlan";
 import { DayBadgeCard } from "@/components/DayBadge";
+import { ScaleWeigh } from "@/components/ScaleWeigh";
 import type { WeekPlan, WeekToday } from "@/lib/api";
 import { OverviewHistory, HistoryCards } from "@/components/OverviewHistory";
 import type { HistoryPoint } from "@/lib/overview-history";
@@ -114,7 +115,9 @@ function ConsistencyHistory({ data, fit = false }: { data: Consistency; fit?: bo
 }
 
 export default function Overview() {
-  const body = useResource<BodySummary>(api.bodySummary);
+  const [weightRevision, setWeightRevision] = useState(0);
+  const loadBody = useCallback(() => api.bodySummary(), [weightRevision]); // eslint-disable-line react-hooks/exhaustive-deps
+  const body = useResource<BodySummary>(loadBody);
   const running = useResource<StandardizedHr>(api.runStandardizedHr);
   const fitness = useResource<RunningFitnessData>(api.runFitness);
   const strength = useResource<StrengthIndex>(loadStrength);
@@ -150,9 +153,7 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
-    <div className="-mt-3 mb-4 flex flex-wrap gap-2">
-      <Link href="/wiegen" className="rounded-full border border-accent px-4 py-2 text-sm font-semibold text-accent">Wiegen</Link>
-    </div>
+    <Card className="mb-4 min-w-0"><ScaleWeigh onSaved={() => setWeightRevision((value) => value + 1)} /></Card>
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="min-w-0 xl:col-span-2"><WeatherCard /><TodayKcal /><WeeklyReportCard /><BriefingCard /></div>
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:flex xl:flex-col">

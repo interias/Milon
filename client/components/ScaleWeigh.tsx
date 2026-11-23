@@ -47,7 +47,17 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   const [copied, setCopied] = useState(false);
   const [recent, setRecent] = useState<ScaleMeasurement[] | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [logOpen, setLogOpen] = useState(false);
   const logRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    if (phase !== "measuring") return;
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
 
   useEffect(() => {
     // erst im Browser prüfen, sonst weicht das Server-HTML ab
@@ -61,6 +71,7 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   useEffect(loadRecent, [loadRecent]);
 
   const addLog = (line: string) => {
+    if (line.includes("Bereit – jetzt barfuß")) setReady(true);
     logRef.current = [...logRef.current, line].slice(-400);
     setLog(logRef.current);
   };
@@ -91,6 +102,8 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     setDuplicate(false);
     setError(null);
     setCopied(false);
+    setReady(false);
+    setElapsed(0);
     setPhase("measuring");
     measureOnce({ acceptAllDevices, onLiveWeight: setLive, onLog: addLog })
       .then((r) => { setReading(r); setLive(r.weightKg); return save(r); })
@@ -108,44 +121,61 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     </div>;
   }
 
-  return <div className="min-w-0">
-    {!compact && <ol className="mb-4 list-decimal space-y-1 pl-5 text-sm text-muted">
-      <li>Arboleaf-App schließen – sie hält sonst die Verbindung zur Waage.</li>
-      <li>Waage antippen, damit sie aufwacht.</li>
-      <li>„Wiegen“ tippen und im Chrome-Dialog die Waage wählen (meist „QN-Scale“).</li>
-      <li>Barfuß draufstellen und stillstehen, bis das Häkchen erscheint.</li>
-    </ol>}
+  const waiting = phase === "measuring" && live == null;
+  const status = phase === "measuring"
+    ? (!ready ? "Verbinde mit der Waage …"
+      : live == null ? (elapsed >= 20 ? "Noch kein Gewicht empfangen. Stehst du schon drauf? Sonst: Log kopieren." : "Bereit – jetzt barfuß draufstellen")
+      : "Messe – stillstehen …")
+    : phase === "saving" ? "Stabil. Speichere …" : null;
 
-    <div className="flex flex-wrap items-center gap-3">
+  return <div className="min-w-0">
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
       <button type="button" disabled={busy || support !== "ok"} onClick={() => start(false)}
         className="min-h-14 rounded-lg bg-accent px-8 text-lg font-semibold text-white disabled:opacity-50">
-        {phase === "measuring" ? "Verbinde / messe …" : phase === "saving" ? "Speichere …" : "Wiegen"}
+        {phase === "measuring" ? "Läuft …" : phase === "saving" ? "Speichere …" : "Wiegen"}
       </button>
-      <button type="button" disabled={busy || support !== "ok"} onClick={() => start(true)}
-        className="py-2 text-xs text-muted underline underline-offset-4 disabled:opacity-50">Alle Geräte anzeigen</button>
+      <div className="flex items-baseline gap-2" aria-live="polite">
+        <span className={`font-display text-5xl font-extrabold tabular-nums ${phase === "saved" ? "text-accent" : live == null ? "text-muted/40" : ""}`}>
+          {live == null ? "–,–" : de(live, phase === "saved" ? 2 : 1)}
+        </span>
+        <span className="text-base text-muted">kg</span>
+        {phase === "saved" && <span className="text-3xl text-accent" aria-label="gespeichert">✓</span>}
+      </div>
     </div>
-
-    <div className="mt-5 flex items-baseline gap-3" aria-live="polite">
-      <span className={`font-display text-6xl font-extrabold tabular-nums ${phase === "saved" ? "text-accent" : live == null ? "text-muted/40" : ""}`}>
-        {live == null ? "–,–" : de(live, phase === "saved" ? 2 : 1)}
-      </span>
-      <span className="text-lg text-muted">kg</span>
-      {phase === "saved" && <span className="text-3xl text-accent" aria-label="gespeichert">✓</span>}
-    </div>
-    <p className="mt-1 min-h-5 text-sm" role="status">
-      {phase === "measuring" && (live == null ? "Warte auf die Waage …" : "Messe – stillstehen …")}
-      {phase === "saving" && "Stabil. Speichere …"}
+    <p className={`mt-2 min-h-5 text-sm ${waiting && ready && elapsed < 20 ? "font-semibold text-accent" : ""}`} role="status">
+      {status}
       {phase === "saved" && reading && (duplicate
         ? "Diese Messung war schon gespeichert."
         : `Gespeichert · ${reading.source === "stored" ? "aus dem Waagenspeicher" : "live"} · Widerstand ${reading.r1}/${reading.r2}`)}
       {phase === "error" && <span className="text-bad">{error}</span>}
     </p>
-    {phase === "error" && reading && <button type="button" onClick={() => save(reading)}
-      className="mt-2 rounded-lg border border-line px-4 py-2 text-sm">Erneut speichern</button>}
+    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <button type="button" disabled={busy || support !== "ok"} onClick={() => start(true)}
+        className="py-1.5 text-muted underline underline-offset-4 disabled:opacity-50">Alle Geräte anzeigen</button>
+      <button type="button" onClick={() => setLogOpen((open) => !open)} className="py-1.5 text-muted underline underline-offset-4">
+        {logOpen ? "Log ausblenden" : `Log (${log.length})`}</button>
+      <button type="button" disabled={!log.length} onClick={() => copyText(log.join("\n")).then(setCopied)}
+        className="py-1.5 text-accent underline underline-offset-4 disabled:opacity-40">{copied ? "Kopiert ✓" : "Log kopieren"}</button>
+      {phase === "error" && reading && <button type="button" onClick={() => save(reading)}
+        className="rounded-lg border border-line px-3 py-1.5">Erneut speichern</button>}
+    </div>
+    {logOpen && <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-surface-alt p-2 font-mono text-[11px] leading-snug">
+      {log.length ? log.join("\n") :"Noch nichts – nach „Wiegen“ erscheinen hier alle Bluetooth-Pakete."}
+    </pre>}
 
-    {recent && recent.length > 0 && <div className="mt-4">
-      <p className="text-xs font-semibold text-muted">Letzte Wiegungen per Bluetooth</p>
-      <ul className="mt-1 divide-y divide-line text-sm">
+    {!compact && <details className="mt-3 text-xs text-muted">
+      <summary className="cursor-pointer py-1">Anleitung</summary>
+      <ol className="mt-1 list-decimal space-y-1 pl-5">
+        <li>Arboleaf-App schließen – sie hält sonst die Verbindung zur Waage.</li>
+        <li>Waage antippen, damit sie aufwacht.</li>
+        <li>„Wiegen“ tippen und im Chrome-Dialog die Waage wählen (meist „QN-Scale“).</li>
+        <li>Erst wenn „Bereit“ erscheint, barfuß draufstellen und stillstehen, bis das Häkchen kommt.</li>
+      </ol>
+    </details>}
+
+    {!compact && recent && recent.length > 0 && <details className="mt-1 text-sm">
+      <summary className="cursor-pointer py-1 text-xs text-muted">Letzte Wiegungen per Bluetooth ({recent.length})</summary>
+      <ul className="mt-1 divide-y divide-line">
         {recent.map((m) => <li key={m.id} className="flex items-center justify-between gap-3 py-1.5">
           <span className="min-w-0 truncate">{dm(m.measured_at)} {time(m.measured_at)} · <b>{de(m.weight_kg, 2)} kg</b>
             <span className="text-xs text-muted"> · r {m.r1 ?? "–"}/{m.r2 ?? "–"}</span></span>
@@ -157,17 +187,6 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
             : <button type="button" className="shrink-0 text-xs text-muted underline" onClick={() => setConfirmDelete(m.id)}>Löschen</button>}
         </li>)}
       </ul>
-    </div>}
-
-    <details className="mt-4 text-xs">
-      <summary className="cursor-pointer py-1 text-muted">Debug-Log ({log.length} Zeilen)</summary>
-      <div className="mt-2 flex gap-3">
-        <button type="button" disabled={!log.length} className="rounded border border-line px-3 py-1.5 disabled:opacity-50"
-          onClick={() => copyText(log.join("\n")).then(setCopied)}>{copied ? "Kopiert ✓" : "Log kopieren"}</button>
-      </div>
-      <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-surface-alt p-2 font-mono text-[11px] leading-snug">
-        {log.length ? log.join("\n") : "Noch nichts – nach „Wiegen“ erscheinen hier alle Bluetooth-Pakete."}
-      </pre>
-    </details>
+    </details>}
   </div>;
 }
