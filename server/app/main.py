@@ -14,6 +14,7 @@ from .api import sync_inventory, overview_history, route_segments, weather
 from .api import hero as hero_api
 from .api import bike_plan as bike_plan_api
 from .api import walkpad as walkpad_api
+from .api import scale as scale_api
 from . import cache_warmer
 from .compute_gate import ComputeGate
 from .config import DATA_DIR, PROGRESS_DIR, settings
@@ -86,6 +87,7 @@ app.include_router(weather.router)
 app.include_router(hero_api.router)
 app.include_router(bike_plan_api.router)
 app.include_router(walkpad_api.router)
+app.include_router(scale_api.router)
 
 # Statische Auslieferung der Fortschritts-Fotos
 app.mount("/media/progress", StaticFiles(directory=str(PROGRESS_DIR)), name="progress-media")

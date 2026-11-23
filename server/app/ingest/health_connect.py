@@ -515,6 +515,10 @@ def import_health_connect(db_path: str | Path, full: bool = False) -> dict:
         sessions_with_hr = sum(1 for d in sess_rows if d.get("avg_hr") is not None)
         hr_update = ["avg_hr", "max_hr", "hr_drift_pct"] if sessions_with_hr else None
 
+        # Same weighing already read over Bluetooth (source scale_ble) → that reading wins.
+        from .. import scale
+        hidden = scale.shadowed(s, [r["measured_at"] for r in body_rows if r["weight_kg"] is not None])
+        body_rows = [r for r in body_rows if r["measured_at"] not in hidden]
         upsert(s, BodyMeasurement, body_rows, ["measured_at", "source"])
         upsert(s, ExerciseSession, sess_rows, ["external_id"], update_cols=hr_update, coalesce=True)
         # Remove splits disproved by positively identified coarse replacement-watch data.

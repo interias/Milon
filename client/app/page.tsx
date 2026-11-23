@@ -150,6 +150,9 @@ export default function Overview() {
 
   return <>
     <PageTitle title="Übersicht" sub="Deine Entwicklung auf einen Blick" />
+    <div className="-mt-3 mb-4 flex flex-wrap gap-2">
+      <Link href="/wiegen" className="rounded-full border border-accent px-4 py-2 text-sm font-semibold text-accent">Wiegen</Link>
+    </div>
     <div className="grid gap-4 xl:grid-cols-3">
       <div className="min-w-0 xl:col-span-2"><WeatherCard /><TodayKcal /><WeeklyReportCard /><BriefingCard /></div>
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:flex xl:flex-col">
