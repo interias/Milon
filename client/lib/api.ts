@@ -2,6 +2,8 @@
 // Standard: relativer `/api`-Pfad → Next proxied serverseitig ans Backend (siehe next.config.ts).
 // Same-origin, daher kein CORS und keine Firewall-Freigabe für :8000 nötig (auch vom Handy).
 // Override per NEXT_PUBLIC_API_URL (z. B. direkte Backend-URL) bleibt möglich.
+import type { ScaleReading } from "./scale/qnScale";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 async function get<T>(path: string): Promise<T> {
@@ -66,6 +68,7 @@ async function live<T>(token: string, method: "GET" | "POST", path: string, body
 export const coachImageUrl = (path: string) => `${BASE}${path}`;
 
 // --- Typen (spiegeln die /metrics- & /coach-Antworten) ---
+export type ScaleMeasurement = { id: number; measured_at: string; weight_kg: number; r1: number | null; r2: number | null; source: "live" | "stored"; protocol_type: number | null; raw_hex: string | null; created_at: string };
 export type ActiveKcalDay = { date: string; total: number; everyday: number; run: number; ride: number; walkpad: number; gym: number; steps: number | null; garmin: number | null; provisional: boolean };
 export type GymCardioEntry = {
   key: string; workout_id: string; title: string | null; date: string; started_at: string; exercise: string;
@@ -789,6 +792,10 @@ export const api = {
   healthOverview: () => get<HealthOverview>("/metrics/health/overview"),
   healthSteps: (days = 30) => get<StepsTrendPoint[]>(`/metrics/health/steps?days=${days}`),
   healthStepsWeekly: (weeks = 12) => get<StepsWeek[]>(`/metrics/health/steps-weekly?weeks=${weeks}`),
+  // Körperwaage über Web Bluetooth (Rohwerte r1/r2 für spätere Körperfett-Kalibrierung)
+  scaleSave: (reading: ScaleReading) => send<{ measurement: ScaleMeasurement; duplicate: boolean }>("POST", "/scale/measurements", reading),
+  scaleList: (days = 90) => get<{ measurements: ScaleMeasurement[] }>(`/scale/measurements?days=${days}`),
+  scaleDelete: (id: number) => send<{ deleted: number }>("DELETE", `/scale/measurements/${id}`),
   walkpad: (weeks = 12) => get<WalkpadOverview>(`/walkpad?weeks=${weeks}`),
   walkpadDaily: (days = 37) => get<WalkpadDaily>(`/walkpad/daily?days=${days}`),
   walkpadControl: () => get<WalkpadControlState>("/walkpad/control"),

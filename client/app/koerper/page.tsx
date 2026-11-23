@@ -12,6 +12,7 @@ import { BodyProgress } from "@/components/BodyProgress";
 import { BodyComposition } from "@/components/BodyComposition";
 import { WeightRate } from "@/components/WeightRate";
 import { WeightTube } from "@/components/WeightTube";
+import { ScaleWeigh } from "@/components/ScaleWeigh";
 import { de, dm } from "@/lib/format";
 
 export default function Koerper() {
@@ -23,12 +24,13 @@ export default function Koerper() {
   const [details, setDetails] = useState(false);
   const [measurementsRevision, setMeasurementsRevision] = useState(0);
   const [phaseRevision, setPhaseRevision] = useState(0);
+  const [weighOpen, setWeighOpen] = useState(false);
   useEffect(() => {
     let active = true;
     const failed = (key: string) => { if (active) setErrors((previous) => [...previous, key]); };
     api.bodySummary().then((value) => { if (active) setSummary(value); }).catch(() => failed("summary"));
     return () => { active = false; };
-  }, []);
+  }, [phaseRevision]);
   useEffect(() => {
     let active = true;
     api.bodyWeight(180).then((value) => { if (active) setWeight(value); }).catch(() => { if (active) setErrors((previous) => [...previous, "weight"]); });
@@ -41,8 +43,15 @@ export default function Koerper() {
     <BodyProgress revision={measurementsRevision} />
     <div className="mb-5"><BodyCircumferences onChange={() => setMeasurementsRevision(value => value + 1)} /></div>
     <Card className="min-w-0">
-      <h2 className="text-sm font-semibold">Gewicht</h2>
-      <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Gewicht</h2>
+          <p className="mt-1 text-xs text-muted">7-Tage-Mittel · neutral bewertet</p>
+        </div>
+        <button type="button" onClick={() => setWeighOpen((open) => !open)}
+          className="shrink-0 rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-accent">{weighOpen ? "Schließen" : "Wiegen"}</button>
+      </div>
+      {weighOpen && <div className="mt-4 rounded-lg border border-line p-4"><ScaleWeigh onSaved={() => setPhaseRevision((value) => value + 1)} /></div>}
       {summary ? <>
         <p className="mt-3 font-display text-3xl font-extrabold">{de(summary.weight_avg7, 1)} <span className="text-sm font-normal text-muted">kg</span></p>
         <p className="mt-2 text-sm">{delta == null ? "Kein Vergleich verfügbar" : `${delta > 0 ? "+" : ""}${de(delta, 2)} kg gegenüber 7 Tagen zuvor`}</p>

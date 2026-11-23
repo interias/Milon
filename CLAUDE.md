@@ -767,3 +767,9 @@ Schlankes Zwei-Container-Setup für **Docker Desktop** (verifiziert lauffähig, 
 - **Verworfen:** Prognose aus Garmin-VO₂max (VDOT 48,8 → 5 km 20:21, 25 % schneller als je gelaufen). Eigentliche Renn-Zeiten gibt es keine; erst ein echter Lauf auf Anschlag prüft die Hochrechnung bis Renn-Puls.
 - **400 m und 1 km** (Zeilen oben, `sprint: true`): aus der 5-km-Zelle derselben Spalte per Riegel heruntergerechnet, ohne Renn-Puls (Puls steigt zu langsam); „Bisher“ zieht hier auch die beste 1-km-Zeit heran. Endspurt/Sprintreserve kennt Milon nicht.
 - Tests `tests/test_race_prediction.py` (synthetische Läufe mit bekanntem Tempo-Puls-Zusammenhang).
+
+## Körperwaage per Web Bluetooth (2026-11-23)
+- **Arboleaf CS20L direkt im Handy-Chrome** (QN-/Yolanda-Protokoll), Doku `docs/scale-ble.md`. Treiber `client/lib/scale/qnScale.ts` (Parser als reine Funktionen, Tests `client/tests/qn-scale.test.cjs`), UI `components/ScaleWeigh.tsx` (Live-Gewicht, Auto-Speichern, „Alle Geräte“, Debug-Log mit Kopieren, letzte Wiegungen löschbar) auf `/wiegen`, Körper-Karte „Gewicht“ und als Knopf auf der Übersicht. Braucht HTTPS (Tailscale) + Chrome/Android. **Noch nicht an der echten Waage geprüft.**
+- **Backend `app/scale.py`**, Tabelle `scale_measurements` (Rohwerte r1/r2, protocol_type, raw_hex; `measured_at` UNIQUE, lokale Wandzeit). API `POST/GET /scale/measurements`, `DELETE /scale/measurements/{id}`. Dubletten: gleiche Zeit oder gleiches Gewicht (±0,05) in 2 min → 200 `duplicate`; 20–250 kg sonst 422.
+- **Gewichtsreihe:** jede Messung auch als `body_measurements` mit `source='scale_ble'` → alle Gewichtsleser sehen sie. **BLE gewinnt:** andere Quellen ±10 min werden beim Speichern gelöscht, der HC-Import überspringt sie (`scale.shadowed`).
+- **Körperfett:** bewusst keine Formel — r1/r2 werden nur gespeichert (Einheit je Firmware Ohm oder Deci-Ohm), Kalibrierung gegen alte Arboleaf-Werte später.

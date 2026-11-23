@@ -36,6 +36,7 @@ def init_db() -> None:
     from .metrics import strength_plan  # noqa: F401 -- per-exercise rep rules of the strength plan
     from .metrics import weight_phase  # noqa: F401 -- cut/maintain/bulk phases with a rate corridor
     from . import walkpad  # noqa: F401 -- walking pad sessions from the host recorder
+    from . import scale  # noqa: F401 -- body scale readings over Web Bluetooth (raw resistances)
 
     SQLModel.metadata.create_all(engine)
     _run_migrations()
