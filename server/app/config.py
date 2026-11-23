@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     biss_url: str = "http://biss-api:2478"  # service name on the shared Docker network milon-biss
     biss_since: date = date(2026, 11, 14)
 
+    # Health Connect ganz aus (2026-11-23): Garmin liefert Uhrdaten direkt, die Waage kommt per Bluetooth.
+    # Aus = kein Scan, kein Drive-Pull, nicht in /ingest/refresh; alte HC-Zeilen bleiben in der DB.
+    health_connect_enabled: bool = True
     # Health Connect via Google Drive: taegliche Export-Zip ziehen.
     # "Jeder mit dem Link"-Inhalte sind per anonymem API-Key NICHT erreichbar (Google blockt das) ->
     # der no-OAuth-Weg ist der keylose Download per DATEI-ID (gdown). Aus dem Datei-Freigabelink

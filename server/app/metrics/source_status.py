@@ -110,6 +110,9 @@ def source_status(*, now: datetime | None = None) -> dict:
         if food == "biss" else
         ("fddb", "FDDB", "Ernährungsprotokoll", 48, "Das Datenende zeigt den letzten protokollierten Eintrag, nicht die Vollständigkeit eines Tages."),
     ]
+    if not settings.health_connect_enabled:
+        # Health Connect aus: die Waage kommt direkt per Bluetooth (scale_measurements), ohne Abruf-Zustand.
+        specs = [spec for spec in specs if spec[0] not in ("health_connect", "arboleaf")]
     sources = []
     for key, label, purpose, hours, note in specs:
         state = states.get("health_connect" if key == "arboleaf" else key)
@@ -139,9 +142,20 @@ def source_status(*, now: datetime | None = None) -> dict:
                         "last_attempt_at": _iso(last_attempt), "last_success_at": _iso(last_success),
                         "latest_data_date": latest[key], "data_old": data_old, "note": note,
                         "categories": categories if key == "garmin" else []})
+    if not settings.health_connect_enabled:
+        from .. import scale
+        latest_scale = scale.history(36500)[:1]
+        day = latest_scale[0]["measured_at"][:10] if latest_scale else None
+        sources.insert(1, {"key": "scale", "label": "Waage", "purpose": "Arboleaf per Bluetooth, direkt im Handy",
+                           "status": "ok" if day else "never", "last_attempt_at": None,
+                           "last_success_at": latest_scale[0]["created_at"] if latest_scale else None,
+                           "latest_data_date": day,
+                           "data_old": day is not None and date.fromisoformat(day) < today - timedelta(days=2),
+                           "note": "Kein Abruf: jede Wiegung kommt sofort beim Wiegen an. Health Connect ist abgeschaltet.",
+                           "categories": []})
     different = any(left != right for left, right in pairs)
     resting_note = ("Die lokalen Tageswerte stimmen nicht durchgehend überein. Die genaue Export- oder Aktualisierungsursache ist noch offen."
                     if different else "Gleiche Tageswerte allein belegen keine identische Berechnung oder Exportsemantik."
                     if pairs else "Für einen Quellenvergleich fehlen noch gemeinsame Messtage.")
     return {"generated_at": now.isoformat(), "scheduler_enabled": settings.scheduler_enabled, "sources": sources,
-            "resting_hr_note": "Garmin-Ruhepuls und HC-Ruhepuls bleiben getrennt. " + resting_note}
+            "resting_hr_note": "Der Ruhepuls kommt von Garmin; Garmin-Tageswerte ersetzen ältere Health-Connect-Werte. " + resting_note}

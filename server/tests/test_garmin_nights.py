@@ -120,8 +120,19 @@ def test_partial_unknown_stages_dont_claim_complete_sleep(db):
     save(db, data)
     value = nights.night(DAY)
     assert value["phases"][0]["stage"] == "unknown"
+    # -1 = "unmeasurable": known time, not asleep. Garmin still reports 6 h asleep but the phases
+    # only add up to 4 h, so the night stays without a duration.
     assert value["asleep_minutes"] is None and value["awake_minutes"] is None
-    assert value["stage_coverage"] == .75
+    assert value["stage_coverage"] == 1.0
+
+
+def test_unmeasurable_stage_counts_when_garmin_leaves_it_out_of_the_total(db):
+    data = payload()
+    data["sleepLevels"][0]["activityLevel"] = -1
+    data["dailySleepDTO"]["sleepTimeSeconds"] = 4 * 3600
+    save(db, data)
+    value = nights.night(DAY)
+    assert (value["asleep_minutes"], value["awake_minutes"]) == (240, 120)
 
 
 def test_complete_aggregates_do_not_manufacture_phase_timeline(db):

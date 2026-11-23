@@ -68,7 +68,14 @@ def ingest_garmin(full: bool = False) -> dict:
 
 
 @router.post("/health-connect")
+def _hc_on() -> None:
+    if not settings.health_connect_enabled:
+        raise HTTPException(status_code=409, detail="Health Connect ist abgeschaltet (HEALTH_CONNECT_ENABLED=false).")
+
+
+@router.post("/health-connect")
 def ingest_health_connect(full: bool = False) -> dict:
+    _hc_on()
     if not HC_DB.exists():
         raise HTTPException(status_code=404, detail="Keine health_connect_export.db in data/incoming/")
     return _run("health_connect", lambda: health_connect.import_health_connect(HC_DB, full=full),
@@ -79,6 +86,7 @@ def ingest_health_connect(full: bool = False) -> dict:
 def ingest_health_connect_pull(full: bool = False) -> dict:
     """Zieht die HC-Export-Zip aus dem öffentlichen Google-Drive-Ordner, entpackt + importiert sie.
     Benötigt GOOGLE_API_KEY + HC_DRIVE_FOLDER_ID in server/.env."""
+    _hc_on()
     try:
         res = drive.pull(full=full)
     except Exception as e:  # noqa: BLE001
@@ -103,7 +111,9 @@ def refresh_all(full: bool = False) -> dict:
             res[src] = {"error": e.detail}
     if "error" not in res["hevy"]:
         res["hevy_routines"] = scheduler.sync_hevy_routines()
-    if settings.hc_drive_file_id:
+    if not settings.health_connect_enabled:
+        res["health_connect"] = {"skipped": "Health Connect ist abgeschaltet"}
+    elif settings.hc_drive_file_id:
         try:
             r = drive.pull(full=full)
             cur = str(int(HC_DB.stat().st_mtime)) if HC_DB.exists() else None

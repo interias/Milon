@@ -11,10 +11,12 @@ from sqlmodel import Field, Session, SQLModel, select
 
 from .config import settings, watch_source_for
 from .db import engine
-from .models import SleepSession, StepsDaily, Vo2Max
+from .models import RestingHrDaily, SleepSession, StepsDaily, Vo2Max
 
 SOURCE = "garmin_direct"
 PACKAGE = "com.garmin.android.apps.connectmobile"
+# 2: unmeasurable sleep (-1) counts as known time; older rows are re-read from raw_json once (apply_daily)
+PARSER_VERSION = 2
 METHODS = {"summary": "get_user_summary", "sleep": "get_sleep_data", "hrv": "get_hrv_data",
            "vo2": "get_max_metrics", "readiness": "get_training_readiness"}
 
@@ -94,7 +96,9 @@ def _sleep(payload, day: date) -> dict:
     window = (end - start).total_seconds()
     if waking_day != day or not 60 <= window <= 24 * 3600:
         return {}
-    # Garmin's sampled level durations agree with DTO totals: 0 deep, 1 light, 2 REM, 3 awake.
+    # Garmin's sampled level durations agree with DTO totals: 0 deep, 1 light, 2 REM, 3 awake,
+    # -1 unmeasurable (e.g. no skin contact): known time, neither asleep nor awake — Garmin's own
+    # sleepTimeSeconds leaves it out too. Counting it as a gap dropped whole nights (coverage < 98 %).
     # Reject overlapping intervals instead of manufacturing coverage from duplicated stages.
     levels = payload.get("sleepLevels") or []
     known, asleep, awake, overlap = 0.0, 0.0, 0.0, False
@@ -115,7 +119,9 @@ def _sleep(payload, day: date) -> dict:
             overlap = True
         previous_end = max(previous_end or right, right)
         seconds = (right - left).total_seconds()
-        if code in (0, 1, 2, 3):
+        if code == -1:
+            known += seconds
+        elif code in (0, 1, 2, 3):
             known += seconds
             asleep += seconds if code != 3 else 0
             awake += seconds if code == 3 else 0
@@ -125,7 +131,7 @@ def _sleep(payload, day: date) -> dict:
                   ("deepSleepSeconds", "lightSleepSeconds", "remSleepSeconds", "awakeSleepSeconds")]
         if all(value is not None for value in totals):
             asleep, awake = sum(totals[:3]), totals[3]
-            known = asleep + awake
+            known = asleep + awake + (_number(dto.get("unmeasurableSleepSeconds"), 0, 86400) or 0)
     coverage = known / window if not overlap and known <= window + 1 else 0.0
     reported = _number(dto.get("sleepTimeSeconds"), 0, 86400)
     consistent = reported is None or abs(reported - asleep) <= max(60, reported * .01)
@@ -275,6 +281,7 @@ def sync_daily(api, full: bool = False, *, force: bool = False, now: datetime | 
                 statuses[category] = status
             row.normalized_json = json.dumps(normalized, allow_nan=False)
             row.raw_json = json.dumps(raw, allow_nan=False)
+            row.parser_version = PARSER_VERSION
             row.status_json = json.dumps(statuses)
             session.add(row)
             session.commit()
@@ -287,13 +294,34 @@ def sync_daily(api, full: bool = False, *, force: bool = False, now: datetime | 
 
 def apply_daily(session: Session) -> dict:
     """Restore direct priority after HC upserts in the same transaction; preserve older sensors."""
-    result = {"steps": 0, "sleep": 0, "vo2": 0}
+    result = {"steps": 0, "sleep": 0, "vo2": 0, "resting_hr": 0, "reparsed": 0}
     if not inspect(session.connection()).has_table(GarminDaily.__tablename__):
         return result
     for row in session.exec(select(GarminDaily).order_by(GarminDaily.day)).all():
         if not _eligible(row.day):
             continue
         values = json.loads(row.normalized_json)
+        if (row.parser_version or 1) < PARSER_VERSION:
+            # Re-read stored raw sleep once with the current parser (no new Garmin request).
+            raw_sleep = json.loads(row.raw_json).get("sleep")
+            fresh = _sleep(raw_sleep, row.day) if raw_sleep else {}
+            if fresh.get("asleep_minutes") is not None:
+                previous = values.get("sleep", {})
+                values["sleep"] = {**previous, **{key: item for key, item in fresh.items() if item is not None}}
+                row.normalized_json = json.dumps(values, allow_nan=False)
+                result["reparsed"] += 1
+            row.parser_version = PARSER_VERSION
+            session.add(row)
+        rhr = values.get("summary", {}).get("rhr_bpm")
+        if isinstance(rhr, (int, float)) and 25 <= rhr <= 250:
+            # Garmin's daily resting HR replaces the Health Connect copy (TRIMP, form, health page read this table).
+            target = session.get(RestingHrDaily, row.day)
+            if target is None:
+                target = RestingHrDaily(day=row.day, bpm=rhr, source=SOURCE)
+            else:
+                target.bpm, target.source = rhr, SOURCE
+            session.add(target)
+            result["resting_hr"] += 1
         steps = values.get("summary", {}).get("steps")
         if steps is not None:
             target = session.get(StepsDaily, row.day)

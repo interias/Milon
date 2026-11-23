@@ -78,7 +78,7 @@ def store(day, normalized, session):
     session.commit()
 
 
-def test_source_projection_is_idempotent_and_keeps_resting_hr_separate(db):
+def test_source_projection_is_idempotent_and_garmin_resting_hr_replaces_hc(db):
     with Session(db) as session:
         session.add(StepsDaily(day=DAY, steps=4000, source="health_connect"))
         session.add(RestingHrDaily(day=DAY, bpm=45, source="health_connect"))
@@ -91,7 +91,7 @@ def test_source_projection_is_idempotent_and_keeps_resting_hr_separate(db):
     with Session(db) as session:
         assert session.get(StepsDaily, DAY).steps == 6200
         assert session.get(StepsDaily, DAY).source == daily.SOURCE
-        assert session.get(RestingHrDaily, DAY).bpm == 45
+        assert (session.get(RestingHrDaily, DAY).bpm, session.get(RestingHrDaily, DAY).source) == (50, daily.SOURCE)
         assert len(session.exec(select(SleepSession)).all()) == 3
         assert len(session.exec(select(Vo2Max)).all()) == 1
         assert len(session.exec(select(daily.GarminDaily)).all()) == 3
@@ -286,7 +286,7 @@ def test_hc_full_reimport_reapplies_direct_values_in_transaction(db):
 def test_projector_noop_on_legacy_database_without_staging_table():
     legacy = create_engine("sqlite://")
     with Session(legacy) as session:
-        assert daily.apply_daily(session) == {"steps": 0, "sleep": 0, "vo2": 0}
+        assert daily.apply_daily(session) == {"steps": 0, "sleep": 0, "vo2": 0, "resting_hr": 0, "reparsed": 0}
     legacy.dispose()
 
 
@@ -402,7 +402,7 @@ def test_real_hc_import_preserves_daily_priority_and_historical_sources(db, monk
         vo2 = session.exec(select(Vo2Max).order_by(Vo2Max.measured_at)).all()
         assert [(row.vo2, row.source) for row in vo2] == [(43, "health_connect"), (45.6, daily.SOURCE)]
         assert session.exec(select(BodyMeasurement)).one().weight_kg == 75
-        assert session.get(RestingHrDaily, DAY).bpm == 45
+        assert (session.get(RestingHrDaily, DAY).bpm, session.get(RestingHrDaily, DAY).source) == (50, daily.SOURCE)  # Garmin wins
 
 
 def test_active_calories_split_today_and_average_from_raw_summary(db):
@@ -424,3 +424,49 @@ def test_active_calories_split_today_and_average_from_raw_summary(db):
     app.include_router(router)
     response = TestClient(app).get("/metrics/garmin/active-calories?days=0")
     assert response.status_code == 422
+
+
+def unmeasurable_payload(day=DAY):
+    """Real shape of 2026-11-16: 15 min "unmeasurable" (-1) inside the night, Garmin leaves it out of sleepTimeSeconds."""
+    payload = sleep_payload(day)
+    end = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc) + timedelta(hours=6)
+    start = end - timedelta(hours=8)
+    gap = start + timedelta(hours=3)
+    payload["sleepLevels"] = [
+        {"startGMT": start.isoformat(), "endGMT": gap.isoformat(), "activityLevel": 1.0},
+        {"startGMT": gap.isoformat(), "endGMT": (gap + timedelta(minutes=15)).isoformat(), "activityLevel": -1.0},
+        {"startGMT": (gap + timedelta(minutes=15)).isoformat(), "endGMT": end.isoformat(), "activityLevel": 0.0}]
+    payload["dailySleepDTO"]["sleepTimeSeconds"] = 8 * 3600 - 15 * 60
+    return payload
+
+
+def test_unmeasurable_minutes_are_known_but_not_asleep(db):
+    value = daily._sleep(unmeasurable_payload(), DAY)
+    assert value["stage_coverage"] == 1.0
+    assert value["asleep_minutes"] == 465
+    payload = unmeasurable_payload()
+    payload.pop("sleepLevels")
+    payload["dailySleepDTO"].update(deepSleepSeconds=3 * 3600, lightSleepSeconds=4 * 3600 + 45 * 60,
+                                    remSleepSeconds=0, awakeSleepSeconds=0, unmeasurableSleepSeconds=900)
+    assert daily._sleep(payload, DAY)["asleep_minutes"] == 465
+
+
+def test_old_rows_are_reparsed_once_and_replace_the_hc_copy(db):
+    """Nights stored by parser v1 without duration get it from raw_json; the HC mirror goes away."""
+    old = daily._sleep(unmeasurable_payload(), DAY)
+    old["asleep_minutes"] = old["awake_minutes"] = None
+    with Session(db) as session:
+        session.add(daily.GarminDaily(day=DAY, normalized_json=json.dumps({"sleep": old}),
+                                      raw_json=json.dumps({"sleep": unmeasurable_payload()}), parser_version=1))
+        session.add(SleepSession(external_id="hc-1", started_at=datetime.fromisoformat(old["started_at"]),
+                                 ended_at=datetime.fromisoformat(old["ended_at"]), day=DAY, duration_window_minutes=480,
+                                 asleep_minutes=465, stage_coverage=1.0, main_sleep=True,
+                                 source_package=daily.PACKAGE, source="health_connect"))
+        session.commit()
+        first = daily.apply_daily(session)
+        session.commit()
+        assert first["reparsed"] == 1
+        rows = session.exec(select(SleepSession)).all()
+        assert [(r.source, r.asleep_minutes) for r in rows] == [(daily.SOURCE, 465)]
+        assert session.get(daily.GarminDaily, DAY).parser_version == daily.PARSER_VERSION
+        assert daily.apply_daily(session)["reparsed"] == 0
