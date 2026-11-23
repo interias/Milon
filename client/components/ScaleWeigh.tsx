@@ -50,6 +50,8 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   const [ready, setReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [logOpen, setLogOpen] = useState(false);
+  const [backfilled, setBackfilled] = useState<string[]>([]);
+  const [remembers, setRemembers] = useState(true);
   const logRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     // erst im Browser prüfen, sonst weicht das Server-HTML ab
     if (!window.isSecureContext) setSupport("insecure");
     else setSupport("bluetooth" in navigator ? "ok" : "missing");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setRemembers(typeof (navigator as any).bluetooth?.getDevices === "function");
   }, []);
 
   const loadRecent = useCallback(() => {
@@ -94,6 +98,17 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     }
   };
 
+  // Ältere Messungen aus dem Waagenspeicher: die Waage löscht sie nach dem Senden, also sofort speichern.
+  const backfill = (r: ScaleReading) => {
+    api.scaleSave(r).then((res) => {
+      addLog(res.duplicate ? "Backend: nachgetragene Messung war schon da" : `Backend: Messung von ${time(r.timestamp)} nachgetragen (#${res.measurement.id})`);
+      if (!res.duplicate) setBackfilled((list) => [...list, `${dm(r.timestamp)} ${time(r.timestamp)} · ${de(r.weightKg, 2)} kg`]);
+      loadRecent();
+      onSaved?.();
+      window.dispatchEvent(new Event(WEIGHT_SAVED));
+    }).catch((e) => addLog(`! Nachtragen fehlgeschlagen: ${friendly(e)}`));
+  };
+
   const start = (acceptAllDevices = false) => {
     logRef.current = [];
     setLog([]);
@@ -104,8 +119,9 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
     setCopied(false);
     setReady(false);
     setElapsed(0);
+    setBackfilled([]);
     setPhase("measuring");
-    measureOnce({ acceptAllDevices, onLiveWeight: setLive, onLog: addLog })
+    measureOnce({ acceptAllDevices, onLiveWeight: setLive, onLog: addLog, onStoredRecord: backfill, timeoutMs: 120_000 })
       .then((r) => { setReading(r); setLive(r.weightKg); return save(r); })
       .catch((e) => { addLog(`! ${friendly(e)}`); setError(friendly(e)); setPhase("error"); });
   };
@@ -124,7 +140,7 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
   const waiting = phase === "measuring" && live == null;
   const status = phase === "measuring"
     ? (!ready ? "Verbinde mit der Waage …"
-      : live == null ? (elapsed >= 20 ? "Noch kein Gewicht empfangen. Stehst du schon drauf? Sonst: Log kopieren." : "Bereit – jetzt barfuß draufstellen")
+      : live == null ? (elapsed >= 30 ? "Noch kein Gewicht. Steh still, bis die Waage fertig blinkt – Milon holt die Messung dann aus ihrem Speicher." : "Bereit – jetzt barfuß draufstellen")
       : "Messe – stillstehen …")
     : phase === "saving" ? "Stabil. Speichere …" : null;
 
@@ -149,6 +165,7 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
         : `Gespeichert · ${reading.source === "stored" ? "aus dem Waagenspeicher" : "live"} · Widerstand ${reading.r1}/${reading.r2}`)}
       {phase === "error" && <span className="text-bad">{error}</span>}
     </p>
+    {backfilled.length > 0 && <p className="text-sm text-accent">Aus dem Waagenspeicher nachgetragen: {backfilled.join(" · ")}</p>}
     <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
       <button type="button" disabled={busy || support !== "ok"} onClick={() => start(true)}
         className="py-1.5 text-muted underline underline-offset-4 disabled:opacity-50">Alle Geräte anzeigen</button>
@@ -170,7 +187,9 @@ export function ScaleWeigh({ onSaved, compact = false }: { onSaved?: () => void;
         <li>Waage antippen, damit sie aufwacht.</li>
         <li>„Wiegen“ tippen und im Chrome-Dialog die Waage wählen (meist „QN-Scale“).</li>
         <li>Erst wenn „Bereit“ erscheint, barfuß draufstellen und stillstehen, bis das Häkchen kommt.</li>
+        <li>Auch ohne Milon gewogen? Die Waage merkt sich die Messung – beim nächsten „Wiegen“ wird sie mit ihrer echten Uhrzeit nachgetragen.</li>
       </ol>
+      {!remembers && <p className="mt-2">Der Koppel-Dialog kommt jedes Mal, weil dieser Chrome sich Bluetooth-Geräte nicht merkt. Abhilfe (ungeprüft): in Chrome <code>chrome://flags</code> öffnen, „Experimental Web Platform features“ aktivieren, Chrome neu starten.</p>}
     </details>}
 
     {!compact && recent && recent.length > 0 && <details className="mt-1 text-sm">

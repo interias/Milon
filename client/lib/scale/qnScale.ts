@@ -34,6 +34,10 @@ export interface QnScaleOptions {
   acceptAllDevices?: boolean;
   unit?: "kg" | "lb";
   timeoutMs?: number;
+  /** Milon: older records from the scale memory (weighed while not connected); the scale deletes them after sending. */
+  onStoredRecord?: (reading: ScaleReading) => void;
+  /** Milon: reuse a device this origin was already granted (navigator.bluetooth.getDevices, if Chrome offers it). Default true. */
+  remember?: boolean;
 }
 
 const u16 = (n: number) => `0000${n.toString(16).padStart(4, "0")}-0000-1000-8000-00805f9b34fb`;
@@ -125,18 +129,28 @@ export function parseStoredFrame(d: Uint8Array): StoredFrame | null {
   };
 }
 
+/** QN record time → ISO, or null if the scale clock is implausible (unset clock, far future). */
+export function qnTimeToIso(recTime: number, nowMs: number): string | null {
+  const ms = (recTime + QN_EPOCH_OFFSET) * 1000;
+  if (ms < nowMs - 365 * 86_400_000 || ms > nowMs + 10 * 60_000) return null;
+  return new Date(ms).toISOString();
+}
+
 /** All-zero 0x23 record (time 0, weight 0): the scale has no stored measurement. */
 export function isEmptyStoredFrame(f: StoredFrame): boolean {
   return f.kg === 0 && f.recTime === 0;
 }
 
 export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReading> {
-  const log = (s: string) => opts.onLog?.(`${new Date().toISOString().slice(11, 23)} ${s}`);
+  // Milon: local wall time in the log (was UTC, which read like the wrong hour)
+  const stamp = () => { const n = new Date(); return `${n.toTimeString().slice(0, 8)}.${String(n.getMilliseconds()).padStart(3, "0")}`; };
+  const log = (s: string) => opts.onLog?.(`${stamp()} ${s}`);
   if (!("bluetooth" in navigator)) throw new Error("Web Bluetooth nicht verfügbar – Chrome auf Android nutzen.");
 
   const optionalServices = [SVC_T1, SVC_T2, SVC_AE00, SVC_DEVINFO, SVC_BATTERY];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const device = await (navigator as any).bluetooth.requestDevice(
+  const bt = (navigator as any).bluetooth;
+  const choose = () => bt.requestDevice(
     opts.acceptAllDevices
       ? { acceptAllDevices: true, optionalServices }
       : {
@@ -144,9 +158,32 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
           optionalServices,
         },
   );
-  log(`Gerät: "${device.name}" id=${device.id}`);
-
-  const server = await device.gatt.connect();
+  // Milon: a remembered scale connects without the chooser (only where Chrome offers getDevices).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let device: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let server: any = null;
+  if (!opts.acceptAllDevices && opts.remember !== false && typeof bt.getDevices === "function") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const known = (await bt.getDevices()).filter((d: any) => (d.name ?? "").startsWith("QN"));
+    if (known.length) {
+      device = known[0];
+      log(`Gemerkte Waage: "${device.name}" – verbinde ohne Dialog`);
+      try {
+        server = await device.gatt.connect();
+      } catch (e) {
+        log(`! gemerkte Waage nicht erreichbar (${e}) – Auswahl-Dialog`);
+        device = null;
+      }
+    }
+  } else if (typeof bt.getDevices !== "function") {
+    log("Chrome kann sich die Waage hier nicht merken (getDevices fehlt) – Auswahl-Dialog");
+  }
+  if (!device) {
+    device = await choose();
+    log(`Gerät: "${device.name}" id=${device.id}`);
+    server = await device.gatt.connect();
+  }
   log("GATT verbunden");
 
   // --- discover characteristics of both layouts ----------------------------
@@ -193,13 +230,14 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
   const sessionStart = qnNow();
   const unitByte = opts.unit === "lb" ? 0x02 : 0x01;
 
+  let done = false;
+  // Milon: keep asking while we wait — a weighing that the scale stores instead of streaming shows up here.
   const sendHistoryQuery = () => {
-    if (historyAttempts++ >= 5) return;
+    if (done || historyAttempts++ >= 40) return;
     write(writeChar, withChecksum([0x22, 0x06, protocolType, 0x00, 0x03, 0x00]), "0x22 history query");
   };
 
   return new Promise<ScaleReading>((resolve, reject) => {
-    let done = false;
     const finish = (r: ScaleReading | Error) => {
       if (done) return;
       done = true;
@@ -262,14 +300,22 @@ export async function measureOnce(opts: QnScaleOptions = {}): Promise<ScaleReadi
           const f = parseStoredFrame(d);
           if (!f) return void setTimeout(sendHistoryQuery, 3000);
           if (isEmptyStoredFrame(f)) {
-            // Milon: all-zero record = nothing stored (seen on a real CS20L); stop polling, wait for live 0x10
-            log("  Waagenspeicher leer – warte auf Live-Gewicht");
+            // Milon: all-zero record = nothing stored (seen on a real CS20L); keep asking until a weighing lands
+            log("  Waagenspeicher leer – warte auf Messung");
+            setTimeout(sendHistoryQuery, 3000);
             break;
           }
           log(`  gespeichert: ${f.kg} kg r1=${f.r1} r2=${f.r2} alter=${sessionStart - f.recTime}s`);
-          if (f.kg > 5 && f.kg < 300 && f.recTime + 90 >= sessionStart) {
-            finish({ weightKg: f.kg, r1: f.r1, r2: f.r2, source: "stored", protocolType, timestamp: new Date().toISOString(), rawHex: hex(d) });
-          } else setTimeout(sendHistoryQuery, 3000);
+          if (f.kg > 5 && f.kg < 300) {
+            const at = qnTimeToIso(f.recTime, Date.now());
+            if (!at) log("  ! Uhrzeit der Waage unplausibel – nehme die Uhrzeit des Handys");
+            const reading: ScaleReading = { weightKg: f.kg, r1: f.r1, r2: f.r2, source: "stored", protocolType, timestamp: at ?? new Date().toISOString(), rawHex: hex(d) };
+            if (f.recTime + 90 >= sessionStart) return void finish(reading);
+            // Milon: the scale deletes a record once sent — never drop an older one, hand it over to be saved
+            log("  ältere Messung – wird nachgetragen");
+            opts.onStoredRecord?.(reading);
+          }
+          setTimeout(sendHistoryQuery, 3000);
           break;
         }
         default:

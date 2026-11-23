@@ -64,6 +64,21 @@ neuere Firmware mit `0x21`). Die Waage antwortet auf `0xA0` mit `0xA1` und auf `
 Test nicht an (16 s Log) – die Reihenfolge entspricht openScale (`QNHandler.kt`), dort gibt es keinen eigenen Startbefehl.
 Das Live-Gewicht ist also noch unbestätigt.
 
+Zweiter Test (2026-11-23): Der Speicher lieferte die Wiegung aus dem ersten Versuch (`23 14 ff 01 01 f0 ea e6 96 32 1d fb …` = 76,75 kg,
+Zeit `0x3296e6ea` = 16:58:34 UTC, r1/r2 = 0). Die Waage löscht einen Datensatz, sobald sie ihn gesendet hat. Deshalb gilt jetzt:
+- Ältere Datensätze werden nie verworfen, sondern mit ihrer echten Uhrzeit nachgetragen (`onStoredRecord`; die Uhr der Waage stellen wir bei jeder Verbindung).
+  Unplausible Waagenuhr (> 1 Jahr alt oder in der Zukunft) → Uhrzeit des Handys.
+- Solange Milon auf eine Messung wartet, fragt es den Speicher alle 3 s ab (höchstens 40-mal, Wartezeit 2 min). Speichert die Waage die
+  Wiegung, statt sie live zu senden, kommt sie so trotzdem in Sekunden an. Ein Datensatz, der höchstens 90 s alt ist, gilt als „diese Wiegung“.
+- Die Log-Zeiten sind jetzt Ortszeit (vorher UTC).
+
+## Koppel-Dialog nur einmal?
+
+Chrome merkt sich erlaubte Bluetooth-Geräte nur, wenn er `navigator.bluetooth.getDevices()` anbietet. Auf Android steht das laut
+Implementierungsstand hinter „Experimental Web Platform features“ (`chrome://flags`); für die aktuelle Chrome-Version nicht bestätigt.
+Gibt es die Funktion, verbindet Milon ohne Dialog mit der gemerkten Waage (Name beginnt mit „QN“); klappt das nicht, kommt der Dialog.
+Ganz ohne Knopfdruck geht es im Browser nicht: eine geschlossene Seite kann nicht nach der Waage suchen.
+
 ## Troubleshooting
 
 - **Waage taucht im Dialog nicht auf:** Waage erneut antippen (sie sendet nur kurz). Dann „Alle Geräte anzeigen“ und das Gerät von Hand wählen.
