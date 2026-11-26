@@ -457,7 +457,7 @@ export type PR = {
 };
 export type PlanSet = { type: "warmup" | "normal"; weight_kg: number | null; reps: number; rpe: number | null };
 export type PlanExercise = {
-  key: string; name: string; template_id: string; rep_range: [number, number]; rest_seconds: number;
+  key: string; name: string; template_id: string; bodyweight?: boolean; rep_range: [number, number]; rest_seconds: number;
   superset: number | null; weight_kg: number | null; step_up_kg: number | null; sets: PlanSet[];
   action: "increase" | "hold" | "decrease" | "pause" | "start" | "new";
   reason: string; rir_note: string; last: { date: string; summary: string; reps: number[]; hit: number } | null;

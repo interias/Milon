@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -7,8 +8,9 @@ from app.metrics import strength_plan as sp
 from app.models import Workout, WorkoutSet
 
 TODAY = date(2026, 11, 2)
-ROW = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "row")
-SKULL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "skull")
+# Regel-Tests mit fester Satzzahl, unabhängig von der Plan-Zusammenstellung.
+ROW = replace(next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "row"), sets=3)
+SKULL = replace(next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "skull"), sets=2, reps=(10, 15))
 RDL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "rdl")
 LATERAL = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "lateral")
 
@@ -63,7 +65,7 @@ def test_rir_compounds_stop_at_one_isolation_goes_to_zero():
     assert sp._targets(LATERAL) == [8, 9, 9, 10]
     assert sp._targets(SKULL) == [8, 10]
     compounds = {ex.key for p in sp.PLANS for ex in p.exercises if ex.last_rpe < 10}
-    assert compounds == {"row", "mts", "pulldown", "legpress", "rdl"}
+    assert compounds == {"row", "mts", "pulldown", "legpress", "rdl", "chinup", "dip"}
 
 
 def test_lateral_raise_targets_15_and_custom_rule_overrides():
@@ -88,7 +90,7 @@ def test_long_pause_steps_down_and_stale_starts_from_e1rm():
     assert sp.suggest(ROW, [], TODAY)["action"] == "new"
 
 
-def test_superset_isolation_two_sets_without_warmup():
+def test_isolation_two_sets_without_warmup():
     s = sp.suggest(SKULL, [_session(TODAY - timedelta(days=3), [(25, 14, 8), (25, 14, 10)])], TODAY)
     assert [x["rpe"] for x in s["sets"]] == [8, 10]
     assert [x["reps"] for x in s["sets"]] == [15, 15]
@@ -114,7 +116,7 @@ def _workout(s, ext, when, rows):
 
 def test_next_training_week_count_and_name_fallback(plan_db):
     with Session(plan_db) as s:
-        # Diese Woche einmal OK A (mit Template-IDs, ohne eigene Übung → erste Variante): OK B und UK offen.
+        # Diese Woche einmal Oberkörper (mit Template-IDs): 1 von 2 OK, UK und Arme offen.
         _workout(s, "a", datetime(2026, 11, 2, 16), [
             ("Rudern sitzend (Maschine)", "1DF4A847", "warmup", 40, 12, None),
             ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
@@ -127,10 +129,10 @@ def test_next_training_week_count_and_name_fallback(plan_db):
         ])
         s.commit()
     r = sp.next_training(date(2026, 11, 4))
-    ok, ok_b, uk = r["plans"]
-    assert (ok["done"], ok_b["done"], uk["done"]) == (1, 0, 0)
-    assert ok_b["program"] == "ok" and uk["program"] == "uk"
-    assert r["next"] == "ok_b"  # Gleichstand offener Einheiten → Oberkörper B vor Unterkörper
+    ok, uk, arme_a, arme_b = r["plans"]
+    assert (ok["per_week"], ok["done"], uk["done"], arme_a["done"]) == (2, 1, 0, 0)
+    assert arme_a["program"] == arme_b["program"] == "arme" and uk["program"] == "uk"
+    assert r["next"] == "ok"  # Gleichstand offener Einheiten → erstes Programm (Oberkörper)
     legpress = next(e for e in uk["exercises"] if e["key"] == "legpress")
     assert legpress["last"]["date"] == "2026-10-28"
     assert uk["last_date"] == "2026-10-28"
@@ -154,7 +156,7 @@ def test_weekly_volume_counts_hard_sets_fractionally(plan_db):
     assert v["Seitliche Schulter"]["planned"] == 8 and v["Gesäß"]["planned"] == 5
 
 
-def test_classify_tells_upper_body_variants_apart(plan_db):
+def test_classify_tells_gym_and_home_apart(plan_db):
     with Session(plan_db) as s:
         _workout(s, "a", datetime(2026, 11, 2, 16), [
             ("Rudern sitzend (Maschine)", "1DF4A847", "normal", 54, 12, 8),
@@ -169,17 +171,55 @@ def test_classify_tells_upper_body_variants_apart(plan_db):
             ("Beinbeugen sitzend", "11A123F3", "normal", 61, 12, 9),
         ])
         s.commit()
+        _workout(s, "d", datetime(2026, 11, 3, 18), [
+            ("Chin Up", "29083183", "normal", None, 8, 8),
+            ("Seated Incline Curl (Dumbbell)", "8BAB2735", "normal", 15, 12, 9),
+        ])
+        _workout(s, "e", datetime(2026, 11, 6, 18), [
+            ("Skullcrusher (Barbell)", "875F585F", "normal", 30, 10, 9),
+            ("Triceps Dip", "28BB4A95", "normal", None, 10, 8),
+        ])
+        s.commit()
     kinds = sp._classify(sp._read_sets())
-    assert sorted(kinds.values()) == ["ok", "ok_b", "uk"]
+    assert sorted(kinds.values()) == ["arme_a", "arme_b", "ok", "ok", "uk"]
 
 
-def test_upper_body_b_has_five_mts_sets_and_face_pulls():
-    b = next(p for p in sp.PLANS if p.key == "ok_b")
-    keys = [ex.key for ex in b.exercises]
-    assert "fly" not in keys and "rear_fly" not in keys and "face_pull" in keys
-    assert next(ex for ex in b.exercises if ex.key == "mts").sets == 5
-    uk = next(p for p in sp.PLANS if p.key == "uk")
-    assert next(ex for ex in uk.exercises if ex.key == "legcurl").templates == ("11A123F3",)
+def test_plans_match_the_weekly_split():
+    by_key = {p.key: p for p in sp.PLANS}
+    assert set(by_key) == {"ok", "uk", "arme_a", "arme_b"}
+    ok = {ex.key: ex.sets for ex in by_key["ok"].exercises}
+    assert ok == {"row": 4, "mts": 4, "pulldown": 4, "fly": 3, "lateral": 4, "face_pull": 4}
+    assert by_key["ok"].per_week == 2
+    assert [ex.key for ex in by_key["arme_a"].exercises] == ["chinup", "incline_curl", "oh_ext"]
+    assert [ex.key for ex in by_key["arme_b"].exercises] == ["skull", "dip", "ez_curl"]
+    assert next(ex for ex in by_key["uk"].exercises if ex.key == "legcurl").templates == ("11A123F3",)
+    v = {m["muscle"]: m["planned"] for m in sp.weekly_volume(date(2026, 11, 4))["muscles"]}
+    assert 10 <= v["Bizeps"] <= 20 and 10 <= v["Trizeps"] <= 20
+
+
+CHIN = next(ex for p in sp.PLANS for ex in p.exercises if ex.key == "chinup")
+
+
+def test_bodyweight_progresses_by_reps_only():
+    hit = sp.suggest(CHIN, [_session(TODAY - timedelta(days=3), [(0, 10, 9), (0, 10, 9), (0, 10, 9)])], TODAY)
+    assert hit["action"] == "increase" and hit["weight_kg"] is None and hit["bodyweight"]
+    assert all(x["weight_kg"] is None for x in hit["sets"]) and len(hit["sets"]) == 3
+    hold = sp.suggest(CHIN, [_session(TODAY - timedelta(days=3), [(0, 8, 9), (0, 6, 9), (0, 4, 10)])], TODAY)
+    assert hold["action"] == "hold" and hold["last"]["reps"] == [8, 6, 4]
+    assert sp.suggest(CHIN, [], TODAY)["action"] == "new"
+
+
+def test_bodyweight_sets_without_weight_are_read(plan_db):
+    with Session(plan_db) as s:
+        _workout(s, "a", datetime(2026, 11, 3, 18), [
+            ("Chin Up", "29083183", "normal", None, 8, 8),
+            ("Chin Up", "29083183", "normal", None, 7, 9),
+            ("Seated Incline Curl (Dumbbell)", "8BAB2735", "normal", 15, 12, 9),
+        ])
+        s.commit()
+    plan = next(p for p in sp.next_training(date(2026, 11, 4))["plans"] if p["key"] == "arme_a")
+    chin = next(e for e in plan["exercises"] if e["key"] == "chinup")
+    assert chin["last"]["reps"] == [8, 7] and plan["done"] == 1
 
 
 def test_rules_are_stored_used_and_reset(plan_db):

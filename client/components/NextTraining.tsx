@@ -28,7 +28,7 @@ function ExerciseRow({ ex, onChange }: { ex: PlanExercise; onChange: () => void 
       <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tone}`}>{delta ?? label}</span>
     </div>
     <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
-      <span className="font-display text-xl font-extrabold text-accent">{kg(ex.weight_kg)}</span>
+      <span className="font-display text-xl font-extrabold text-accent">{ex.bodyweight ? "Körpergewicht" : kg(ex.weight_kg)}</span>
       <span className="text-sm">Ziel {work.length} × {ex.rule.target_reps} Wdh.</span>
       <span className="text-xs text-muted">RIR {work.map((set) => rir(set.rpe)).join(" → ")}</span>
     </div>
@@ -108,7 +108,7 @@ export function NextTraining() {
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <button type="button" onClick={write} disabled={writing} className="rounded border border-line px-3 py-2 text-sm disabled:opacity-60">{writing ? "Schreibe …" : "Jetzt nach Hevy schreiben"}</button>
-      <p className="text-xs text-muted" role="status">{message ?? "Wird nach jedem Hevy-Sync automatisch als Routinen „Milon OK“, „Milon OK B“ und „Milon UK“ gesetzt."}</p>
+      <p className="text-xs text-muted" role="status">{message ?? "Wird nach jedem Hevy-Sync automatisch als Routinen „Milon OK“, „Milon UK“, „Milon Arme A“ und „Milon Arme B“ gesetzt."}</p>
     </div>
   </Card>;
 }
