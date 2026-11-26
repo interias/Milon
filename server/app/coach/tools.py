@@ -96,7 +96,8 @@ TOOLS = [
         "Watt-TSS nie mit Lauflast verrechnen. Rad erhält die aerobe Basis, ersetzt aber nicht Laufökonomie "
         "und Sehnen-/Knochenbelastbarkeit."),
     _fn("get_week_plan", "Mein Wochenplan (Kalenderwoche Mo–So, offset 0 = aktuelle, -1 = Vorwoche, 1 = nächste): "
-        "geplant vs. erledigt über Rad (Rad-Plan), Kraft (Milon OK/UK an Gym-Tagen) und Lauf, Summen, harte Einheiten "
+        "geplant vs. erledigt über Rad (Rad-Plan, falls aktiv), Kraft (Milon OK/UK an Gym-Tagen), Arme zu Hause (Di/Do) und "
+        "zwei Cardio-Plätze (Sa/So; jeder Lauf oder jede Fahrt der Woche zählt, die längste als „lang“), Lauf, Summen, harte Einheiten "
         "(Regel höchstens 2 Rad + Lauf), Regel-Hinweise (Beintag/6 h, Tag danach, zwei harte Tage) und je Tag die "
         "Einheiten mit Farbe. Krankheitstage (sick) sind pausiert, kein Versäumnis. Last nie über Sportarten addieren.",
         {"offset": {"type": "integer", "description": "Wochen relativ zur aktuellen (-52 bis 8)", "default": 0}}),

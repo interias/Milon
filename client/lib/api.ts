@@ -644,7 +644,7 @@ export type BikeWeek = {
 };
 export type BikeStepInput = { label: string; duration_min: number | null; power_pct: [number, number] | null; cadence: [number | null, number | null] | null };
 export type BikePlanOverview = {
-  plan: { id: string; name: string; start: string; end: string; imported_at: string } | null;
+  plan: { id: string; name: string; start: string; end: string; imported_at: string; planned_end?: string | null } | null;
   today?: string;
   ftp?: BikeFtpEntry & { wkg: number | null; history: BikeFtpEntry[] };
   zones?: { zone: string; from_pct: number; to_pct: number; watts: [number, number] }[];
@@ -671,12 +671,12 @@ export type BikeCheckpoints = {
 // ---- Mein Wochenplan (/metrics/week) ----
 export type WeekColor = "green" | "yellow" | "orange" | "red" | "grey" | "open" | "skipped" | "sick";
 export type WeekItem = {
-  type: "bike" | "gym" | "ride" | "run" | "strength"; planned: boolean; title: string; color: WeekColor; href?: string;
+  type: "bike" | "gym" | "ride" | "run" | "strength" | "cardio" | "home"; planned: boolean; title: string; color: WeekColor; href?: string;
   kind?: string; optional?: boolean; status?: BikeSessionStatus; duration_min?: number | null; ratio?: number | null; target?: string | null;
   ride?: BikeSession["ride"]; run?: BikeSession["run"]; execution?: BikeExecution | null; run_alternative?: string | null;
-  warnings?: string[]; zwo?: number | null; program?: "ok" | "uk" | null; label?: string | null;
+  warnings?: string[]; zwo?: number | null; program?: "ok" | "uk" | "arme" | null; label?: string | null; slot?: string | null; variant?: string | null;
   session_id?: number; day?: string; hard?: boolean; start?: string; end?: string;
-  done?: { title: string; minutes: number | null; program: string | null } | null; prescription?: string[];
+  done?: { title: string; minutes: number | null; program?: string | null; kind?: string; day?: string } | null; prescription?: string[];
   minutes?: number | null; km?: number; avg_hr?: number | null;
 };
 export type WeekDay = {
@@ -690,7 +690,8 @@ export type WeekPlan = {
   plan: { name: string; week: number | null; phase: string | null; goal: string | null } | null;
   days: WeekDay[]; max_hard: number; warnings: string[];
   totals: { bike_planned_min: number; bike_planned: number; bike_done_min: number; bike_done: number; bike_matched: number;
-    gym_planned: number; gym_done: number; gym_matched: number; run_km: number; runs: number; hard_planned: number; hard_done: number; missed: number };
+    gym_planned: number; gym_done: number; gym_matched: number; run_km: number; runs: number; hard_planned: number; hard_done: number; missed: number;
+    cardio_planned?: number; cardio_done?: number; cardio_min?: number; home_planned?: number; home_done?: number };
   hard_sets: { done: number; planned: number } | null;
   form: { date: string; tsb: number; ctl: number; atl: number } | null;
 };

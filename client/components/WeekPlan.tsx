@@ -17,7 +17,8 @@ export const WEEK_COLOR: Record<WeekColor, { bar: string; label: string }> = {
   skipped: { bar: "var(--color-line)", label: "ausgelassen (optional)" },
   sick: { bar: "var(--color-sick)", label: "krank (pausiert)" },
 };
-const TYPE_LABEL: Record<WeekItem["type"], string> = { bike: "Rad", gym: "Kraft", ride: "Rad", run: "Lauf", strength: "Kraft" };
+const TYPE_LABEL: Record<WeekItem["type"], string> = { bike: "Rad", gym: "Kraft", ride: "Rad", run: "Lauf", strength: "Kraft", cardio: "Cardio", home: "Arme" };
+const otherDay = (it: WeekItem) => it.done?.day && it.done.day !== it.day ? ` am ${dm(it.done.day)}` : "";
 
 function status(it: WeekItem): string {
   if (it.type === "bike") {
@@ -25,6 +26,9 @@ function status(it: WeekItem): string {
     if (it.status === "done" && it.ratio != null) return `${de0(it.ratio * 100)} % der Dauer`;
     if (it.status === "done") return "erledigt";
   }
+  if (it.type === "cardio" && it.done) return `${it.color === "open" ? "bisher " : ""}${it.done.kind} ${de0(it.done.minutes)} min${otherDay(it)}`;
+  if (it.type === "home" && it.done) return it.color === "yellow" ? `${it.done.title}${otherDay(it)} (anderes Programm)` : `erledigt${otherDay(it)}`;
+  if (it.slot) return `zählt als ${it.slot}`;
   if (it.type === "gym" && it.done) return it.color === "yellow" ? `${it.done.title} (anderes Programm)` : "erledigt";
   return WEEK_COLOR[it.color].label;
 }
@@ -34,7 +38,8 @@ function Item({ it, planning, days, onMove }: { it: WeekItem; planning?: boolean
   const c = WEEK_COLOR[it.color];
   const sub = it.type === "bike"
     ? [it.optional ? "optional" : null, it.duration_min ? `${de0(it.duration_min)} min` : null, it.target].filter(Boolean).join(" · ")
-    : it.type === "gym" ? (it.label ?? "")
+    : it.type === "gym" || it.type === "home" ? (it.label ?? "")
+    : it.type === "cardio" ? (it.target ?? "")
     : it.type === "run" ? `${de(it.km, 1)} km · ${de0(it.minutes)} min${it.avg_hr ? ` · Ø ${it.avg_hr} bpm` : ""}`
     : `${de0(it.minutes)} min`;
   const body = (
@@ -136,7 +141,7 @@ function GymPicker({ d, onSet }: { d: WeekDay; onSet: (p: "ok" | "uk" | null) =>
   return (
     <label className="flex items-center gap-1 text-[11px] text-muted">Kraft an diesem Tag
       <select value={value} onChange={(e) => onSet((e.target.value || null) as "ok" | "uk" | null)} className="rounded border border-line bg-surface px-1 py-0.5 text-base sm:text-[11px]" aria-label={`Kraft am ${dm(d.date)}`}>
-        <option value="">kein Krafttraining</option><option value="ok">Milon OK (A/B)</option><option value="uk">Milon UK</option>
+        <option value="">kein Krafttraining</option><option value="ok">Milon OK</option><option value="uk">Milon UK</option>
       </select>
     </label>
   );
@@ -148,7 +153,7 @@ export function WeekLegend() {
       {(["green", "yellow", "orange", "red", "grey", "sick", "open"] as WeekColor[]).map((k) => (
         <span key={k} className="flex items-center gap-1"><span className="inline-block h-2.5 w-1 rounded-sm" style={{ background: WEEK_COLOR[k].bar }} />{WEEK_COLOR[k].label}</span>
       ))}
-      <span>· Rad im Soll = Dauer ±20 %</span>
+      <span>· Rad im Soll = Dauer ±20 % · Cardio im Soll ab 80 % der Dauer, Lauf oder Rad, an jedem Tag der Woche</span>
     </div>
   );
 }
@@ -194,7 +199,7 @@ export function WeekLine({ data, today }: { data: WeekPlan; today?: WeekToday | 
     {today && <p className="text-sm"><span className="font-semibold">Heute:</span> <span className="text-muted">{today.status === "open" ? todo : TODAY_STATUS[today.status]}{today.adjustments.length ? " · ↻ Anpassung vorgeschlagen" : ""}</span></p>}
     <p className="text-sm">
       <span className="font-semibold">Diese Woche:</span>{" "}
-      <span className="text-muted">Rad {de0(t.bike_done_min)}/{de0(t.bike_planned_min)} min · Kraft {t.gym_matched}/{t.gym_planned} · harte Einheiten {t.hard_done}/{t.hard_planned}{t.run_km ? ` · Lauf ${de(t.run_km, 1)} km` : ""}</span>
+      <span className="text-muted">{t.cardio_planned ? `Cardio ${t.cardio_done}/${t.cardio_planned} · Arme ${t.home_done}/${t.home_planned}` : `Rad ${de0(t.bike_done_min)}/${de0(t.bike_planned_min)} min`} · Kraft {t.gym_matched}/{t.gym_planned} · harte Einheiten {t.hard_done}/{t.hard_planned}{t.run_km ? ` · Lauf ${de(t.run_km, 1)} km` : ""}</span>
     </p>
     </div>
   );

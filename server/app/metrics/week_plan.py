@@ -33,6 +33,13 @@ GYM_LABEL = {"ok": "Gym Oberkörper", "uk": "Gym Beine"}
 HARD_RUN_SHARE = 0.80   # Lauf gilt als hart ab Ø-Puls ≥ 80 % HFmax (Z3+ wie running._ZONE_DEFS)
 HARD_RIDE_IF = 0.85     # Fahrt gilt als hart ab IF 0,85 (NP/eFTP)
 LEG_GAP_H = 6.0         # harte Ausdauer und Beintraining: mindestens 6 h Abstand (Robineau 2016)
+# Zielwoche außerhalb eines Rad-Plans (User-Entscheid 2026-11-26): Gym Mo/Mi/Fr, Arme zu Hause Di/Do,
+# zwei Cardio-Plätze Sa/So, die jeder Lauf oder jede Fahrt der Woche erfüllt (die längste zählt als „lang“).
+SCHEMA_FROM = date(2026, 11, 30)
+DEFAULT_HOME = {1: "arme_a", 3: "arme_b"}
+CARDIO_SLOTS = {5: ("z2", "Cardio · Z2", 45, "Lauf oder Rad, 45–70 min nach Puls"),
+                6: ("long", "Cardio lang", 90, "90+ min Z2, bei Mistwetter auf Zwift")}
+CARDIO_MIN = 20         # kürzere Fahrten/Läufe zählen nicht als Cardio-Einheit
 
 
 class WeekGym(SQLModel, table=True):
@@ -141,6 +148,55 @@ def _variant_queue(plans: dict, nxt: str | None, fresh: bool) -> dict[str, list[
     return out
 
 
+def _slot_days(days: list[date], in_plan: set) -> list[date]:
+    return [d for d in days if d >= SCHEMA_FROM and d.isoformat() not in in_plan]
+
+
+def _cardio_pool(runs: pd.DataFrame, rides: pd.DataFrame, days: set[date]) -> list[dict]:
+    """Läufe und Fahrten (ab CARDIO_MIN) der Woche als Kandidaten für die Cardio-Plätze, längste zuerst."""
+    pool = []
+    for r in runs.itertuples() if not runs.empty else []:
+        if r.day in days and float(r.dur_min) >= CARDIO_MIN:
+            pool.append({"id": ("run", pd.Timestamp(r.started_at).isoformat()), "day": r.day, "kind": "Lauf",
+                         "minutes": round(float(r.dur_min)), "title": f"Lauf {float(r.distance_km):.1f} km".replace(".", ",")})
+    for r in rides.itertuples() if not rides.empty else []:
+        if r.day in days and float(r.minutes) >= CARDIO_MIN:
+            pool.append({"id": ("ride", pd.Timestamp(r.started_at).isoformat()), "day": r.day, "kind": "Rad",
+                         "minutes": round(float(r.minutes)), "title": r.title})
+    return sorted(pool, key=lambda s: (-s["minutes"], s["day"]))
+
+
+def _assign_cardio(slot_days: list[date], pool: list[dict]) -> dict[date, dict]:
+    """Längste Einheit → Platz „lang“, nächste → Platz „Z2“ (ohne lang-Platz: längste → Z2)."""
+    slots = sorted((d for d in slot_days if d.weekday() in CARDIO_SLOTS),
+                   key=lambda d: CARDIO_SLOTS[d.weekday()][0] != "long")
+    return {d: s for d, s in zip(slots, pool)}
+
+
+def _assign_home(slot_days: list[date], workouts: list[dict]) -> dict[date, dict]:
+    """Arm-Plätze: erst das passende Programm (Arme A/B), dann ein anderes Arm-Workout der Woche."""
+    slots = [d for d in slot_days if d.weekday() in DEFAULT_HOME]
+    arms = [w for w in workouts if w["program"] == "arme"]
+    out: dict[date, dict] = {}
+    for exact in (True, False):
+        for d in slots:
+            if d in out:
+                continue
+            hit = next((w for w in arms if w not in out.values()
+                        and (not exact or w["variant"] == DEFAULT_HOME[d.weekday()])), None)
+            if hit:
+                out[d] = hit
+    return out
+
+
+def _slot_color(ratio: float, day: date, today: date) -> str:
+    if ratio >= 0.8:
+        return "green"
+    if day >= today:  # Woche läuft noch: es kann noch eine längere Einheit kommen
+        return "open"
+    return "yellow" if ratio >= 0.5 else "orange"
+
+
 def _prescription(plans: dict, key: str) -> list[str]:
     p = plans.get(key)
     if not p:
@@ -192,6 +248,11 @@ def week(offset: int = 0, today: date | None = None) -> dict:
     nxt = _safe(lambda: strength_plan.next_training(today), {"plans": []})
     plans = {p["key"]: p for p in nxt.get("plans") or []}
     queue = _variant_queue(plans, nxt.get("next"), fresh=first > today)
+    slot_days = _slot_days(days, in_plan)
+    pool = _cardio_pool(runs, rides, {d for d in days if d.isoformat() not in in_plan}) if slot_days else []
+    cardio_hits, home_hits = _assign_cardio(slot_days, pool), _assign_home(slot_days, workouts)
+    cardio_used = {s["id"]: d for d, s in cardio_hits.items()}
+    home_used = {w["id"]: d for d, w in home_hits.items()}
 
     main_sleep = _safe(lambda: sleep._main_by_day(sleep._sleep_rows(7 + (today - first).days, today)), {})
     entries = {e["day"]: e for e in _safe(lambda: checkins.list_entries(7 + max(0, (today - first).days), max(today, last)), [])}
@@ -212,7 +273,9 @@ def week(offset: int = 0, today: date | None = None) -> dict:
 
     out_days, totals = [], {"bike_planned_min": 0.0, "bike_planned": 0, "bike_done_min": 0.0, "bike_done": 0,
                             "bike_matched": 0, "gym_planned": 0, "gym_done": 0, "gym_matched": 0,
-                            "run_km": 0.0, "runs": 0, "hard_planned": 0, "hard_done": 0, "missed": 0}
+                            "run_km": 0.0, "runs": 0, "hard_planned": 0, "hard_done": 0, "missed": 0,
+                            "cardio_planned": 0, "cardio_done": 0, "cardio_min": sum(x["minutes"] for x in pool),
+                            "home_planned": 0, "home_done": 0}
     for d, key in zip(days, iso):
         past, is_today = d < today, d == today
         sick = bool((entries.get(key) or {}).get("sick"))
@@ -248,7 +311,7 @@ def week(offset: int = 0, today: date | None = None) -> dict:
         # Kraft (Soll aus Gym-Tagen)
         program = _program_for(d, plan_gym, in_plan, overrides)
         if program:
-            done = [w for w in workouts if w["day"] == d]
+            done = [w for w in workouts if w["day"] == d and w["program"] != "arme"]
             hit = next((w for w in done if w["program"] == program), None) or (done[0] if done else None)
             if hit:
                 used_workouts.add(hit["id"])
@@ -270,6 +333,32 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             totals["gym_planned"] += 1
             totals["gym_matched"] += hit is not None
             totals["missed"] += color == "red"
+        # Arme zu Hause (Zielwoche): erfüllt von einem Arm-Workout irgendwann in der Woche
+        if d in slot_days and d.weekday() in DEFAULT_HOME:
+            variant = DEFAULT_HOME[d.weekday()]
+            hit = home_hits.get(d)
+            color = ("green" if hit["variant"] == variant else "yellow") if hit                 else ("sick" if sick and (past or is_today) else "red" if past else "open")
+            items.append({"type": "home", "planned": True, "title": (plans.get(variant) or {}).get("title") or variant,
+                          "program": "arme", "variant": variant, "color": color, "label": "Home-Gym", "day": key,
+                          "done": {"title": hit["title"], "minutes": hit["minutes"], "program": "arme",
+                                   "day": hit["day"].isoformat()} if hit else None,
+                          "prescription": _prescription(plans, variant) if not hit and not past else [], "href": "/kraft",
+                          **({"start": hit["start"], "end": hit["end"]} if hit and hit["day"] == d else {})})
+            totals["home_planned"] += 1
+            totals["home_done"] += hit is not None
+            totals["missed"] += color == "red"
+        # Cardio-Plätze (Zielwoche): erfüllt von Lauf oder Fahrt der Woche
+        if d in slot_days and d.weekday() in CARDIO_SLOTS:
+            slot, title, target, desc = CARDIO_SLOTS[d.weekday()]
+            hit = cardio_hits.get(d)
+            color = _slot_color(hit["minutes"] / target, d, today) if hit                 else ("sick" if sick and (past or is_today) else "red" if past else "open")
+            items.append({"type": "cardio", "planned": True, "title": title, "slot_key": slot, "color": color,
+                          "duration_min": target, "target": desc, "ratio": round(hit["minutes"] / target, 2) if hit else None,
+                          "done": {"title": hit["title"], "kind": hit["kind"], "minutes": hit["minutes"],
+                                   "day": hit["day"].isoformat()} if hit else None, "hard": False, "day": key, "href": "/woche"})
+            totals["cardio_planned"] += 1
+            totals["cardio_done"] += color == "green"
+            totals["missed"] += color == "red"
         # Erledigt, aber ungeplant (grau)
         for r in rides[rides["day"] == d].itertuples() if not rides.empty else []:
             rid = indoor_ids.get((d, pd.Timestamp(r.started_at)))
@@ -281,8 +370,13 @@ def week(offset: int = 0, today: date | None = None) -> dict:
                 items[0].update(times)  # geplante Rad-Einheit steht immer zuerst
                 continue
             hard = (intensity.get(rid) or 0) >= HARD_RIDE_IF
-            items.append({"type": "ride", "planned": False, "title": r.title, "color": "grey", "hard": hard,
-                          "minutes": round(float(r.minutes)), "href": f"/rad/{rid}" if rid else "/gesundheit", **times})
+            slot_day = cardio_used.get(("ride", start.isoformat()))
+            if slot_day == d:
+                next(it for it in items if it["type"] == "cardio").update(times, hard=hard)
+                continue
+            items.append({"type": "ride", "planned": False, "title": r.title, "color": "green" if slot_day else "grey",
+                          "hard": hard, "minutes": round(float(r.minutes)), "href": f"/rad/{rid}" if rid else "/gesundheit",
+                          "slot": CARDIO_SLOTS[slot_day.weekday()][1] if slot_day else None, **times})
         day_runs = runs[runs["day"] == d].sort_values("dur_min", ascending=False) if not runs.empty else runs
         for i, r in enumerate(day_runs.itertuples() if not day_runs.empty else []):
             totals["runs"] += 1
@@ -292,7 +386,12 @@ def week(offset: int = 0, today: date | None = None) -> dict:
                 items[0].update(times)
                 continue
             hard = bool(pd.notna(r.avg_hr) and r.avg_hr >= HARD_RUN_SHARE * hr_max)
-            items.append({"type": "run", "planned": False, "title": "Lauf", "color": "grey", "hard": hard,
+            slot_day = cardio_used.get(("run", pd.Timestamp(r.started_at).isoformat()))
+            if slot_day == d:
+                next(it for it in items if it["type"] == "cardio").update(times, hard=hard)
+                continue
+            items.append({"type": "run", "planned": False, "title": "Lauf", "color": "green" if slot_day else "grey",
+                          "hard": hard, "slot": CARDIO_SLOTS[slot_day.weekday()][1] if slot_day else None,
                           "km": round(float(r.distance_km), 1), "minutes": round(float(r.dur_min)),
                           "avg_hr": round(float(r.avg_hr)) if pd.notna(r.avg_hr) else None, "href": "/laufen", **times})
         for w in workouts:
@@ -301,8 +400,12 @@ def week(offset: int = 0, today: date | None = None) -> dict:
             totals["gym_done"] += 1
             if w["id"] in used_workouts:
                 continue
-            items.append({"type": "strength", "planned": False, "title": w["title"], "color": "grey",
+            slot_day = home_used.get(w["id"])
+            if slot_day == d:
+                continue
+            items.append({"type": "strength", "planned": False, "title": w["title"], "color": "green" if slot_day else "grey",
                           "program": w["program"], "minutes": w["minutes"], "href": "/kraft",
+                          "slot": (plans.get(DEFAULT_HOME[slot_day.weekday()]) or {}).get("title") if slot_day else None,
                           "start": w["start"], "end": w["end"]})
         night = main_sleep.get(d)
         entry = entries.get(key) or {}
@@ -323,7 +426,8 @@ def week(offset: int = 0, today: date | None = None) -> dict:
     prev_in_plan = bool(plan.get("plan")) and plan["plan"]["start"] <= before.isoformat() <= plan["plan"]["end"]
     prev_leg = _program_for(before, prev_gym, {before.isoformat()} if prev_in_plan else set(), overrides) == "uk"
     hard_count = apply_rules(out_days, prev_hard=bool(prev and prev["kind"] in bike_plan.HARD_KINDS), prev_leg=prev_leg)
-    totals["hard_done"] += sum(1 for dd in out_days for it in dd["items"] if not it["planned"] and it.get("hard"))
+    totals["hard_done"] += sum(1 for dd in out_days for it in dd["items"]
+                               if (not it["planned"] or it["type"] == "cardio") and it.get("hard"))
     week_warnings = [f"{hard_count} harte Einheiten (Rad + Lauf, Regel: höchstens {MAX_HARD} pro Woche)"] \
         if hard_count > MAX_HARD else []
     return {
@@ -365,7 +469,8 @@ def apply_rules(days: list[dict], prev_hard: bool = False, prev_leg: bool = Fals
     count = 0
     for day in days:
         hard = [it for it in day["items"] if it.get("hard")]
-        gym = [it for it in day["items"] if it["type"] in ("gym", "strength") and it["color"] not in ("sick", "red")]
+        gym = [it for it in day["items"] if it["type"] in ("gym", "strength") and it.get("program") != "arme"
+               and it["color"] not in ("sick", "red")]
         legs = [it for it in gym if it.get("program") == "uk" or (it.get("done") or {}).get("program") == "uk"]
         timed = [it if it["type"] == "strength" else it["done"] for it in legs
                  if it["type"] == "strength" or it.get("done")]
@@ -456,6 +561,12 @@ def adjustments(day: dict, form: dict | None) -> list[str]:
             run = weather["run"]
             out.append(f"Gutes Laufwetter {run['start'][11:16]}–{run['end'][11:16]}: statt Rad geht auch "
                        f"„{it['run_alternative']}“.")
+        if it["type"] == "cardio" and weather:
+            if weather.get("run") and (weather.get("rain_prob") or 0) < RUN_WEATHER_RAIN:
+                run = weather["run"]
+                out.append(f"{it['title']}: gutes Laufwetter {run['start'][11:16]}–{run['end'][11:16]}, gern draußen laufen.")
+            else:
+                out.append(f"{it['title']}: Wetter eher schlecht – auf Zwift nach Puls fahren.")
     if reasons and not any(it.get("hard") for it in open_items) and open_items:
         out.append(f"Heute eher müde ({', '.join(reasons)}): locker bleiben, Puls-Deckel ernst nehmen.")
     return out
@@ -490,8 +601,10 @@ def today_focus(today: date | None = None) -> dict:
 def _item_text(it: dict) -> str:
     if it["type"] == "bike":
         return f"{it['title']} ({', '.join(x for x in (f'{it['duration_min']:g} min' if it.get('duration_min') else None, it.get('target')) if x)})"
-    if it["type"] == "gym":
+    if it["type"] in ("gym", "home"):
         return it["title"] + (f": {'; '.join(it['prescription'][:4])}" if it.get("prescription") else "")
+    if it["type"] == "cardio":
+        return f"{it['title']} ({it['target']})"
     return it["title"]
 
 
@@ -502,6 +615,12 @@ def briefing_lines(day: date) -> list[str]:
     lines = [f"WOCHE BISHER (erledigt bis heute von geplant Mo–So): Rad {t['bike_done_min']} von {t['bike_planned_min']} min, "
              f"Kraft {t['gym_matched']} von {t['gym_planned']} nach Plan, harte Einheiten {t['hard_done']} von {t['hard_planned']} "
              f"(Regel höchstens {MAX_HARD}), verpasst {t['missed']}."]
+    if t.get("cardio_planned") or t.get("home_planned"):
+        lines.append(f"ZIELWOCHE: Cardio {t['cardio_done']} von {t['cardio_planned']} (Lauf oder Rad, {t['cardio_min']} min bisher), "
+                     f"Arme zu Hause {t['home_done']} von {t['home_planned']}.")
+    for it in f["open"]:
+        if it["type"] in ("cardio", "home"):
+            lines.append(("CARDIO HEUTE: " if it["type"] == "cardio" else "ARME HEUTE: ") + _item_text(it) + ".")
     gym = [it for it in f["open"] if it["type"] == "gym"]
     if gym:
         lines.append("KRAFT HEUTE: " + _item_text(gym[0]) + ".")
@@ -516,7 +635,7 @@ def briefing_lines(day: date) -> list[str]:
 def compact(offset: int = 0, today: date | None = None) -> dict:
     """Wochenplan für Coach/MCP: Summen, Hinweise, je Tag die Einheiten mit Status (ohne Gewichte/Serien)."""
     w = week(offset, today=today)
-    keep = ("type", "title", "color", "status", "duration_min", "target", "hard", "warnings", "km", "minutes")
+    keep = ("type", "title", "color", "status", "duration_min", "target", "hard", "warnings", "km", "minutes", "slot")
     return {"from": w["from"], "to": w["to"], "plan": w["plan"], "totals": w["totals"], "hard_sets": w["hard_sets"],
             "form": w["form"], "warnings": w["warnings"],
             "days": [{"date": d["date"], "weekday": d["weekday"], "sick": d["context"]["sick"],

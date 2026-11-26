@@ -51,10 +51,13 @@ export default function Woche() {
     {err ? <ApiError error={err} /> : !data || !t ? <Loading /> : <>
       {data.plan?.goal && <p className="-mt-2 mb-3 text-xs text-muted">Ziel der Woche: {data.plan.goal}</p>}
       <section aria-label="Wochensumme" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Rad" sub={future ? "geplant" : `erledigt · geplant ${de0(t.bike_planned_min)} min`} value={de0(future ? t.bike_planned_min : t.bike_done_min)} unit="min"
-          delta={future ? `${t.bike_planned} Einheiten` : `${t.bike_matched}/${t.bike_planned} Plan-Einheiten · ${t.bike_done} ${t.bike_done === 1 ? "Fahrt" : "Fahrten"}`} deltaKind="muted" />
+        {t.cardio_planned && !t.bike_planned
+          ? <Kpi label="Cardio" sub="Lauf oder Rad, Plätze Sa/So" value={future ? String(t.cardio_planned) : `${t.cardio_done}/${t.cardio_planned}`} unit={future ? "geplant" : "im Soll"}
+            delta={future ? "Lauf oder Rad, einer davon lang" : `${de0(t.cardio_min ?? 0)} min Cardio diese Woche`} deltaKind="muted" />
+          : <Kpi label="Rad" sub={future ? "geplant" : `erledigt · geplant ${de0(t.bike_planned_min)} min`} value={de0(future ? t.bike_planned_min : t.bike_done_min)} unit="min"
+            delta={future ? `${t.bike_planned} Einheiten` : `${t.bike_matched}/${t.bike_planned} Plan-Einheiten · ${t.bike_done} ${t.bike_done === 1 ? "Fahrt" : "Fahrten"}`} deltaKind="muted" />}
         <Kpi label="Kraft" sub={future ? "geplant (OK/UK)" : "nach Plan erledigt"} value={future ? String(t.gym_planned) : `${t.gym_matched}/${t.gym_planned}`} unit="Einheiten"
-          delta={data.hard_sets ? `harte Sätze ${de0(data.hard_sets.done)}/${de0(data.hard_sets.planned)}` : `${t.gym_done} Workouts`} deltaKind="muted" />
+          delta={[t.home_planned ? (future ? `+ ${t.home_planned}× Arme zu Hause` : `Arme ${t.home_done}/${t.home_planned}`) : null, data.hard_sets ? `harte Sätze ${de0(data.hard_sets.done)}/${de0(data.hard_sets.planned)}` : `${t.gym_done} Workouts`].filter(Boolean).join(" · ")} deltaKind="muted" />
         <Kpi label="Harte Einheiten" sub={`Regel: höchstens ${data.max_hard} pro Woche`} value={future ? String(t.hard_planned) : `${t.hard_done}/${t.hard_planned}`} unit={future ? "geplant" : "erledigt"}
           delta={t.hard_planned > data.max_hard ? "über der Regel" : undefined} deltaKind="bad" />
         <Kpi label="Lauf & Form" sub={data.form ? `Form am ${dm(data.form.date)}` : "ohne Puls-Last"} value={data.form ? de0(data.form.tsb) : "–"} unit="TSB"

@@ -190,6 +190,30 @@ def delete_plan(plan_id: str) -> bool:
     return True
 
 
+def end_plan(plan_id: str, last_day: date) -> BikePlan | None:
+    """Plan nach `last_day` enden lassen (nichts wird gelöscht): Einheiten und Wochen danach blendet
+    `overview` aus, danach gilt im Wochenplan das Standard-Schema. Das ursprüngliche Ende steht in
+    meta['planned_end']; ein `last_day` ab diesem Ende nimmt das Beenden zurück."""
+    with Session(engine) as db:
+        plan = db.get(BikePlan, plan_id)
+        if not plan:
+            return None
+        meta = json.loads(plan.meta_json)
+        planned = date.fromisoformat(meta.get("planned_end") or plan.end.isoformat())
+        if last_day < plan.start:
+            raise ValueError("Das Ende liegt vor dem Planstart.")
+        plan.end = min(last_day, planned)
+        if plan.end < planned:
+            meta["planned_end"] = planned.isoformat()
+        else:
+            meta.pop("planned_end", None)
+        plan.meta_json = json.dumps(meta, ensure_ascii=False)
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+        return plan
+
+
 def active_plan() -> BikePlan | None:
     with Session(engine) as db:
         return db.exec(select(BikePlan).where(BikePlan.active).order_by(BikePlan.imported_at.desc())).first()
@@ -628,7 +652,10 @@ def overview(today: date | None = None) -> dict:
     if plan is None:
         return {"plan": None}
     meta, weeks = json.loads(plan.meta_json), json.loads(plan.weeks_json)
-    rides, runs, sessions = _rides(), _runs(), _sessions(plan.id)
+    end = plan.end.isoformat()  # beendeter Plan (end_plan): Wochen/Einheiten danach entfallen
+    weeks = [{**w, "end": min(w["end"], end)} for w in weeks if w["start"] <= end]
+    rides, runs = _rides(), _runs()
+    sessions = [s for s in _sessions(plan.id) if s.day <= plan.end]
     history = ftp_history(plan, rides)
     current = ftp_at(history, today)
     matched = _match(sessions, rides, runs, today)
@@ -667,7 +694,7 @@ def overview(today: date | None = None) -> dict:
     core = [x for x in all_s if not x["optional"]]
     return {
         "plan": {"id": plan.id, "name": plan.name, "start": plan.start.isoformat(), "end": plan.end.isoformat(),
-                 "imported_at": plan.imported_at.isoformat()},
+                 "imported_at": plan.imported_at.isoformat(), "planned_end": meta.get("planned_end")},
         "today": today.isoformat(),
         "ftp": {**current, "wkg": round(current["watts"] / weight, 2) if weight else None, "history": history},
         "zones": zones,

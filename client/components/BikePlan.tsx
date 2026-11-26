@@ -136,7 +136,7 @@ export function PlanTodayCard({ data }: { data: BikePlanOverview }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">{data.plan?.name}{week ? ` · Woche ${week.week}${week.phase ? ` · ${week.phase}` : ""}` : ""}</h3>
-          <p className="text-[11px] text-muted">{week?.goal ?? (all.length && today > all[all.length - 1].date ? "Plan abgeschlossen" : "Plan beginnt bald")} · FTP {de0(data.ftp?.watts)} W ({FTP_SOURCE[data.ftp?.source ?? "plan"]})</p>
+          <p className="text-[11px] text-muted">{week?.goal ?? (all.length && today > all[all.length - 1].date ? (data.plan?.planned_end ? "Plan beendet · jetzt gilt die Zielwoche auf „Woche“" : "Plan abgeschlossen") : "Plan beginnt bald")} · FTP {de0(data.ftp?.watts)} W ({FTP_SOURCE[data.ftp?.source ?? "plan"]})</p>
         </div>
         <Link href="/rad/plan" className="text-xs font-semibold text-accent">Ganzer Plan →</Link>
       </div>
