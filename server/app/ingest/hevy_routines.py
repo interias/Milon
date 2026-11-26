@@ -1,6 +1,7 @@
-"""Schreibt den Trainingsplan (metrics.strength_plan) als Hevy-Routinen „Milon OK“/„Milon OK B“/
-„Milon UK“ in den Routinen-Ordner „Milon“. Nur diese Routinen werden angelegt bzw. überschrieben
-(PUT ersetzt die Übungsliste komplett); andere Routinen bleiben unberührt. Ist der Inhalt seit
+"""Schreibt den Trainingsplan (metrics.strength_plan) als Hevy-Routinen „Milon OK“/„Milon UK“/
+„Milon Arme A“/„Milon Arme B“ in den Routinen-Ordner „Milon“. Nur diese Routinen werden angelegt bzw.
+überschrieben (PUT ersetzt die Übungsliste komplett); andere Routinen bleiben unberührt — auch nicht
+mehr geplante wie „Milon OK B“ (die API kann nicht löschen). Ist der Inhalt seit
 dem letzten Schreiben gleich (Hash in sync_state 'hevy_routines'.cursor), geht kein Request raus.
 Die Hevy-API kennt kein RPE in Routinen → Ziel-RIR und Begründung stehen in der Übungsnotiz."""
 from __future__ import annotations

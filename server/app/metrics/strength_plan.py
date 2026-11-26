@@ -1,5 +1,6 @@
-"""Trainingsplan „Nächstes Training“: feste Programme (Oberkörper A/B, Unterkörper) mit
-doppelter Progression nach geschafften Wiederholungen.
+"""Trainingsplan „Nächstes Training“: feste Programme (Gym Oberkörper 2×, Gym Unterkörper,
+Home Arme A/B je 1× pro Woche) mit doppelter Progression nach geschafften Wiederholungen.
+Übungen mit Körpergewicht (`bodyweight`: Klimmzug, Dips) steigern nur über die Wiederholungen.
 
 Regeln (vom User 2026-11-08 festgelegt, je Übung einstellbar über `StrengthRule`):
 - Je Übung Ziel-Wdh. und Mindest-Wdh. (Standard = `PlanExercise.reps`).
@@ -86,6 +87,7 @@ class PlanExercise:
     last_rpe: float = 10.0              # Ziel-RPE des letzten Satzes
     muscles: tuple[tuple[str, float], ...] = ()  # harte Sätze je Muskel; mitbeteiligt = 0,5
     mid_rpe: float = 9.0                # Ziel-RPE der mittleren Sätze
+    bodyweight: bool = False            # ohne Gewicht geloggt (Hevy „reps_only“): Progression nur über Wdh.
 
 
 # Schwere Grundübungen: nie bis zum Versagen (RIR 2 → 2 → 1).
@@ -106,47 +108,28 @@ class Plan:
         return self.family or self.key
 
 
-_ROW = PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
-                    ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 3, (8, 12), 150, _select(40), warmup=True, **_COMPOUND,
-                    muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5)))
-_LATERAL = PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
-                        ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 15), 90, _select(25),
-                        muscles=(("Seitliche Schulter", 1),))
-_PULLDOWN = PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
-                         ("Iso-Lateral Front Lat Pulldown",), 3, (8, 12), 150, Ladder(5.0), **_COMPOUND,
-                         muscles=(("Rücken", 1), ("Bizeps", .5)))
-_HAMMER = PlanExercise("hammer", "Hammer Curl sitzend Schrägbank", ("C01F58D1",),
-                       ("Hammer Curl sitzend auf der Schrägbank (Kurzhantel)", "Seated Incline Hammer Curl (Dumbbell)"),
-                       2, (10, 15), 90, Ladder(5.0), superset=1, muscles=(("Bizeps", 1),))
-_SKULL = PlanExercise("skull", "Stirndrücken (Langhantel)", ("875F585F",),
-                      ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 2, (10, 15), 90, Ladder(2.5),
-                      superset=1, muscles=(("Trizeps", 1),))
-
-
-def _mts(sets: int) -> PlanExercise:
-    return PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
-                        ("MTS Incline Press",), sets, (8, 12), 150, Ladder(5.0), warmup=True, **_COMPOUND,
-                        muscles=(("Brust", 1), ("Trizeps", .5)))
-
-
 PLANS: tuple[Plan, ...] = (
-    Plan("ok", "Milon OK", "Oberkörper A", 1, (
-        _ROW, _mts(3), _LATERAL, _PULLDOWN,
+    # Gym Oberkörper Mo + Fr (User-Entscheid 2026-11-26): Rudern + Pulldown je 4, Schrägbank 4,
+    # Butterfly 3, Seitheben + Face Pull je 4. Arme trainiert er zu Hause (Arme A/B).
+    Plan("ok", "Milon OK", "Oberkörper", 2, (
+        PlanExercise("row", "Rudern sitzend (Maschine)", ("1DF4A847",),
+                     ("Rudern sitzend (Maschine)", "Seated Row (Machine)"), 4, (8, 12), 150, _select(40), warmup=True,
+                     **_COMPOUND, muscles=(("Rücken", 1), ("Bizeps", .5), ("Hintere Schulter", .5))),
+        PlanExercise("mts", "MTS Incline Press", ("806def2a-0d7f-4b99-a200-893c01b6e00d",),
+                     ("MTS Incline Press",), 4, (8, 12), 150, Ladder(5.0), warmup=True, **_COMPOUND,
+                     muscles=(("Brust", 1), ("Trizeps", .5))),
+        PlanExercise("pulldown", "Iso-Lateral Front Lat Pulldown", ("ada49467-4881-4b3d-9720-38df35f40c82",),
+                     ("Iso-Lateral Front Lat Pulldown",), 4, (8, 12), 150, Ladder(5.0), **_COMPOUND,
+                     muscles=(("Rücken", 1), ("Bizeps", .5))),
         PlanExercise("fly", "Butterfly (Maschine)", ("78683336", "9DCE2D64"),
-                     ("Fliegende (Maschine)", "Butterfly (Pec Deck)"), 2, (10, 15), 90, _select(82), superset=0,
+                     ("Fliegende (Maschine)", "Butterfly (Pec Deck)"), 3, (10, 15), 90, _select(82),
                      muscles=(("Brust", 1),)),
-        PlanExercise("rear_fly", "Reverse Butterfly (Maschine)", ("D8281C62",),
-                     ("Reverse Fliegende (Maschine)", "Rear Delt Reverse Fly (Machine)"), 2, (10, 15), 90, _select(40),
-                     superset=0, muscles=(("Hintere Schulter", 1),)),
-        _HAMMER, _SKULL,
-    )),
-    # Variante ohne Butterfly: Brustvolumen über 5 Sätze MTS, hintere Schulter per Face Pull am Seilzug.
-    Plan("ok_b", "Milon OK B", "Oberkörper B", 1, (
-        _ROW, _mts(5), _LATERAL, _PULLDOWN,
-        PlanExercise("face_pull", "Face Pull (Seilzug)", ("BE640BA0",), ("Face Pull",), 3, (12, 20), 90,
+        PlanExercise("lateral", "Seitheben (Maschine)", ("D5D0354D",),
+                     ("Seitheben (Maschine)", "Lateral Raise (Machine)"), 4, (12, 15), 90, _select(25),
+                     muscles=(("Seitliche Schulter", 1),)),
+        PlanExercise("face_pull", "Face Pull (Seilzug)", ("BE640BA0",), ("Face Pull",), 4, (12, 20), 90,
                      Ladder(2.5), muscles=(("Hintere Schulter", 1),)),
-        _HAMMER, _SKULL,
-    ), family="ok"),
+    )),
     Plan("uk", "Milon UK", "Unterkörper", 1, (
         PlanExercise("legpress", "Beinpresse (Maschine)", ("C7973E0E",),
                      ("Beinpresse (Maschine)", "Leg Press (Machine)"), 4, (10, 15), 150, Ladder(5.0, 53), warmup=True, **_COMPOUND,
@@ -161,6 +144,27 @@ PLANS: tuple[Plan, ...] = (
                      ("Beinstrecker (Maschine)", "Leg Extension (Machine)"), 4, (10, 15), 90, _select(61),
                      superset=0, muscles=(("Quadrizeps", 1),)),
     )),
+    # Home-Gym Di + Do: Arme A = Bizeps-Fokus + Rücken (Klimmzug), Arme B = Trizeps-Fokus + Brust (Dips).
+    # SZ-Stange wie Kurzhanteln: Gesamtgewicht, 2,5-kg-Stufen; Kurzhanteln Gesamtgewicht beider Hanteln.
+    Plan("arme_a", "Milon Arme A", "Arme A · Bizeps", 1, (
+        PlanExercise("chinup", "Klimmzug Untergriff", ("29083183",), ("Chin Up", "Klimmzug Untergriff"), 3, (5, 10),
+                     120, Ladder(2.5), bodyweight=True, **_COMPOUND, muscles=(("Rücken", 1), ("Bizeps", .5))),
+        PlanExercise("incline_curl", "Schrägbank-Curl (Kurzhantel)", ("8BAB2735",),
+                     ("Incline Curl sitzend (Kurzhantel)", "Seated Incline Curl (Dumbbell)"), 3, (10, 15), 90,
+                     Ladder(5.0), muscles=(("Bizeps", 1),)),
+        PlanExercise("oh_ext", "Überkopf-Trizepsstrecken (SZ)", ("2F8D3067",),
+                     ("Triceps Extension (Barbell)", "Trizepsstrecken (Langhantel)"), 3, (10, 15), 90, Ladder(2.5),
+                     muscles=(("Trizeps", 1),)),
+    ), family="arme"),
+    Plan("arme_b", "Milon Arme B", "Arme B · Trizeps", 1, (
+        PlanExercise("skull", "Skull Crusher (SZ)", ("875F585F",),
+                     ("Stirndrücken (Langhantel)", "Skullcrusher (Barbell)"), 3, (8, 12), 90, Ladder(2.5),
+                     muscles=(("Trizeps", 1),)),
+        PlanExercise("dip", "Dips", ("28BB4A95",), ("Triceps Dip", "Trizeps Dip"), 3, (8, 12), 120, Ladder(2.5),
+                     bodyweight=True, **_COMPOUND, muscles=(("Trizeps", 1), ("Brust", .5))),
+        PlanExercise("ez_curl", "SZ-Curl stehend", ("01A35BF9",), ("Bizepscurl (EZ-Hantel)", "EZ Bar Biceps Curl"), 3,
+                     (8, 12), 90, Ladder(2.5), muscles=(("Bizeps", 1),)),
+    ), family="arme"),
 )
 MUSCLES = ("Brust", "Rücken", "Seitliche Schulter", "Hintere Schulter", "Bizeps", "Trizeps",
            "Quadrizeps", "Beinbeuger", "Gesäß")
@@ -264,12 +268,14 @@ def _main_weight(weights: list[float]) -> float:
     return max(w for w, c in counts.items() if c == top)
 
 
-def _session_sets(df: pd.DataFrame) -> list[dict]:
-    """Je Workout die Arbeitssätze dieser Übung: [{date, sets:[(w, r, rpe)]}], chronologisch."""
-    work = df[df["set_type"].isin(WORK_TYPES) & (df["weight_kg"] > 0) & (df["reps"] > 0)]
+def _session_sets(df: pd.DataFrame, bodyweight: bool = False) -> list[dict]:
+    """Je Workout die Arbeitssätze dieser Übung: [{date, sets:[(w, r, rpe)]}], chronologisch.
+    Körpergewichtsübungen zählen auch Sätze ohne Gewicht (w = 0)."""
+    weight = df["weight_kg"].fillna(0)
+    work = df[df["set_type"].isin(WORK_TYPES) & ((weight > 0) | bodyweight) & (df["reps"] > 0)]
     sessions: dict = {}  # workout_id → Session, in Reihenfolge des ersten Auftretens (wie groupby sort=False)
     for wid, started, w, r, rpe in zip(work["workout_id"].tolist(), work["started_at"].tolist(),
-                                       work["weight_kg"].tolist(), work["reps"].tolist(), work["rpe"].tolist()):
+                                       weight[work.index].tolist(), work["reps"].tolist(), work["rpe"].tolist()):
         s = sessions.get(wid)
         if s is None:
             s = sessions[wid] = {"date": started.date(), "sets": []}
@@ -287,6 +293,8 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date,
     lo, hi = rule or ex.reps
     targets = _targets(ex)
     recent = [s for s in sessions if (today - s["date"]).days <= STALE_DAYS]
+    if ex.bodyweight:
+        return _suggest_bodyweight(ex, recent, lo, hi, targets)
     if not recent:
         window = [st for s in sessions if (today - s["date"]).days <= E1RM_DAYS for st in s["sets"]]
         if not window:
@@ -327,7 +335,34 @@ def suggest(ex: PlanExercise, sessions: list[dict], today: date,
     return _result(ex, new_w, lo, hi, targets, action, f"Letztes Mal {shown}. {reason}", last_info)
 
 
+def _suggest_bodyweight(ex: PlanExercise, recent: list[dict], lo: int, hi: int, targets: list[float]) -> dict:
+    """Körpergewicht: kein Gewicht vorzuschlagen — Wiederholungen sammeln, am Ziel Zusatzgewicht."""
+    if not recent:
+        return _result(ex, None, lo, hi, targets, "new",
+                       f"Körpergewicht: Ziel {lo}–{hi} saubere Wdh. Unter {lo}: mit langsamen Negativen auffüllen.",
+                       None)
+    last = recent[-1]
+    done = [r for _, r, _ in last["sets"][:ex.sets]]
+    shown = "Körpergewicht × " + "/".join(str(r) for r in done)
+    hit = sum(r >= hi for r in done)
+    if len(done) == ex.sets and hit == ex.sets:
+        action = "increase"
+        reason = f"Alle {ex.sets} Sätze ≥ {hi} Wdh. → Zusatzgewicht (Kurzhantel zwischen den Füßen) oder Ziel-Wdh. erhöhen."
+    else:
+        action = "hold"
+        reason = f"{hit} von {ex.sets} Sätzen ≥ {hi} Wdh. → weiter Wiederholungen sammeln."
+    last_info = {"date": last["date"].isoformat(), "summary": shown, "reps": done, "hit": hit}
+    return _result(ex, None, lo, hi, targets, action, f"Letztes Mal {shown}. {reason}", last_info)
+
+
 def _rule_lines(ex: PlanExercise, weight: float | None, lo: int, hi: int, targets: list[float]) -> list[str]:
+    if ex.bodyweight:
+        return [
+            f"Schwerer: alle {ex.sets} {_sets_word(ex.sets)} ≥ {hi} Wdh. → Zusatzgewicht oder Ziel-Wdh. erhöhen",
+            f"Unter {lo} Wdh.: Satz mit langsamen Negativen auffüllen",
+            "Sonst: Wiederholungen sammeln",
+            "RIR " + " → ".join(_de(10 - t) for t in targets) + ": Leitplanke beim Training, zählt nicht für die Regel",
+        ]
     up = f" → {_de(ex.ladder.up(weight))} kg" if weight else " → eine Stufe schwerer"
     down = f" → {_de(ex.ladder.down(weight))} kg" if weight else " → eine Stufe leichter"
     return [
@@ -348,7 +383,7 @@ def _result(ex: PlanExercise, weight: float | None, lo: int, hi: int, targets: l
     rir = (f"Ziel {ex.sets} × {hi} Wdh., dann schwerer; unter {lo} leichter. RIR "
            + " → ".join(_de(10 - t) for t in targets) + " als Leitplanke")
     return {
-        "key": ex.key, "name": ex.name, "template_id": ex.templates[0],
+        "key": ex.key, "name": ex.name, "template_id": ex.templates[0], "bodyweight": ex.bodyweight,
         "rep_range": [lo, hi], "rest_seconds": ex.rest, "superset": ex.superset,
         "weight_kg": weight, "step_up_kg": round(ex.ladder.up(weight) - weight, 2) if weight else None,
         "sets": sets, "action": action, "reason": reason, "rir_note": rir, "last": last,
@@ -405,7 +440,9 @@ def next_training(today: date | None = None) -> dict:
     kinds = _classify(df) if not df.empty else {}
     starts = df.groupby("workout_id")["started_at"].first() if not df.empty else pd.Series(dtype="datetime64[ns]")
     own = rules()
-    by_key = {k: _session_sets(g) for k, g in df.groupby("key", sort=False)} if not df.empty else {}
+    plan_ex = _exercises()
+    by_key = {k: _session_sets(g, plan_ex[k].bodyweight) for k, g in df.groupby("key", sort=False)} \
+        if not df.empty else {}
     plans = []
     for p in PLANS:
         mine = [wid for wid, k in kinds.items() if k == p.key]
