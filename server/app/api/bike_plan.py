@@ -1,7 +1,7 @@
 """Rad-Trainingsplan: Import, Übersicht, Plan-FTP, Messpunkte, .zwo-Export."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile
@@ -56,6 +56,23 @@ def import_plan(file: UploadFile = File(...)) -> dict:
         raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+class EndInput(BaseModel):
+    day: date | None = None  # letzter Plantag; leer = Sonntag der laufenden Woche
+
+
+@router.post("/end")
+def end_plan(body: EndInput) -> dict:
+    """Aktiven Plan vorzeitig enden lassen (nichts wird gelöscht); ein Tag ab dem ursprünglichen Ende nimmt es zurück."""
+    plan = _active()
+    today = bike_plan._today()
+    day = body.day or today + timedelta(days=6 - today.weekday())
+    try:
+        bike_plan.end_plan(plan.id, day)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return bike_plan.overview()
 
 
 @router.delete("/{plan_id}")

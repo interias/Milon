@@ -132,7 +132,7 @@ def get_run_records() -> dict:
 @mcp.tool()
 def get_week_plan(offset: int = 0) -> dict:
     """Mein Wochenplan (Mo–So; offset 0 = aktuelle Woche, -1 = Vorwoche, 1 = nächste): geplant vs. erledigt über
-    Rad, Kraft (Milon OK/UK) und Lauf, Summen, harte Einheiten (höchstens 2 Rad + Lauf), Regel-Hinweise und je Tag
+    Rad-Plan, Kraft (Milon OK/UK), Arme zu Hause, zwei Cardio-Plätze (Lauf oder Rad) und Lauf, Summen, harte Einheiten (höchstens 2 Rad + Lauf), Regel-Hinweise und je Tag
     die Einheiten mit Farbe. Krankheitstage sind pausiert, kein Versäumnis."""
     from ..metrics import week_plan
     return week_plan.compact(max(-52, min(8, offset)))

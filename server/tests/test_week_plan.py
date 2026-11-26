@@ -264,3 +264,100 @@ def test_today_api(db):
     app.include_router(metrics_api.router)
     r = TestClient(app).get("/metrics/week/today")
     assert r.status_code == 200 and r.json()["status"] in ("open", "done", "rest", "sick")
+
+
+# ---------------- Zielwoche: Cardio-Plätze (Lauf oder Rad) + Arme zu Hause ----------------
+def _run(s, day: date, minutes: int, km: float, hour: int = 7, ext: str = "r"):
+    start = datetime.combine(day, datetime.min.time()) + timedelta(hours=hour)
+    s.add(ExerciseSession(source="garmin", external_id=f"{ext}{day}{hour}", exercise_type=running.RUN, started_at=start,
+                          ended_at=start + timedelta(minutes=minutes), distance_km=km, avg_hr=135))
+
+
+def _arms_b(s, day: date):
+    from app.models import WorkoutSet
+    w = Workout(external_id=f"arme{day}", title="Arme", source="hevy",
+                started_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=19))
+    s.add(w)
+    s.flush()
+    for i, (name, tid, kg, reps) in enumerate([("Skullcrusher (Barbell)", "875F585F", 22.5, 10),
+                                               ("Triceps Dip", "28BB4A95", None, 9)]):
+        s.add(WorkoutSet(workout_id=w.id, exercise=name, exercise_template_id=tid, set_index=i, set_type="normal",
+                         weight_kg=kg, reps=reps, rpe=9))
+
+
+def test_target_week_floating_cardio_and_home_slots(db, monkeypatch):
+    monkeypatch.setattr(week_plan, "SCHEMA_FROM", START)
+    mo, tu = START + timedelta(days=7), START + timedelta(days=8)
+    with Session(db) as s:
+        _run(s, mo, 61, 10.1)      # Mo-Lauf: einzige Cardio-Einheit → Platz „lang“ (So), noch offen
+        _arms_b(s, tu)             # Arme B am Dienstag → erfüllt den Do-Platz (passendes Programm)
+        s.commit()
+    w = _week()
+    sa, so, th = START + timedelta(days=12), START + timedelta(days=13), START + timedelta(days=10)
+    assert ("run", "Lauf", "green") in _items(w, mo)
+    run = next(i for i in _day(w, mo)["items"] if i["type"] == "run")
+    assert run["slot"] == "Cardio lang"
+    long = next(i for i in _day(w, so)["items"] if i["type"] == "cardio")
+    assert long["color"] == "open" and long["done"]["kind"] == "Lauf" and long["done"]["minutes"] == 61
+    assert _items(w, sa) == [("cardio", "Cardio · Z2", "open")]
+    assert _items(w, tu)[0] == ("home", "Milon Arme A", "red")               # Di vorbei, kein Arme A
+    assert ("strength", "Arme", "green") in _items(w, tu)                    # zählt als Arme B (Do)
+    assert _items(w, th) == [("home", "Milon Arme B", "green")]
+    t = w["totals"]
+    assert (t["cardio_planned"], t["cardio_done"], t["cardio_min"], t["home_planned"], t["home_done"]) == (2, 0, 61, 2, 1)
+    assert ("gym", "Milon OK", "red") in _items(w, mo)                       # Lauf ersetzt kein Gym
+
+
+def test_target_week_same_day_hit_and_past_colors(db, monkeypatch):
+    monkeypatch.setattr(week_plan, "SCHEMA_FROM", START)
+    sa, so = START + timedelta(days=5), START + timedelta(days=6)
+    with Session(db) as s:
+        _run(s, sa, 50, 8.0)
+        _run(s, so, 60, 10.0)      # längste → „lang“: 60/90 = 0,67 → gelb (Woche vorbei)
+        s.commit()
+    w = _week(-1)
+    assert _items(w, so) == [("cardio", "Cardio lang", "yellow")]           # gleicher Tag: Lauf steckt im Platz
+    assert _items(w, sa) == [("cardio", "Cardio · Z2", "green")]            # 50 ≥ 0,8 × 45
+    assert w["totals"]["cardio_done"] == 1
+
+
+def test_target_week_starts_at_schema_date(db):
+    w = _week()  # Testwochen liegen vor SCHEMA_FROM → nur das alte Gym-Schema
+    assert all(i["type"] not in ("cardio", "home") for d in w["days"] for i in d["items"])
+
+
+def test_slot_helpers():
+    pool = [{"minutes": 100, "day": START}, {"minutes": 40, "day": START}]
+    sa, so = START + timedelta(days=5), START + timedelta(days=6)
+    hits = week_plan._assign_cardio([sa, so], pool)
+    assert hits[so]["minutes"] == 100 and hits[sa]["minutes"] == 40
+    assert week_plan._slot_color(0.85, sa, so) == "green"
+    assert week_plan._slot_color(0.6, sa, so) == "yellow" and week_plan._slot_color(0.3, sa, so) == "orange"
+    assert week_plan._slot_color(0.3, so, so) == "open"
+
+
+def test_end_bike_plan_switches_to_target_week(db, monkeypatch):
+    monkeypatch.setattr(week_plan, "SCHEMA_FROM", START)
+    plan = bike_plan.import_plan(json.dumps(plan_json()).encode())
+    bike_plan.end_plan(plan["id"], START + timedelta(days=6))
+    ov = bike_plan.overview(today=TODAY)
+    assert [x["week"] for x in ov["weeks"]] == [1] and ov["plan"]["planned_end"] == (START + timedelta(days=13)).isoformat()
+    w = _week()
+    assert w["plan"] is None and w["totals"]["bike_planned"] == 0 and w["totals"]["cardio_planned"] == 2
+    assert _week(-1)["plan"]["week"] == 1                                    # Historie bleibt
+    bike_plan.end_plan(plan["id"], START + timedelta(days=30))              # ab dem alten Ende: zurückgenommen
+    ov = bike_plan.overview(today=TODAY)
+    assert len(ov["weeks"]) == 2 and ov["plan"]["planned_end"] is None
+    with pytest.raises(ValueError):
+        bike_plan.end_plan(plan["id"], START - timedelta(days=1))
+
+
+def test_end_bike_plan_api(db):
+    from app.api import bike_plan as bike_api
+    app = FastAPI()
+    app.include_router(bike_api.router)
+    http = TestClient(app)
+    assert http.post("/bike-plan/end", json={}).status_code == 404
+    bike_plan.import_plan(json.dumps(plan_json()).encode())
+    r = http.post("/bike-plan/end", json={"day": (START + timedelta(days=6)).isoformat()})
+    assert r.status_code == 200 and r.json()["plan"]["end"] == (START + timedelta(days=6)).isoformat()
