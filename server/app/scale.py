@@ -31,9 +31,11 @@ DOUBLE_TAP = timedelta(minutes=2)    # same weight again within this → same we
 DOUBLE_TAP_KG = 0.05
 PREFER_WINDOW = timedelta(minutes=10)  # other sources this close to a BLE reading are the same weighing
 FUTURE_SLACK = timedelta(minutes=10)
-# Someone else (or a bag) on the scale: more than this off the median of the last 30 days is rejected.
+# Someone else on the scale: more than this off the median of the last 5 weighings (within 30 days) is rejected.
+# 5 % ≈ 3.7 kg at 74 kg — above a real day-to-day swing (water, a big meal ~2–3 kg).
 OUTLIER_WINDOW = timedelta(days=30)
-OUTLIER_SHARE = 0.15
+OUTLIER_SHARE = 0.05
+OUTLIER_LAST = 5
 OUTLIER_MIN_WEIGHINGS = 3
 
 
@@ -99,16 +101,17 @@ def save(*, measured_at: datetime, weight_kg: float, r1: int | None, r2: int | N
 
 
 def _check_outlier(s: Session, at: datetime, weight_kg: float) -> None:
-    """ValueError if the weight is far from the own median of the 30 days before (any source)."""
+    """ValueError if the weight is far from the median of the last weighings before it (any source)."""
     recent = sorted(s.exec(select(BodyMeasurement.weight_kg).where(
         BodyMeasurement.weight_kg.is_not(None), BodyMeasurement.measured_at >= at - OUTLIER_WINDOW,
-        BodyMeasurement.measured_at < at - PREFER_WINDOW)).all())
+        BodyMeasurement.measured_at < at - PREFER_WINDOW)
+        .order_by(BodyMeasurement.measured_at.desc()).limit(OUTLIER_LAST)).all())
     if len(recent) < OUTLIER_MIN_WEIGHINGS:
         return
     n = len(recent)
     median = recent[n // 2] if n % 2 else (recent[n // 2 - 1] + recent[n // 2]) / 2
     if abs(weight_kg - median) > OUTLIER_SHARE * median:
-        raise ValueError(f"Gewicht {weight_kg:.2f} kg weicht stark von deinem Gewicht der letzten 30 Tage "
+        raise ValueError(f"Gewicht {weight_kg:.2f} kg weicht stark von deinen letzten Wiegungen "
                          f"(um {median:.1f} kg) ab – stand jemand anderes auf der Waage? Nicht gespeichert.")
 
 
