@@ -88,6 +88,20 @@ def test_bounds_are_inclusive_and_bad_input_rejected(db):
     assert http.post("/scale/measurements", json=reading(r1=-1)).status_code == 422
 
 
+def test_far_off_weight_is_rejected_once_there_is_history(db):
+    """Real case 2026-11-25: a 23.75 kg record (no impedance) between 74 kg mornings pulled the 7-day mean to 69."""
+    def put(day, kg):
+        return scale.save(measured_at=datetime(2026, 11, day, 4, 30), weight_kg=kg, r1=4300, r2=200,
+                          source="stored", protocol_type=255, raw_hex=None, now=NOW)
+    put(20, 74.0)
+    put(21, 73.8)
+    put(22, 74.2)
+    with pytest.raises(ValueError, match="jemand anderes"):
+        put(23, 23.75)
+    assert put(23, 72.5)[1] is True  # normal day-to-day change still passes
+    assert [w for _, _, w in weights(db)] == [74.0, 73.8, 74.2, 72.5]
+
+
 def test_future_timestamp_rejected(db):
     with pytest.raises(ValueError):
         scale.save(measured_at=datetime(2026, 11, 23, 9, 0), weight_kg=73, r1=None, r2=None,
