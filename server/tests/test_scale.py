@@ -98,6 +98,8 @@ def test_far_off_weight_is_rejected_once_there_is_history(db):
     put(22, 74.2)
     with pytest.raises(ValueError, match="jemand anderes"):
         put(23, 23.75)
+    with pytest.raises(ValueError):
+        put(23, 70.0)  # 4 kg off (> 5 %)
     assert put(23, 72.5)[1] is True  # normal day-to-day change still passes
     assert [w for _, _, w in weights(db)] == [74.0, 73.8, 74.2, 72.5]
 
